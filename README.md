@@ -4,7 +4,7 @@
 
 ## Current status
 
-Task 00 provides the React, TypeScript, Vite, MUI, Zustand, and test foundation plus a minimal landing screen. No gameplay code exists yet.
+Tasks 00 and 01 provide the React application foundation, minimal landing screen, and pure TypeScript domain contracts for authoritative state, commands, events, violations, and redacted player views. Game-rule behaviour is not implemented yet.
 
 V1 target:
 
@@ -32,8 +32,9 @@ Read in this order:
 7. `docs/TRADE_AI.md`
 8. `docs/CODING_STANDARDS.md`
 9. `tasks/TASK_00_PROJECT_FOUNDATION.md`
+10. `tasks/TASK_01_DOMAIN_CONTRACTS.md`
 
-The first implementation task is **Task 00: Project Foundation**. It must not implement game rules, board topology, AI behaviour, networking, or persistence.
+The current implementation includes **Task 00: Project Foundation** and **Task 01: Domain Contracts**. It does not yet implement game rules, board generation, AI behaviour, networking, or persistence.
 
 ## Local development
 
@@ -69,7 +70,7 @@ Run the complete quality suite:
 npm run check
 ```
 
-See the [product documentation](docs/PRODUCT_SCOPE.md), [architecture](docs/ARCHITECTURE.md), and [Task 00 specification](tasks/TASK_00_PROJECT_FOUNDATION.md) for scope and design details.
+See the [product documentation](docs/PRODUCT_SCOPE.md), [architecture](docs/ARCHITECTURE.md), [Task 00 specification](tasks/TASK_00_PROJECT_FOUNDATION.md), and [Task 01 specification](tasks/TASK_01_DOMAIN_CONTRACTS.md) for scope and design details.
 
 ## Working ruleset identifier
 

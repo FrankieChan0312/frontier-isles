@@ -1,0 +1,130 @@
+import type { AwardState } from '../model/awards.ts'
+import type { BoardState } from '../model/board-state.ts'
+import type { OwnedDevelopmentCard } from '../model/development-card.ts'
+import type {
+  DevelopmentCardId,
+  EdgeId,
+  GameId,
+  PlayerId,
+  TileId,
+  VertexId,
+} from '../model/ids.ts'
+import type { RobberCause } from '../model/pending-decision.ts'
+import type { PlayerColor, PlayerController } from '../model/player.ts'
+import type { ResourceBag, ResourceType } from '../model/resource.ts'
+import { RULESET_ID } from '../model/ruleset.ts'
+import type { MaritimeTradeRatio, TradeOffer } from '../model/trade.ts'
+import type { TurnState } from '../model/turn.ts'
+
+export interface PublicPlayerState {
+  readonly id: PlayerId
+  readonly name: string
+  readonly color: PlayerColor
+  readonly controller: PlayerController
+  readonly resourceCardCount: number
+  readonly developmentCardCount: number
+  readonly playedKnights: number
+  readonly publicVictoryPoints: number
+}
+
+export interface PrivatePlayerState {
+  readonly id: PlayerId
+  readonly name: string
+  readonly color: PlayerColor
+  readonly controller: PlayerController
+  readonly resources: ResourceBag
+  readonly developmentCards: readonly OwnedDevelopmentCard[]
+  readonly playedKnights: number
+  readonly publicVictoryPoints: number
+  readonly actualVictoryPoints: number
+}
+
+export interface PublicBankState {
+  readonly resources: ResourceBag
+  readonly developmentDeckCount: number
+}
+
+export interface LegalMaritimeTradeOption {
+  readonly giveResource: ResourceType
+  readonly receiveResource: ResourceType
+  readonly ratio: MaritimeTradeRatio
+}
+
+export interface LegalActionView {
+  readonly canRollDice: boolean
+  readonly canEndTurn: boolean
+  readonly canBuyDevelopmentCard: boolean
+  readonly canProposeTrade: boolean
+  readonly legalRoadEdgeIds: readonly EdgeId[]
+  readonly legalSettlementVertexIds: readonly VertexId[]
+  readonly legalCityUpgradeVertexIds: readonly VertexId[]
+  readonly legalRobberTileIds: readonly TileId[]
+  readonly eligibleRobberTargetPlayerIds: readonly PlayerId[]
+  readonly requiredDiscardCount: number | null
+  readonly playableDevelopmentCardIds: readonly DevelopmentCardId[]
+  readonly legalMaritimeTradeOptions: readonly LegalMaritimeTradeOption[]
+}
+
+export type PendingDecisionView =
+  | {
+      readonly type: 'DISCARD_RESOURCES'
+      readonly requiredCount: number
+    }
+  | {
+      readonly type: 'MOVE_ROBBER'
+      readonly actingPlayerId: PlayerId
+      readonly cause: RobberCause
+      readonly legalTileIds: readonly TileId[]
+    }
+  | {
+      readonly type: 'CHOOSE_ROBBER_TARGET'
+      readonly actingPlayerId: PlayerId
+      readonly selectedTileId: TileId
+      readonly eligibleTargetPlayerIds: readonly PlayerId[]
+      readonly cause: RobberCause
+    }
+  | {
+      readonly type: 'PLACE_FREE_ROADS'
+      readonly actingPlayerId: PlayerId
+      readonly cardId: DevelopmentCardId
+      readonly remainingRoadCount: 1 | 2
+      readonly legalEdgeIds: readonly EdgeId[]
+    }
+  | {
+      readonly type: 'CHOOSE_INVENTION_RESOURCES'
+      readonly actingPlayerId: PlayerId
+      readonly cardId: DevelopmentCardId
+      readonly availableResources: ResourceBag
+    }
+  | {
+      readonly type: 'CHOOSE_MONOPOLY_RESOURCE'
+      readonly actingPlayerId: PlayerId
+      readonly cardId: DevelopmentCardId
+      readonly legalResourceTypes: readonly ResourceType[]
+    }
+  | {
+      readonly type: 'RESPOND_TO_TRADE'
+      readonly responderId: PlayerId
+      readonly offer: TradeOffer
+      readonly counterDepth: 0 | 1
+    }
+
+export interface PublicGameState {
+  readonly gameId: GameId
+  readonly stateVersion: number
+  readonly rulesetId: typeof RULESET_ID
+  readonly board: BoardState
+  readonly bank: PublicBankState
+  readonly turn: TurnState
+  readonly awards: AwardState
+  readonly winnerId: PlayerId | null
+}
+
+export interface PlayerView {
+  readonly stateVersion: number
+  readonly publicGame: PublicGameState
+  readonly self: PrivatePlayerState
+  readonly opponents: readonly PublicPlayerState[]
+  readonly pendingDecision: PendingDecisionView | null
+  readonly legalActions: LegalActionView
+}

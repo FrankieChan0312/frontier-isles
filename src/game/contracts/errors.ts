@@ -1,0 +1,37 @@
+export type RuleViolationCode =
+  | 'STALE_STATE_VERSION'
+  | 'UNKNOWN_ACTOR'
+  | 'GAME_OVER'
+  | 'NOT_YOUR_TURN'
+  | 'WRONG_PHASE'
+  | 'PENDING_DECISION_REQUIRED'
+  | 'INSUFFICIENT_RESOURCES'
+  | 'INSUFFICIENT_PIECES'
+  | 'BANK_RESOURCE_UNAVAILABLE'
+  | 'DEVELOPMENT_DECK_EMPTY'
+  | 'DEVELOPMENT_CARD_NOT_OWNED'
+  | 'DEVELOPMENT_CARD_NOT_PLAYABLE'
+  | 'DEVELOPMENT_CARD_LIMIT_REACHED'
+  | 'ILLEGAL_VERTEX'
+  | 'ILLEGAL_EDGE'
+  | 'DISTANCE_RULE_VIOLATION'
+  | 'ROAD_NOT_CONNECTED'
+  | 'ROAD_BLOCKED'
+  | 'INVALID_ROBBER_TILE'
+  | 'INVALID_ROBBER_TARGET'
+  | 'INVALID_DISCARD'
+  | 'TRADE_NOT_ALLOWED'
+  | 'INVALID_TRADE_OFFER'
+  | 'TRADE_PARTY_MISMATCH'
+  | 'TRADE_RESOURCE_UNAVAILABLE'
+  | 'TRADE_NOT_PENDING'
+  | 'SAME_RESOURCE_TRADE'
+  | 'MARITIME_TRADE_NOT_ALLOWED'
+
+export type RuleViolationDetail = string | number | boolean | null
+
+export interface RuleViolation {
+  readonly code: RuleViolationCode
+  readonly details?: Readonly<Record<string, RuleViolationDetail>>
+}
+

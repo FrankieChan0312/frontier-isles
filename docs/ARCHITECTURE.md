@@ -87,10 +87,11 @@ export interface CommandEnvelope {
 
 Every command is validated by the engine. Human clicks and AI decisions submit the same command union.
 
+Game creation is an application/engine operation exposed through `createGame`; it is not an in-game actor command and therefore is not represented by `START_GAME` in `GameCommand`.
+
 Representative commands:
 
 ```text
-START_GAME
 PLACE_INITIAL_SETTLEMENT
 PLACE_INITIAL_ROAD
 ROLL_DICE

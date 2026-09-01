@@ -1,0 +1,40 @@
+Implement Task 01 in this repository.
+
+Before coding, read and obey in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/GAME_RULES.md
+4. docs/ARCHITECTURE.md
+5. docs/BOARD_MODEL.md
+6. docs/CODING_STANDARDS.md
+7. docs/adr/ADR-0001-v1-architecture-baseline.md
+8. tasks/TASK_01_DOMAIN_CONTRACTS.md
+
+First run `git status --short` and `npm run check`. Stop and report if the Task 00 baseline is failing. Inspect the existing implementation and preserve the working landing page, theme, tests, scripts, and supplied documentation.
+
+Work only on Task 01: implement the pure TypeScript branded IDs, frozen literals, resource/dice/board/player/development-card/trade/turn/pending-decision/bank/award/random/config/GameState contracts, GameCommand, GameEvent, RuleViolation, EngineResult, PlayerView/legal-action contracts, and the required contract tests.
+
+Make only the narrow documentation changes authorized by the task: clarify in docs/ARCHITECTURE.md that game creation is not a START_GAME command, update README status, and retain this task/prompt under tasks/.
+
+Hard limits:
+- no new dependency;
+- no game engine or command execution;
+- no resource arithmetic/validation;
+- no board generator or topology algorithms;
+- no seeded RNG implementation;
+- no selectors;
+- no AI;
+- no React/MUI/SVG change beyond preserving Task 00;
+- no Zustand store, gateway implementation, persistence, router, backend, networking, deployment, or Git commit;
+- no Math.random(), crypto.randomUUID(), Date, Map, Set, class-based domain data, any, or barrel index files.
+
+Use kebab-case filenames, named exports, readonly serializable contracts, branded string IDs, exhaustive discriminated unions, import type for type-only imports, and strict TypeScript. Do not invent a rule or public field not specified by the task; report any material ambiguity.
+
+Before completion run, in this order:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+
+Finish with the exact completion-report structure required by AGENTS.md, plus the Task 01 additions: final command/event discriminant lists, START_GAME clarification, maritime-ratio confirmation, exact test counts/results, and scope confirmation.
