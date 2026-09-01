@@ -1,0 +1,73 @@
+{
+  "bundle": "frontier-isles-foundation",
+  "architectureBaseline": "0.1",
+  "ruleset": "BASE_4P_COMBINED_ACTION_V1",
+  "generatedDate": "2026-08-31",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 3618,
+      "sha256": "09b9abf64b6192ba6e9e63012c8cbd4fb29ba5594a884b20ce19739ab821a5b4"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1607,
+      "sha256": "0beb69727f01fd275da15efbfe9a0947ea2e54e91f70f413c855e788371c28b9"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 906,
+      "sha256": "9a2daf5e862edb2fa2d0b055bc6b41de177ed3cae5afe93f0f8c587965374864"
+    },
+    {
+      "path": "docs/AI_DESIGN.md",
+      "bytes": 6824,
+      "sha256": "54082fd8be96cf1069c8ca06a84494aecfa1d7716738470dc31f1f91d8eed05b"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 8781,
+      "sha256": "1ebcccfe54e1ec98d86873981b59bb78c8d038e2ccf478a8179411b21359894a"
+    },
+    {
+      "path": "docs/BOARD_MODEL.md",
+      "bytes": 6266,
+      "sha256": "15c0961a4f9db8677b634d77a3b39b710942cdd1c1df97b99b53a604c454b1a0"
+    },
+    {
+      "path": "docs/CODING_STANDARDS.md",
+      "bytes": 5002,
+      "sha256": "7234c6b6b3d49b7cebd39fc6eb93c367fa2aba440d9a863b42f0da41b202443b"
+    },
+    {
+      "path": "docs/GAME_RULES.md",
+      "bytes": 10848,
+      "sha256": "40458fb64ea4e8172b3fc69c61e6324922b17efc98c30bf0a5ac44a110ea78de"
+    },
+    {
+      "path": "docs/PRODUCT_SCOPE.md",
+      "bytes": 4342,
+      "sha256": "180cca44e8bddd93c299c067c1306adaef43ad31ef76f5ee1623db1003c4a874"
+    },
+    {
+      "path": "docs/TRADE_AI.md",
+      "bytes": 7001,
+      "sha256": "8d8d87ff1aaa9c0abf33dc164e328b694d9b25be4caed4aa1c07e02828d5eb83"
+    },
+    {
+      "path": "docs/adr/ADR-0001-v1-architecture-baseline.md",
+      "bytes": 2598,
+      "sha256": "f98537b549c4965e135d810ae78f63fe896c684d6ca5f7374ab19a93a8de1d78"
+    },
+    {
+      "path": "tasks/CODEX_TASK_00_PROMPT.txt",
+      "bytes": 1116,
+      "sha256": "9f38a89b4a63a6368836f9abceb331ab505cb2231f08f8920b569f59e9d3ac10"
+    },
+    {
+      "path": "tasks/TASK_00_PROJECT_FOUNDATION.md",
+      "bytes": 6663,
+      "sha256": "00ddd1fc38e01e19eeff1e4a9fcb43e32ed95c86b631a3674022a05ad88510b5"
+    }
+  ]
+}

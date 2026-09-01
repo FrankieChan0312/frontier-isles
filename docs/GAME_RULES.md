@@ -1,0 +1,326 @@
+# Frozen Game Rules
+
+## 1. Ruleset identity
+
+```text
+BASE_4P_COMBINED_ACTION_V1
+```
+
+This repository implements its own explicit rules contract. When terminology differs across physical editions, the behaviour written here controls the software until changed by an accepted ADR and corresponding tests.
+
+Rules precedence:
+
+1. This document
+2. Accepted ADRs that explicitly amend this document
+3. Official base-game rulebook and official base-game FAQ
+4. No unstated assumption
+
+Reference pages:
+
+- https://www.catan.com/understand-catan/game-rules
+- https://www.catan.com/faq/basegame
+
+The project paraphrases mechanics and must not copy official rulebook prose or presentation.
+
+## 2. Players and objective
+
+- Exactly four players
+- One human and three AI players in V1
+- First player to establish a valid victory during that player's own turn wins
+- Victory target: 10 actual victory points
+- Hidden victory-point development cards count toward actual score
+- Opponents see public score only until hidden points are revealed for victory
+
+A player who reaches 10 points outside their own turn does not immediately win. Victory is checked when their own turn begins and after their successful commands.
+
+## 3. Board component distribution
+
+### Terrain
+
+| Terrain | Count | Production |
+|---|---:|---|
+| Forest | 4 | Lumber |
+| Pasture | 4 | Wool |
+| Fields | 4 | Grain |
+| Hills | 3 | Brick |
+| Mountains | 3 | Ore |
+| Desert | 1 | None |
+
+### Number tokens
+
+```text
+2 x1
+3 x2
+4 x2
+5 x2
+6 x2
+8 x2
+9 x2
+10 x2
+11 x2
+12 x1
+```
+
+The desert has no number token. Six and eight are red numbers and must not be adjacent in generated V1 boards.
+
+### Ports
+
+- Four generic 3:1 ports
+- One 2:1 port for each of the five resources
+- A port is usable by a player with a settlement or city on either of its two coastal vertices
+
+## 4. Player piece supply
+
+Each player begins with a finite personal supply:
+
+- 15 roads
+- 5 settlements
+- 4 cities
+
+Building is illegal when the required piece is unavailable. Upgrading a settlement to a city returns that settlement piece to the player's supply.
+
+## 5. Bank and development deck
+
+### Bank resources
+
+The bank begins with 19 cards of each resource type.
+
+When production owes a resource to multiple players but the bank cannot satisfy all of that resource, nobody receives that resource for that production. If the shortage affects only one player, that player receives as many as remain. Other resource types are resolved normally.
+
+### Development deck
+
+The V1 deck contains 25 cards:
+
+- 14 Knight
+- 5 Victory Point
+- 2 Road Building
+- 2 Monopoly
+- 2 Invention / Year of Plenty effect
+
+The software may use original card names in the public UI while preserving these effects.
+
+## 6. Setup phase
+
+### Starting order
+
+The seeded random source chooses the first player. Clockwise order is then fixed for the match.
+
+### Placement sequence
+
+For players A, B, C, D:
+
+```text
+First pass:  A, B, C, D
+Second pass: D, C, B, A
+```
+
+On each setup placement, the player places:
+
+1. One settlement on a legal empty vertex
+2. One road on an empty edge adjacent to that newly placed settlement
+
+Setup settlements do not require connection to an existing road, but the distance rule always applies.
+
+After placing the second settlement, the player immediately receives one resource from each adjacent producing terrain hex. Desert contributes nothing. Bank-shortage handling still applies.
+
+The first player begins the first normal turn after all setup placements finish.
+
+## 7. Distance rule
+
+A settlement is legal only when:
+
+- the target vertex is empty;
+- every adjacent vertex is free of a settlement or city;
+- outside setup, at least one adjacent edge contains the acting player's road;
+- the player can pay the cost and has a settlement piece.
+
+A city can only replace the acting player's own settlement on that vertex.
+
+## 8. Normal turn state machine
+
+The normal turn is represented by explicit phases rather than UI assumptions.
+
+```text
+TURN START
+  -> ROLL_REQUIRED
+  -> normal production OR seven-resolution sequence
+  -> ACTION
+  -> END_TURN
+```
+
+A previously acquired eligible development card may be played before rolling or during the Action phase, subject to the one-card-per-turn restriction.
+
+### Combined Action phase
+
+During `ACTION`, the current player may interleave legal actions in any order and repeat them while able:
+
+- Domestic trade
+- Maritime trade
+- Build road
+- Build settlement
+- Upgrade city
+- Buy development card
+- Play one eligible development card if none has been played this turn
+- End turn
+
+Building a port settlement may therefore improve maritime trade later in the same Action phase.
+
+## 9. Dice and production
+
+- A normal roll uses two six-sided dice
+- Totals 2–6 and 8–12 produce resources
+- Every unblocked tile matching the total produces
+- Settlement: one resource from each adjacent producing tile
+- City: two resources from each adjacent producing tile
+- All eligible players receive production, not only the roller
+- A tile occupied by the robber produces nothing
+- Total 7 produces no terrain resources
+
+All dice use the seeded random source.
+
+## 10. Rolling seven
+
+When the current player rolls seven:
+
+1. Every player with more than seven resource cards must discard half, rounded down.
+2. Required discards are completed.
+3. The current player moves the robber to a different land tile.
+4. If one or more opponents have a settlement/city adjacent to that tile and at least one resource card, the current player chooses one eligible target.
+5. One resource card is stolen uniformly at random from that target's resource hand.
+6. The turn enters `ACTION`.
+
+Development cards do not count toward the seven-card threshold and cannot be stolen by the robber.
+
+Playing a Knight moves the robber and may steal a card, but does not trigger discards.
+
+## 11. Building costs
+
+| Action | Cost |
+|---|---|
+| Road | 1 Lumber + 1 Brick |
+| Settlement | 1 Lumber + 1 Brick + 1 Wool + 1 Grain |
+| City | 2 Grain + 3 Ore |
+| Development card | 1 Wool + 1 Grain + 1 Ore |
+
+Costs are paid to the bank before placement/draw is finalized within one atomic successful command.
+
+## 12. Road placement
+
+A road is legal only when:
+
+- the edge is empty;
+- the player can pay and has a road piece, unless placement is free;
+- it connects to the player's road, settlement, or city;
+- an opponent building on the connecting vertex does not block the connection.
+
+An opponent settlement or city can interrupt route continuity. The acting player's own settlement or city does not interrupt their own road.
+
+## 13. Domestic trade
+
+- Only the current player may initiate a domestic trade.
+- Every completed trade must include the current player as one party.
+- The counterparty must explicitly accept.
+- Only resource cards may be traded.
+- Both sides must give at least one resource card.
+- A trade cannot be a disguised gift using the same resource type on both sides.
+- Development cards, future promises, loans, services, and binding future agreements are not supported.
+- Multiple legal trades may occur in one Action phase.
+
+Human-versus-AI offers display an explicit response. AI-to-AI offers resolve through the same command and validation contracts.
+
+## 14. Maritime trade
+
+A player may exchange multiple cards of one resource type for one card of a different resource type:
+
+- 4:1 without a port
+- 3:1 with a generic port
+- 2:1 with the matching resource port
+
+The engine determines the best legal ratio available to the player. The bank must have the requested card. A player may perform multiple separate maritime trades in one Action phase.
+
+## 15. Development cards
+
+### Purchase
+
+- Draw the top card from the shuffled development deck.
+- Keep the card private.
+- A non-victory-point card bought this turn cannot be played this turn.
+
+### Per-turn limit
+
+At most one playable development card is activated during a player's turn. Victory-point cards are not activated as actions; they are revealed when establishing victory.
+
+### Knight
+
+- Move robber to a different tile
+- Select an eligible adjacent opponent
+- Steal one random resource if a target exists
+- Increment played-Knight count after valid resolution
+
+### Road Building
+
+Place up to two free legal roads, one at a time. Normal connectivity, blocking, empty-edge, and piece-supply rules apply.
+
+### Monopoly
+
+Choose one resource type. Every opponent transfers all cards of that type to the acting player.
+
+### Invention / Year of Plenty effect
+
+Take any two available bank resource cards. They may be the same or different. Bank availability limits the choices.
+
+### Victory Point
+
+Counts as one hidden actual victory point. It is revealed when needed to establish victory on the owner's turn.
+
+## 16. Largest Army
+
+- Requires at least three played Knight cards
+- First qualifying player receives the award and 2 VP
+- A challenger must have strictly more played Knights than the current holder
+- A tie leaves the award with the current holder
+
+## 17. Longest Road
+
+- Requires a continuous route of at least five roads
+- No edge may be used more than once in a candidate path
+- Branches do not all add together; use the longest valid trail
+- Loops are valid
+- Opponent buildings interrupt continuity at their vertex
+- Own buildings do not interrupt continuity
+- A challenger must have a strictly longer qualifying road than the current holder
+- A tie leaves the award with the current holder when the holder still qualifies
+- If an interruption creates a situation where no single player uniquely qualifies under the frozen tie rules, the award can become unheld; exact award-recalculation cases require dedicated tests
+
+Longest Road is a graph problem and must not be calculated as total roads owned.
+
+## 18. Victory
+
+Actual victory points are derived from:
+
+- Settlements: 1 each
+- Cities: 2 each
+- Longest Road award: 2
+- Largest Army award: 2
+- Hidden Victory Point development cards: 1 each
+
+When the current player has at least 10 actual points during their own turn, the engine emits `GAME_WON`, reveals the necessary hidden VP cards, sets the winner, and stops further commands except safe viewing/restart actions.
+
+## 19. Mandatory edge-case tests for later tasks
+
+- Seven cards versus eight cards at discard time
+- Multiple resource types when only one bank supply is short
+- Second setup settlement beside the desert
+- Opponent building splits a route
+- Own building does not split a route
+- Forked route
+- Closed loop with a branch
+- Longest Road holder tied by challenger
+- Holder falls below five after interruption
+- Newly bought non-VP development card cannot be played
+- Newly bought VP card can establish victory
+- Knight does not trigger discards
+- Building a port then trading in the same turn
+- Attempted zero-sided trade
+- Attempted same-resource disguised gift
+- Victory score reached outside own turn

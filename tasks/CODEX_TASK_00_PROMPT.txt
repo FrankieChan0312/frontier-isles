@@ -1,0 +1,22 @@
+Implement Task 00 in this repository.
+
+Read and obey, in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/ARCHITECTURE.md
+4. docs/CODING_STANDARDS.md
+5. docs/adr/ADR-0001-v1-architecture-baseline.md
+6. tasks/TASK_00_PROJECT_FOUNDATION.md
+
+Work only on Task 00. Preserve all supplied documentation. Do not implement any game rules, board model, SVG board, AI, trade system, persistence, router, backend, networking, deployment workflow, or future feature.
+
+Perform the environment preflight, scaffold safely in this already non-empty repository, install only approved dependencies, configure MUI/Roboto/Zustand/Vitest/Testing Library/strict TypeScript/ESLint, create the minimal themed landing screen and smoke test, and add the required scripts.
+
+Before completion, run:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+
+Do not create a Git commit. Finish with the completion report required by AGENTS.md, including exact Node/npm versions, files changed, dependencies and reasons, tests, command results, limitations, and confirmation that no unrelated feature was implemented.
