@@ -252,12 +252,19 @@ it cannot be placed on an empty vertex, an opponent building, or an existing cit
 ## 13. Domestic trade
 
 - Only the current player may initiate a domestic trade.
-- Every completed trade must include the current player as one party.
-- The counterparty must explicitly accept.
+- The current player remains the stable initiator and selects exactly one other player as the
+  counterparty; two non-current players cannot trade with each other.
+- The counterparty may accept, reject, or make one formal counter-offer. The initiator may then
+  accept or reject that counter, but may not counter again in the same chain.
+- Resources move only when the current terms are explicitly accepted. Both parties are checked
+  again at acceptance and the exchange is atomic.
 - Only resource cards may be traded.
 - Both sides must give at least one resource card.
-- A trade cannot be a disguised gift using the same resource type on both sides.
+- A resource type cannot have a positive quantity on both sides; overlapping quantities are not
+  netted into a disguised gift.
 - Development cards, future promises, loans, services, and binding future agreements are not supported.
+- Proposal and counter submission validates only the author's outgoing bundle. The other party's
+  private hand is not tested until acceptance.
 - Multiple legal trades may occur in one Action phase.
 
 Human-versus-AI offers display an explicit response. AI-to-AI offers resolve through the same command and validation contracts.
@@ -271,6 +278,11 @@ A player may exchange multiple cards of one resource type for one card of a diff
 - 2:1 with the matching resource port
 
 The engine determines the best legal ratio available to the player. The bank must have the requested card. A player may perform multiple separate maritime trades in one Action phase.
+
+A player controls a port by owning a Settlement or City at either endpoint of its coastal edge.
+Port control is derived from current board occupancy, so a port built earlier in the same combined
+Action phase is immediately usable. Other players' buildings provide no benefit and the robber
+does not disable ports. Matching 2:1 is preferred over generic 3:1, with 4:1 always available.
 
 ## 15. Development cards
 

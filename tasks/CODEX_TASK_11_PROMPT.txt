@@ -1,0 +1,86 @@
+Implement Task 11 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making source changes:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the mandatory repository documentation and ADRs listed in tasks/TASK_11_DOMESTIC_AND_MARITIME_TRADING.md.
+3. Read tasks/TASK_11_DOMESTIC_AND_MARITIME_TRADING.md in full and treat it as authoritative.
+4. Inspect and reuse the accepted Task 01-10 contracts, helpers, validators, engines, and test fixtures.
+5. Run the complete preflight specified by Task 11.
+
+Implement the complete Task 11 scope exactly as specified:
+
+- authoritative PROPOSE_TRADE, ACCEPT_TRADE, REJECT_TRADE, COUNTER_TRADE, and MARITIME_TRADE execution;
+- stable initiator/counterparty TradeOffer semantics;
+- complete resource-bundle validation;
+- no gifts, empty sides, same-resource overlap, credit, or services;
+- current-player-only initiation and direct one-counterparty negotiation;
+- one formal counter per pending chain;
+- hidden-information-safe proposal/counter validation;
+- acceptance-time validation of both parties and atomic exchange;
+- RESPOND_TO_TRADE pending-state coherence;
+- player port ownership derived from Board topology and building occupancy;
+- exact best 2:1, 3:1, or 4:1 maritime ratio;
+- exact player/Bank maritime transfer;
+- deterministic event ordering, one-version-per-success semantics, no RNG use;
+- focused invariants, corruption tests, golden domestic and maritime replays;
+- required ADR and documentation updates.
+
+Important frozen decisions:
+
+- Do not modify the accepted Task 01 public contracts.
+- Do not generate or parse TradeIds.
+- Do not add trade history to GameState.
+- An initial proposal validates only the initiator's outgoing bundle, not the requested counterparty bundle.
+- A counter validates only the countering player's outgoing bundle, not the other party's requested bundle.
+- ACCEPT_TRADE revalidates both parties.
+- A failed acceptance preserves the pending trade unchanged.
+- A valid non-current responder must not receive NOT_YOUR_TURN merely for responding.
+- A second counter in the same chain returns TRADE_NOT_ALLOWED.
+- Port ownership and ratios are derived, never stored and never supplied by the client.
+- The robber does not disable ports.
+- Maritime trade always has a Base Game fallback ratio of 4:1.
+- Every successful Task 11 command increments stateVersion exactly once and consumes no randomness.
+
+Do not implement:
+
+- AI trade evaluation or automatic responses;
+- natural-language negotiation;
+- broadcast auctions or simultaneous offers;
+- a generic command router;
+- PlayerView or event redaction;
+- legal-action projection;
+- Zustand, gateway, persistence, backend, networking, routing, deployment, or UI;
+- any unrelated refactor;
+- any new dependency;
+- a Git commit.
+
+Before finishing, run and fix every in-scope failure from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Also run the production-source forbidden-entropy audit required by the repository/task.
+
+Return a completion report containing:
+
+1. Files created or changed
+2. Public APIs and helpers implemented
+3. Exact initiation/maritime/response validation precedence
+4. Domestic proposal, counter, acceptance, rejection, and hidden-information behaviour
+5. Port-control and 2:1/3:1/4:1 derivation behaviour
+6. Golden domestic replay results
+7. Golden maritime replay results
+8. Tests added and final repository test totals
+9. Exact results of every verification command
+10. Dependencies added, or explicit confirmation that none changed
+11. Deviations, blockers, or unresolved questions
+12. Explicit confirmation that no out-of-scope feature was implemented
+13. Explicit confirmation that Task 01 public contracts were unchanged
+14. Explicit confirmation that no Git commit was created

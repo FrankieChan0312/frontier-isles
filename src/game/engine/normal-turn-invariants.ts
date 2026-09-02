@@ -236,8 +236,9 @@ export function assertNormalTurnState(state: GameState): void {
     assertInvariant(
       state.pendingDecision === null
         || state.pendingDecision.type === 'CHOOSE_INVENTION_RESOURCES'
-        || state.pendingDecision.type === 'CHOOSE_MONOPOLY_RESOURCE',
-      'ACTION must not have a pending decision except an Invention or Monopoly choice.',
+        || state.pendingDecision.type === 'CHOOSE_MONOPOLY_RESOURCE'
+        || state.pendingDecision.type === 'RESPOND_TO_TRADE',
+      'ACTION must not have a pending decision except an Invention, Monopoly, or trade response.',
     )
   }
 

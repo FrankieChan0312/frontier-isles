@@ -415,6 +415,26 @@ Army changes on play, while Task 07 completes movement and any theft before Task
 resulting victory. Purchase and each free road reconcile scoring at their stable boundaries; a
 winning first free road clears the remaining card effect before entering `GAME_OVER`.
 
+### Task 11 authoritative trading boundary
+
+Task 11 adds the narrow `executeTradingCommand` boundary for domestic proposal, response, one
+formal counter, acceptance, rejection, and maritime exchange. A domestic chain is stored only in
+the accepted `RESPOND_TO_TRADE` pending decision. The current player remains the stable initiator,
+the selected counterparty remains fixed, and `proposedById` identifies the author of the current
+terms. Trade IDs enter through commands and are checked for active-chain lineage; they are neither
+generated nor stored as history.
+
+Proposal and counter submission validates only the author's outgoing bundle, preventing command
+submission from becoming an oracle for the other party's private hand. No resources are reserved
+or escrowed. Acceptance revalidates both parties and commits one atomic exchange, while a failed
+acceptance preserves the pending decision.
+
+Controlled ports and the best 2:1, 3:1, or 4:1 maritime ratio are derived on every command from
+port edges, their topology endpoints, and current building occupancy. Neither port ownership nor
+ratios are cached in authoritative state or supplied by the client. Task 12 will compose this
+narrow executor with the other accepted command boundaries and provide redacted player views;
+Task 11 does not add routing or view projection.
+
 ## 16. Suggested source structure
 
 ```text

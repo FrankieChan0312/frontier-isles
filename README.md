@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–10 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, clockwise turn advancement, discard/robber/random-theft resolution, authoritative paid building, derived awards/scoring/victory, and the complete standard development-card lifecycle. Trade and the remaining application layers are future work.
+Tasks 00–11 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation and setup, deterministic turns and robber resolution, paid building, awards/scoring/victory, development cards, and complete authoritative domestic and maritime trading. The remaining application layers are future work.
 
 V1 target:
 
@@ -42,12 +42,13 @@ Read in this order:
 17. `tasks/TASK_08_PAID_BUILDING_ACTIONS.md`
 18. `tasks/TASK_09_AWARDS_SCORING_AND_VICTORY.md`
 19. `tasks/TASK_10_DEVELOPMENT_CARD_LIFECYCLE.md`
+20. `tasks/TASK_11_DOMESTIC_AND_MARITIME_TRADING.md`
 
-The current implementation includes **Tasks 00–10**, through deterministic seven resolution,
-paid Action-phase construction, awards/scoring/victory, and authoritative development-card
-purchase, play, free roads, resource effects, and Knight integration. The landing page remains a
-static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are
-not rendered. Trade, AI, networking, persistence, and additional gameplay UI are not implemented.
+The current implementation includes **Tasks 00–11**, through deterministic seven resolution,
+paid Action-phase construction, awards/scoring/victory, development cards, direct one-counter
+domestic negotiation, atomic acceptance, and derived 2:1/3:1/4:1 maritime exchange. The landing
+page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings,
+and roads are not rendered. AI, networking, persistence, and additional gameplay UI are not implemented.
 
 ## Local development
 
