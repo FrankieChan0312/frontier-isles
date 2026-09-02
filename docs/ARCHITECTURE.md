@@ -293,6 +293,12 @@ Responsibilities:
 - Auto-save successful state transitions
 - Enforce an AI command safety budget
 
+Stage 15 implements this boundary in `src/application/gateways`. The concrete gateway owns the
+only live `GameState`, projects every subscriber update for the configured Human viewer, and routes
+both Human and AI envelopes through the same complete engine. AI command IDs and counters are
+deterministic application metadata. The loop resolves current-player and non-current pending AI
+actors until a Human decision or victory boundary, and persists after every accepted transition.
+
 ### V2 WebSocketGameGateway
 
 Future responsibilities:
@@ -306,7 +312,7 @@ React components must not branch on the concrete gateway type.
 
 ## 12. Zustand
 
-Two stores are planned.
+Stage 15 implements two independent vanilla Zustand stores.
 
 ### Game session store
 
@@ -333,26 +339,35 @@ May contain:
 
 The UI store must never become a second source of authoritative game facts.
 
+The session store consumes `GameUpdate` and retains only `PlayerView`, redacted events, connection,
+AI-thinking, save, and recoverable-error state. The interaction store contains presentation-only
+hover, selection, build-mode, dialog, zoom, and sidebar state. Neither store imports `GameState`.
+
 ## 13. Persistence
 
 Persistence is behind `GameSaveRepository`.
 
 V1 implementation may use browser `localStorage` because one game state is small, but UI and engine do not call `localStorage` directly.
 
-Save envelope requires:
+The Stage 15 save envelope contains:
 
 ```text
 schemaVersion
 savedAt (in infrastructure metadata, not deterministic engine logic)
 gameId
-rulesetId
+displaySeed
+humanPlayerId
+AI profile assignments
+deterministic orchestration counters and per-turn command keys
 authoritative GameState
-bounded event history
 ```
 
 Auto-save occurs after each successful command. Failed commands do not change or save state.
 
 Schema migration is explicit. An incompatible save produces a clear recoverable message rather than an unsafe cast.
+The browser implementation stores a single latest-game JSON document behind `GameSaveRepository`;
+tests use the same contract in memory. Loading defensively parses the envelope, runs the complete
+accepted invariant chain, verifies the Human controller and AI assignments, then resumes the AI loop.
 
 ## 14. Randomness
 

@@ -54,8 +54,8 @@ Verification results:
 Stage commits:
 
 - Stage 12: `52b24ea66d368521a7393e12d3ed43cf7d774f86` — `feat: add unified game engine and redacted player views`
-- Stage 13: pending
-- Stage 14: pending
+- Stage 13: `dbf4a1e4354be24363336e7a78c7a0b9e80572ae` — `feat: add deterministic core AI player`
+- Stage 14: `5e53f708aca33733dec58a6f47725597c45ab986` — `feat: add trade AI and player personalities`
 - Stage 15: pending
 - Stage 16: pending
 - Stage 17: pending
@@ -211,9 +211,93 @@ Known limitations:
 
 Stage commit:
 
-- Pending creation: `feat: add trade AI and player personalities`
+- `5e53f708aca33733dec58a6f47725597c45ab986` — `feat: add trade AI and player personalities`
 
 Next stage:
 
 - Stage 15 LocalGameGateway, deterministic AI orchestration, Zustand session/UI stores, and
   versioned browser persistence.
+
+### Stage 15 — COMPLETE
+
+Plan:
+
+1. Define the application-facing `GameGateway` update/status contracts without exposing
+   authoritative state.
+2. Implement `LocalGameGateway` with stale-version enforcement, ordered redacted publications,
+   deterministic command/trade counters, and bounded AI orchestration until a Human boundary.
+3. Add versioned defensive save envelopes, repository abstraction, in-memory tests, browser
+   localStorage implementation, autosave/manual load/delete, and deterministic resume metadata.
+4. Add separate Zustand session and UI-interaction stores containing only redacted/session or
+   transient presentation data.
+5. Prove AI-to-Human pause/resume, non-current AI trade response, save equivalence/corruption
+   recovery, subscriptions, and store authority boundaries; document and fully verify the stage.
+
+Design decisions:
+
+- Only `LocalGameGateway` and persistence repositories hold `GameState`; subscriber/store updates
+  contain `PlayerView` and `PlayerEventView` only.
+- Browser timestamps are injected persistence metadata and never enter deterministic engine state.
+- AI command IDs and generated game IDs use injected/materialized counters and seed text, never UUID
+  or hidden entropy.
+- The gateway pauses whenever the required actor is Human, including non-current discard/trade
+  response, and resumes orchestration after the Human's successful command.
+
+Files changed:
+
+- `vitest.config.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/V1_COMPLETION_PROGRESS.md`
+- `docs/adr/ADR-0014-local-gateway-orchestration-and-persistence.md`
+- `src/application/gateways/game-gateway.ts`
+- `src/application/gateways/local-game-gateway.ts`
+- `src/application/gateways/local-game-gateway.test.ts`
+- `src/application/stores/game-session-store.ts`
+- `src/application/stores/ui-interaction-store.ts`
+- `src/application/stores/stores.test.ts`
+- `src/infrastructure/persistence/game-save-format.ts`
+- `src/infrastructure/persistence/game-save-format.test.ts`
+- `src/infrastructure/persistence/game-save-repository.ts`
+- `src/infrastructure/persistence/game-save-repository.test.ts`
+
+Verification results:
+
+- Focused Stage 15 tests: PASS — 4 files, 14 tests.
+- Stage 15 `npm run typecheck`: PASS.
+- Stage 15 `npm run lint`: PASS with zero warnings.
+- Stage 15 `npm run test`: PASS — 56 test files, 312 tests.
+- Stage 15 `npm run build`: PASS — 919 modules transformed; production bundle built.
+- Stage 15 `npm run check`: PASS — typecheck, lint, 56 files / 312 tests, build.
+- Initial unbounded and four-worker full-suite attempts exposed CPU-contention timeouts in accepted
+  simulation shards; every affected shard passed in isolation. Vitest is capped at two workers and
+  the exact full commands pass without raising timeouts or reducing the 40-game corpus.
+- Stage 15 `git diff --check`: PASS (Git emitted only line-ending conversion notices).
+- Diff review: authoritative `GameState` is confined to the gateway/save boundary; stores and
+  subscribers contain redacted contracts only. No forbidden entropy, domain-to-application import,
+  backend, networking, or future multiplayer implementation was introduced.
+
+Dependencies:
+
+- None added. Zustand was already an accepted project dependency.
+
+Tests added:
+
+- Defensive JSON/schema/invariant save parsing and deterministic round-trip coverage.
+- In-memory and localStorage repository contract coverage.
+- Redacted gateway publication, stale rejection, autosave, load/delete/corruption recovery,
+  AI-to-Human pause/resume, and non-current AI trade-response coverage.
+- Separate session/UI store update, retention, reset, clamp, and authority-boundary coverage.
+
+Known limitations:
+
+- V1 stores one latest local game rather than a save catalogue.
+- Browser localStorage necessarily contains the authoritative offline state; the application and UI
+  receive only redacted projections.
+
+Stage commit:
+
+- Pending — `feat: add local game gateway and browser persistence`
+
+Next stage:
+
+- Stage 16 complete interactive MUI and raw SVG browser interface.
