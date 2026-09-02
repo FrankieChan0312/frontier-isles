@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "simulate:core": "node --experimental-strip-types src/ai/simulation/run-core-simulations.ts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {

@@ -450,6 +450,19 @@ opponent private collections. `PlayerEventView` is a separate viewer-specific ev
 composition, bought-card identity, unresolved offer terms, and stolen-resource identity are redacted
 when the viewer is not entitled to them. The frozen `GameEvent` contract is unchanged.
 
+### Stage 13 deterministic AI boundary
+
+Stage 13 adds a redacted-view-only `AiAgent` under `src/ai/**`. It returns a `GameCommand`; callers
+own envelopes and submit through the unified engine. Strategic evaluation uses public board/player
+facts and the actor's private self data, then resolves equal scores by code-unit ordering without
+consuming authoritative randomness. The core agent completes every mandatory choice except domestic
+trade strategy, for which it deliberately rejects incoming offers until Stage 14.
+
+The simulation harness is an application-side authority consumer: it may hold `GameState`, but it
+creates a fresh player view for every AI decision, executes the result through `GameEngine`, and
+asserts the full invariant stack after every accepted command. Creation retains the frozen
+one-Human/three-AI configuration even when the harness controls all four seats.
+
 ## 16. Suggested source structure
 
 ```text

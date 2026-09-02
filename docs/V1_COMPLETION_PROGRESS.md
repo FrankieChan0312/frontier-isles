@@ -53,7 +53,7 @@ Verification results:
 
 Stage commits:
 
-- Stage 12: pending commit creation (`feat: add unified game engine and redacted player views`)
+- Stage 12: `52b24ea66d368521a7393e12d3ed43cf7d774f86` — `feat: add unified game engine and redacted player views`
 - Stage 13: pending
 - Stage 14: pending
 - Stage 15: pending
@@ -66,4 +66,78 @@ Unresolved risks:
 
 Next stage:
 
-- Stage 13 deterministic core AI plan and implementation.
+- Stage 13 deterministic core AI implementation and verification.
+
+### Stage 13 — COMPLETE
+
+Plan:
+
+1. Define the redacted-view-only asynchronous AI boundary, decision context, diagnostics, and
+   deterministic stable tie-breaking.
+2. Implement mandatory setup, turn, robber, development-card, maritime-trade, build, discard, and
+   safe domestic-rejection decisions using authoritative legal projections.
+3. Add explicit heuristic scoring for production, diversity/scarcity, income, build unlocks,
+   expansion, ports, awards, threat, and projected score.
+4. Add command/turn/game/no-progress/repeated-state safety guards and invariant-checked deterministic
+   simulation support.
+5. Prove focused decisions and at least 16 fixed all-AI smoke games, document the boundary, run the
+   full stage verification matrix, and commit the passing checkpoint.
+
+Design decisions:
+
+- AI receives only `PlayerView`; command envelopes and authoritative execution remain outside the
+  agent.
+- Equivalent scores resolve by direct code-unit ordering; thinking consumes no authoritative RNG.
+- Stage 13 rejects incoming domestic offers and does not initiate them; Stage 14 owns trade strategy.
+- Simulation orchestration may hold `GameState` but exposes only each actor's view to the AI and
+  asserts the full invariant stack after every accepted transition.
+
+Files changed:
+
+- `package.json`
+- `docs/AI_DESIGN.md`
+- `docs/AI_SIMULATION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/adr/ADR-0012-redacted-deterministic-core-ai.md`
+- `src/ai/ai-agent.ts`
+- `src/ai/core-ai-agent.ts`
+- `src/ai/core-ai-agent.test.ts`
+- `src/ai/evaluation/core-evaluation.ts`
+- `src/ai/simulation/core-ai-simulation.ts`
+- `src/ai/simulation/core-ai-simulation.test.ts`
+- `src/ai/simulation/core-ai-smoke-test-helper.ts`
+- `src/ai/simulation/core-ai-smoke-1.test.ts`
+- `src/ai/simulation/core-ai-smoke-2.test.ts`
+- `src/ai/simulation/core-ai-smoke-3.test.ts`
+- `src/ai/simulation/core-ai-smoke-4.test.ts`
+
+Verification results:
+
+- Stage 13 `npm run simulate:core -- 16`: PASS — 16/16 legal winners, 6,434 total
+  commands, maximum 163 turns.
+- Stage 13 `npm run typecheck`: PASS.
+- Stage 13 `npm run lint`: PASS with zero warnings.
+- Stage 13 `npm run test`: PASS — 44 test files, 282 tests, including 16 fixed all-seat AI games.
+- Stage 13 `npm run build`: PASS — 919 modules transformed; production bundle built.
+- Stage 13 `npm run check`: PASS — typecheck, lint, 44 files / 282 tests, build.
+- Stage 13 `git diff --check`: PASS (Git emitted only line-ending conversion notices).
+- Diff review: AI production code imports no `GameState`, hidden opponent collection, random module,
+  clock/crypto entropy, UI framework, or state store; all commands route through `GameEngine`.
+
+Dependencies:
+
+- None added. The corpus runner uses Node 24's built-in TypeScript stripping.
+
+Unresolved risks:
+
+- Domestic negotiation intentionally remains a safe reject-only policy until Stage 14.
+- Full invariant checks make the 16-game ordinary smoke corpus materially slower than unit tests,
+  but the four fixed batches run in parallel and remain bounded.
+
+Stage commit:
+
+- Pending creation: `feat: add deterministic core AI player`
+
+Next stage:
+
+- Stage 14 trade AI, personality profiles, mixed-profile simulations, and verification.

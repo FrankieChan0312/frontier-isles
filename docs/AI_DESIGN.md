@@ -261,3 +261,15 @@ Tests should include:
 - Setup evaluation distinguishes high and low production
 - Threat weighting changes a trade or robber decision near victory
 - Personality profiles can produce different valid choices from the same state
+
+## 16. Stage 13 implementation boundary
+
+The accepted core agent implements `AiAgent.chooseNextCommand(PlayerView, AiDecisionContext)` and
+uses no `GameState` or random-source input. It handles every mandatory setup, turn, seven/robber,
+build, development-card, and maritime decision. Incoming domestic offers are safely rejected until
+Stage 14 supplies the documented trade evaluator.
+
+Candidate scoring is deterministic and exposes production, diversity, scarcity, income, immediate
+unlock, expansion, port, city, award, threat, and projected-score factors. Direct code-unit ordering
+is the final tie-break. Simulation orchestration owns envelopes, validates every accepted transition,
+and enforces explicit turn, game, repeated-command, state-progress, and repeated-state bounds.
