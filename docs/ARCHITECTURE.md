@@ -435,6 +435,21 @@ ratios are cached in authoritative state or supplied by the client. Task 12 will
 narrow executor with the other accepted command boundaries and provide redacted player views;
 Task 11 does not add routing or view projection.
 
+### Stage 12 unified engine and projection boundary
+
+Stage 12 composes every accepted focused executor behind `GameEngine.execute`. Routing is exhaustive
+over the frozen command union and delegates validation and transitions rather than reimplementing
+rules. The one overlapping `BUILD_ROAD` command is selected by authoritative free-road phase/pending
+state; every other discriminant has one focused destination. A complete invariant check precedes
+routing so corrupted loaded state is distinct from an ordinary rule violation.
+
+`createPlayerView` returns a detached serializable graph containing exact self data, opponent public
+counts, public board and turn state, viewer-appropriate pending data, and bounded legal actions
+derived with accepted validators. It never returns the random cursor, complete development deck, or
+opponent private collections. `PlayerEventView` is a separate viewer-specific event union: discard
+composition, bought-card identity, unresolved offer terms, and stolen-resource identity are redacted
+when the viewer is not entitled to them. The frozen `GameEvent` contract is unchanged.
+
 ## 16. Suggested source structure
 
 ```text

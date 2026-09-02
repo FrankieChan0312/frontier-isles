@@ -1,5 +1,6 @@
 import type { AwardState } from '../model/awards.ts'
 import type { BoardState } from '../model/board-state.ts'
+import type { GameCommand } from './commands.ts'
 import type { OwnedDevelopmentCard } from '../model/development-card.ts'
 import type {
   DevelopmentCardId,
@@ -50,25 +51,46 @@ export interface LegalMaritimeTradeOption {
   readonly ratio: MaritimeTradeRatio
 }
 
+export type LegalInventionSelection = ResourceBag
+
+export interface LegalTradeResponseView {
+  readonly canAccept: boolean
+  readonly canReject: boolean
+  readonly canCounter: boolean
+}
+
 export interface LegalActionView {
+  readonly permittedCommandTypes?: readonly GameCommand['type'][]
   readonly canRollDice: boolean
   readonly canEndTurn: boolean
   readonly canBuyDevelopmentCard: boolean
   readonly canProposeTrade: boolean
+  readonly canFinishFreeRoadPlacement?: boolean
+  readonly legalInitialSettlementVertexIds?: readonly VertexId[]
+  readonly legalInitialRoadEdgeIds?: readonly EdgeId[]
   readonly legalRoadEdgeIds: readonly EdgeId[]
   readonly legalSettlementVertexIds: readonly VertexId[]
   readonly legalCityUpgradeVertexIds: readonly VertexId[]
   readonly legalRobberTileIds: readonly TileId[]
   readonly eligibleRobberTargetPlayerIds: readonly PlayerId[]
   readonly requiredDiscardCount: number | null
+  readonly discardableResources?: ResourceBag | null
   readonly playableDevelopmentCardIds: readonly DevelopmentCardId[]
+  readonly legalInventionSelections?: readonly ResourceBag[]
+  readonly legalMonopolyResourceTypes?: readonly ResourceType[]
   readonly legalMaritimeTradeOptions: readonly LegalMaritimeTradeOption[]
+  readonly legalDomesticTradeCounterpartyIds?: readonly PlayerId[]
+  readonly tradeResponse?: LegalTradeResponseView | null
 }
 
 export type PendingDecisionView =
   | {
       readonly type: 'DISCARD_RESOURCES'
       readonly requiredCount: number
+    }
+  | {
+      readonly type: 'AWAITING_DISCARDS'
+      readonly remainingPlayerIds: readonly PlayerId[]
     }
   | {
       readonly type: 'MOVE_ROBBER'
@@ -106,6 +128,13 @@ export type PendingDecisionView =
       readonly type: 'RESPOND_TO_TRADE'
       readonly responderId: PlayerId
       readonly offer: TradeOffer
+      readonly counterDepth: 0 | 1
+    }
+  | {
+      readonly type: 'TRADE_IN_PROGRESS'
+      readonly initiatorId: PlayerId
+      readonly counterpartyId: PlayerId
+      readonly responderId: PlayerId
       readonly counterDepth: 0 | 1
     }
 
