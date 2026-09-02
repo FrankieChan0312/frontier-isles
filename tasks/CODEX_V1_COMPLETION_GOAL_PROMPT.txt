@@ -1,0 +1,36 @@
+Complete the Frontier Isles browser V1 release candidate from Stage 12 through Stage 17.
+
+Work directly in the currently opened repository:
+
+C:\Users\user\Desktop\Fullstack Software Engineering\Project\frontier-isles
+
+Task 11 is already accepted and committed. Do not reimplement or redesign Task 11.
+
+Before changing source:
+
+1. Read and follow repository-root AGENTS.md.
+2. Read all relevant documentation under docs/.
+3. Read tasks/V1_COMPLETION_GOAL_TASK_12_TO_17.md in full.
+4. Treat that file as the authoritative execution and completion specification for this goal.
+5. Verify the working tree is clean and the accepted Task 11 baseline passes npm run check.
+6. Create and maintain docs/V1_COMPLETION_PROGRESS.md as the durable execution log.
+
+Execute Stages 12, 13, 14, 15, 16, and 17 sequentially.
+
+At every stage:
+- implement the stage completely;
+- preserve frozen contracts and accepted behavior;
+- add tests and documentation;
+- run every required stage gate;
+- review the diff;
+- create exactly one passing stage commit;
+- confirm a clean working tree;
+- continue automatically to the next stage without waiting for confirmation.
+
+Do not stop after a normal completion report for an individual stage. Continue until the complete local, deploy-ready V1 release candidate satisfies the final acceptance gate, or until a genuine blocker defined in the goal specification prevents safe progress.
+
+Do not add backend, online multiplayer, Firebase, authentication, WebSocket, lobby, chat, or database functionality.
+
+Do not create or expose credentials and do not publish to an unauthorized account.
+
+Return only the final consolidated completion report required by the goal specification, unless a genuine blocker forces an earlier report.
