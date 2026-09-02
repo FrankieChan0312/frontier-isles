@@ -1,0 +1,103 @@
+Implement Task 08 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making source changes:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the relevant frozen documentation and ADRs under docs/.
+3. Read the accepted Task 01, Task 02, Task 04, corrected Task 05, Task 06, and Task 07 specifications.
+4. Read tasks/TASK_08_PAID_BUILDING_ACTIONS.md in full and treat it as the execution specification.
+5. Run every required preflight check.
+
+Implement the complete Task 08 scope exactly as specified:
+
+- readonly standard road, settlement, and city costs;
+- standard 15-road, 5-settlement, and 4-city piece limits;
+- board-derived player piece counts;
+- a narrow BUILD_ROAD / BUILD_SETTLEMENT / UPGRADE_CITY command executor;
+- exact shared validation precedence;
+- immutable, atomic player-to-bank resource payment;
+- exact paid-road connectivity through own buildings and empty intersections;
+- exact opponent-building ROAD_BLOCKED distinction;
+- disconnected ROAD_NOT_CONNECTED distinction;
+- settlement occupancy, distance, actor-road connection, piece, and affordability rules;
+- city ownership, replacement, piece, and affordability rules;
+- accepted ROAD_BUILT source=PAID_BUILD, SETTLEMENT_BUILT source=PAID_BUILD, and CITY_BUILT events;
+- state-integrity, ownership, piece-count, and resource-conservation assertions;
+- the exact four-command combined-action golden replay;
+- integration proving paid building works after the accepted resolved Task 07 total-seven workflow;
+- all required corruption, precedence, legality, payment, conservation, immutability, RNG, and regression tests;
+- the required narrow documentation and ADR updates.
+
+Important boundaries:
+
+- Reuse the accepted Task 01 contracts unchanged.
+- Reuse accepted topology, board, resource, RNG, normal-turn, and robber helpers rather than duplicating them.
+- Preserve all accepted Task 00–07 behaviour.
+- Do not implement a complete generic command router.
+- Do not implement Longest Road, Largest Army, scoring, winner assignment, GAME_WON, development-card purchase/play, free Road Building placement, trade, legal-action projection, PlayerView work, AI, Zustand, gateways, persistence, routing, backend, networking, or UI changes.
+- BUILD_ROAD in FREE_ROAD_PLACEMENT is out of scope and must not be treated as a paid build.
+- Do not use Math.random(), Web Crypto randomness, UUIDs, timestamps, or hidden entropy.
+- Do not add dependencies.
+- Do not create a Git commit.
+
+The exact golden replay is authoritative:
+
+```text
+Start from the accepted Task 06 first-roll ACTION state:
+stateVersion 17
+turn 1
+current player player:sentinel
+lastRoll [3,2] total 5
+random 1264537981 / 86
+
+Apply the conservation-preserving test-only resource rebalance specified in Task 08.
+
+v17 BUILD_ROAD
+edge:vertex:-1,-1,2|vertex:1,-2,1
+
+v18 BUILD_ROAD
+edge:vertex:1,-2,1|vertex:2,-1,-1
+
+v19 BUILD_SETTLEMENT
+vertex:2,-1,-1
+
+v20 UPGRADE_CITY
+vertex:2,-1,-1
+
+Final:
+stateVersion 21
+phase ACTION
+same turn/current player/lastRoll
+random unchanged 1264537981 / 86
+Sentinel resources all zero
+Bank L19 B14 W18 G17 O19
+Sentinel 4 roads, 2 settlements, 1 city
+exactly 2 ROAD_BUILT, 1 SETTLEMENT_BUILT, 1 CITY_BUILT
+```
+
+The exact blocked-road fixture is also authoritative:
+
+```text
+Sentinel roads end at vertex:2,-1,-1
+another player's settlement occupies vertex:2,-1,-1
+target edge is empty:
+edge:vertex:2,-1,-1|vertex:4,-2,-2
+result: ROAD_BLOCKED
+```
+
+Normal invalid player commands must return the accepted RuleViolation / EngineResult failure branch. Corrupt authoritative state must throw an actionable invariant Error. Every success and failure must obey the immutability and no-RNG rules in the task.
+
+Before finishing, run and fix all in-scope failures from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Perform and report the required src/game entropy audit.
+
+Return a completion report containing every item required by AGENTS.md and the Task 08 completion-report section, including exact golden intermediate/final resources, occupancy, piece counts, events, ROAD_BLOCKED and resolved-seven results, dependency/scope confirmation, and confirmation that no Git commit was created.

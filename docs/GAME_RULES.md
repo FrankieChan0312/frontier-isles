@@ -223,6 +223,10 @@ Playing a Knight moves the robber and may steal a card, but does not trigger dis
 | Development card | 1 Wool + 1 Grain + 1 Ore |
 
 Costs are paid to the bank before placement/draw is finalized within one atomic successful command.
+Paid construction derives each player's remaining supply from authoritative board occupancy rather
+than storing counters in player state. The standard limits are 15 active roads, 5 active
+settlements, and 4 active cities. A city upgrade replaces one settlement at the same vertex, so
+that settlement piece becomes available again through derived counting.
 
 ## 12. Road placement
 
@@ -234,6 +238,16 @@ A road is legal only when:
 - an opponent building on the connecting vertex does not block the connection.
 
 An opponent settlement or city can interrupt route continuity. The acting player's own settlement or city does not interrupt their own road.
+
+For paid placement, either endpoint may establish the required connection. The acting player's own
+building connects directly. An empty endpoint connects through another incident road owned by the
+actor. An opponent building prevents the actor's existing incident road from continuing through
+that endpoint; if the other endpoint independently connects, the road remains legal. Another
+player's road at an empty intersection neither connects nor blocks the actor.
+
+Paid settlements require an incident road owned by the actor in addition to the empty-vertex and
+distance rules. They grant no setup resources. A city may replace only the actor's own settlement;
+it cannot be placed on an empty vertex, an opponent building, or an existing city.
 
 ## 13. Domestic trade
 

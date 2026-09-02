@@ -122,6 +122,14 @@ pending decision. `ROBBER_TARGET_REQUIRED` is valid only with a coherent
 `CHOOSE_ROBBER_TARGET` decision whose selected tile is the robber tile and whose ordered targets
 exactly match fresh authoritative derivation.
 
+Task 08 adds a fourth narrow executor for paid `BUILD_ROAD`, `BUILD_SETTLEMENT`, and
+`UPGRADE_CITY` commands during `ACTION`. It derives piece counts and connectivity from current
+board occupancy, validates placement before affordability, and atomically transfers the exact
+resource cost from the actor to the bank. Successful paid builds consume no random draw and remain
+in the same combined Action phase. Opponent buildings block road continuation through their
+vertex, while an independently legal second endpoint still permits placement. Award, score, and
+victory recalculation remain deliberately outside this executor.
+
 Representative commands:
 
 ```text
