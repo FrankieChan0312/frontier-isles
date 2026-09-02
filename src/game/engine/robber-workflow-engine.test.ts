@@ -1,6 +1,6 @@
 import type { GameEvent } from '../contracts/events.ts'
 import type { GameState } from '../model/game-state.ts'
-import type { CommandId, DevelopmentCardId, PlayerId, TileId } from '../model/ids.ts'
+import type { CommandId, PlayerId, TileId, VertexId } from '../model/ids.ts'
 import type { ResourceBag } from '../model/resource.ts'
 import { executeNormalTurnLifecycleCommand } from './normal-turn-lifecycle-engine.ts'
 import {
@@ -187,8 +187,36 @@ describe('robber workflow engine', () => {
     )
     expect(unknown.ok ? null : unknown.violation.code).toBe('UNKNOWN_ACTOR')
 
+    const sentinel = state.players[GOLDEN_PLAYER_IDS.sentinel]
+    if (sentinel === undefined) throw new Error('Missing Sentinel.')
+    const victoryPointCards = state.bank.developmentDeck.filter((card) => card.type === 'VICTORY_POINT')
+    const victoryPointIds = new Set(victoryPointCards.map((card) => card.id))
     const gameOverState: GameState = {
       ...state,
+      board: {
+        ...state.board,
+        vertexOccupancy: {
+          ...state.board.vertexOccupancy,
+          ['vertex:-1,-1,2' as VertexId]: { type: 'CITY', ownerId: GOLDEN_PLAYER_IDS.sentinel },
+          ['vertex:-4,-4,8' as VertexId]: { type: 'CITY', ownerId: GOLDEN_PLAYER_IDS.sentinel },
+          ['vertex:5,-4,-1' as VertexId]: { type: 'SETTLEMENT', ownerId: GOLDEN_PLAYER_IDS.sentinel },
+        },
+      },
+      players: {
+        ...state.players,
+        [GOLDEN_PLAYER_IDS.sentinel]: {
+          ...sentinel,
+          developmentCards: victoryPointCards.map((card) => ({
+            ...card,
+            acquiredTurnNumber: 1,
+            status: 'REVEALED' as const,
+          })),
+        },
+      },
+      bank: {
+        ...state.bank,
+        developmentDeck: state.bank.developmentDeck.filter((card) => !victoryPointIds.has(card.id)),
+      },
       turn: { ...state.turn, phase: 'GAME_OVER' },
       pendingDecision: null,
       winnerId: GOLDEN_PLAYER_IDS.sentinel,
@@ -327,19 +355,38 @@ describe('robber workflow engine', () => {
 
   it('resumes synthetic Knight workflows according to whether dice were already rolled', () => {
     const base = createNoDiscardRobberMoveState()
+    const knightCard = base.bank.developmentDeck.find((card) => card.type === 'KNIGHT')
+    const sentinel = base.players[GOLDEN_PLAYER_IDS.sentinel]
+    if (knightCard === undefined || sentinel === undefined) throw new Error('Missing Knight fixture data.')
     for (const [lastRoll, expectedPhase] of [
       [null, 'ROLL_REQUIRED'],
       [{ dice: [3, 2] as const, total: 5 as const }, 'ACTION'],
     ] as const) {
       const knight: GameState = {
         ...base,
+        bank: {
+          ...base.bank,
+          developmentDeck: base.bank.developmentDeck.filter((card) => card.id !== knightCard.id),
+        },
+        players: {
+          ...base.players,
+          [GOLDEN_PLAYER_IDS.sentinel]: {
+            ...sentinel,
+            playedKnights: 1,
+            developmentCards: [{
+              ...knightCard,
+              acquiredTurnNumber: 0,
+              status: 'PLAYED',
+            }],
+          },
+        },
         turn: { ...base.turn, lastRoll },
         pendingDecision: {
           type: 'MOVE_ROBBER',
           actingPlayerId: GOLDEN_PLAYER_IDS.sentinel,
           cause: {
             type: 'KNIGHT',
-            cardId: 'development-card:knight:test' as DevelopmentCardId,
+            cardId: knightCard.id,
           },
         },
       }

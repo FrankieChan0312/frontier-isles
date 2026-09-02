@@ -50,25 +50,32 @@ export function validatePaidRoadPlacement(
   actorId: PlayerId,
   edgeId: EdgeId,
 ): RuleViolation | null {
+  const placementViolation = validateFreeRoadPlacement(state, actorId, edgeId)
+  if (placementViolation !== null) return placementViolation
+  const player = state.players[actorId]
+  if (player === undefined) throw new Error(`Cannot validate road payment for unknown player ${actorId}.`)
+  if (!canAffordResourceCost(player.resources, STANDARD_ROAD_COST)) {
+    return { code: 'INSUFFICIENT_RESOURCES' }
+  }
+  return null
+}
+
+export function validateFreeRoadPlacement(
+  state: GameState,
+  actorId: PlayerId,
+  edgeId: EdgeId,
+): RuleViolation | null {
   if (
     state.board.topology.edges[edgeId] === undefined
     || state.board.edgeOccupancy[edgeId] !== null
   ) {
     return { code: 'ILLEGAL_EDGE', details: { edgeId } }
   }
-
   const connection = classifyPaidRoadConnection(state, actorId, edgeId)
   if (connection === 'BLOCKED') return { code: 'ROAD_BLOCKED', details: { edgeId } }
-  if (connection === 'DISCONNECTED') {
-    return { code: 'ROAD_NOT_CONNECTED', details: { edgeId } }
-  }
+  if (connection === 'DISCONNECTED') return { code: 'ROAD_NOT_CONNECTED', details: { edgeId } }
   if (derivePlayerPieceCounts(state.board, actorId).roads >= STANDARD_ROAD_PIECE_LIMIT) {
     return { code: 'INSUFFICIENT_PIECES', details: { piece: 'ROAD' } }
-  }
-  const player = state.players[actorId]
-  if (player === undefined) throw new Error(`Cannot validate road payment for unknown player ${actorId}.`)
-  if (!canAffordResourceCost(player.resources, STANDARD_ROAD_COST)) {
-    return { code: 'INSUFFICIENT_RESOURCES' }
   }
   return null
 }

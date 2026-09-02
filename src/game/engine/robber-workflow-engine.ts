@@ -10,7 +10,8 @@ import type { GamePhase } from '../model/turn.ts'
 import { drawRandomResourceFromBag } from '../random/draw-random-resource.ts'
 import { validateDiscardSelection } from '../rules/discard-rules.ts'
 import { deriveEligibleRobberTargetPlayerIds } from '../rules/robber-target-rules.ts'
-import { assertRobberWorkflowState } from './robber-workflow-invariants.ts'
+import { assertDevelopmentCardState } from './development-card-invariants.ts'
+import { resolveCurrentPlayerVictory } from './scoring-reconciliation.ts'
 
 export type RobberWorkflowCommand = Extract<
   GameCommand,
@@ -105,7 +106,7 @@ function executeDiscard(
           cause: { type: 'DICE_SEVEN' },
         },
   }
-  assertRobberWorkflowState(nextState)
+  assertDevelopmentCardState(nextState)
   return {
     ok: true,
     state: nextState,
@@ -151,17 +152,20 @@ function executeMove(
           cause: pending.cause,
         },
   }
-  assertRobberWorkflowState(nextState)
+  const victory = targets.length === 0 && pending.cause.type === 'KNIGHT'
+    ? resolveCurrentPlayerVictory(nextState)
+    : { state: nextState, events: [] }
+  assertDevelopmentCardState(victory.state)
   return {
     ok: true,
-    state: nextState,
+    state: victory.state,
     events: [{
       type: 'ROBBER_MOVED',
       playerId: envelope.actorId,
       fromTileId: oldTileId,
       toTileId: tileId,
       cause: pending.cause,
-    }],
+    }, ...victory.events],
   }
 }
 
@@ -198,16 +202,19 @@ function executeSteal(
     pendingDecision: null,
     random: draw.random,
   }
-  assertRobberWorkflowState(nextState)
+  const victory = pending.cause.type === 'KNIGHT'
+    ? resolveCurrentPlayerVictory(nextState)
+    : { state: nextState, events: [] }
+  assertDevelopmentCardState(victory.state)
   return {
     ok: true,
-    state: nextState,
+    state: victory.state,
     events: [{
       type: 'RESOURCE_STOLEN',
       fromPlayerId: targetId,
       toPlayerId: envelope.actorId,
       resource: draw.value,
-    }],
+    }, ...victory.events],
   }
 }
 
@@ -215,7 +222,7 @@ export function executeRobberWorkflowCommand(
   state: GameState,
   envelope: RobberWorkflowCommandEnvelope,
 ): EngineResult {
-  assertRobberWorkflowState(state)
+  assertDevelopmentCardState(state)
   if (envelope.expectedStateVersion !== state.stateVersion) {
     return failure('STALE_STATE_VERSION', {
       expected: envelope.expectedStateVersion,

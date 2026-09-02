@@ -233,7 +233,12 @@ export function assertNormalTurnState(state: GameState): void {
     assertInvariant(state.turn.lastRoll === null, 'ROLL_REQUIRED must have null lastRoll.')
   } else if (state.turn.phase === 'ACTION') {
     assertInvariant(state.turn.lastRoll !== null, 'ACTION requires lastRoll.')
-    assertInvariant(state.pendingDecision === null, 'ACTION must not have a pending decision.')
+    assertInvariant(
+      state.pendingDecision === null
+        || state.pendingDecision.type === 'CHOOSE_INVENTION_RESOURCES'
+        || state.pendingDecision.type === 'CHOOSE_MONOPOLY_RESOURCE',
+      'ACTION must not have a pending decision except an Invention or Monopoly choice.',
+    )
   }
 
   if (state.pendingDecision !== null) assertPendingDecision(state, state.pendingDecision)

@@ -396,6 +396,25 @@ replaces `RandomState`; command executors own their existing one-version transit
 paid builds call the full boundary after applying payment and occupancy. `END_TURN` calls the
 narrow current-player victory helper after clockwise advancement, because no award facts changed.
 
+### Task 10 development-card lifecycle boundary
+
+Task 10 adds the narrow `executeDevelopmentCardLifecycleCommand` boundary for development-card
+purchase/play, Invention and Monopoly choices, free `BUILD_ROAD`, and dead-end free-road
+completion. It is intentionally not a generic game-command router. Exact card identity is conserved
+across the top-at-index-zero bank deck and owned-card collections; owned action cards remain as
+`PLAYED` records, while winning Victory Point cards become `REVEALED`.
+
+Road Building routes `BUILD_ROAD` through `FREE_ROAD_PLACEMENT`, reusing normal target,
+connectivity, blocking, and piece-supply validation without payment. Invention and Monopoly retain
+their origin `ROLL_REQUIRED` or `ACTION` phase while an explicit pending choice is resolved. These
+choice and dead-end completion commands may validly emit no event because the public event union is
+frozen.
+
+Knight play creates the accepted Task 07 robber pending workflow with a typed Knight cause. Largest
+Army changes on play, while Task 07 completes movement and any theft before Task 09 establishes a
+resulting victory. Purchase and each free road reconcile scoring at their stable boundaries; a
+winning first free road clears the remaining card effect before entering `GAME_OVER`.
+
 ## 16. Suggested source structure
 
 ```text

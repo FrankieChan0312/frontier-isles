@@ -1,0 +1,62 @@
+Implement Task 10 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before changing source:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the mandatory documents listed in tasks/TASK_10_DEVELOPMENT_CARD_LIFECYCLE.md.
+3. Read tasks/TASK_10_DEVELOPMENT_CARD_LIFECYCLE.md completely and treat it as the authoritative execution specification.
+4. Inspect and reuse the accepted Task 05 deck, Task 07 robber workflow, Task 08 road/payment rules, and Task 09 scoring reconciliation.
+5. Run the required preflight checks and stop only for a genuine contradiction or failed accepted baseline.
+
+Implement the complete Task 10 scope exactly as specified:
+
+- standard development-card cost;
+- card-conservation and status invariants;
+- BUY_DEVELOPMENT_CARD;
+- PLAY_DEVELOPMENT_CARD;
+- Knight and Task 07 integration;
+- Road Building and free BUILD_ROAD lifecycle;
+- FINISH_FREE_ROAD_PLACEMENT;
+- Invention pending choice and transfer;
+- Monopoly pending choice and transfer;
+- automatic Victory Point revelation/win through accepted Task 09 scoring;
+- required tests, ADR, and focused documentation updates.
+
+Critical frozen decisions:
+
+- The top of the deck is array index 0.
+- Buying consumes no RNG.
+- Non-VP cards cannot be played on their acquisition turn.
+- At most one non-VP development card may be played per own turn.
+- Eligible non-VP cards may be played in ROLL_REQUIRED or ACTION.
+- Victory Point cards are never played with PLAY_DEVELOPMENT_CARD.
+- A newly bought VP card may cause an immediate win through scoring reconciliation.
+- Knight does not trigger discards.
+- Largest Army changes when the Knight is played, but a resulting win is finalized only after the Knight robber effect completes.
+- Road Building uses BUILD_ROAD in FREE_ROAD_PLACEMENT, pays no resources, and otherwise follows normal road legality.
+- FINISH_FREE_ROAD_PLACEMENT is a dead-end completion only: reject it while two placements remain or while any legal second road exists; accept it at remaining one only when no legal second edge exists.
+- Invention selects exactly two available bank cards and may select the same resource twice.
+- Monopoly takes every selected resource from all opponents and may legally collect zero.
+- Effect-resolution commands may emit zero events; do not add event discriminants.
+- Every successful command increments stateVersion exactly once.
+- Do not modify accepted Task 01 public contracts.
+- Do not create a generic game-command router.
+- Do not implement trade, PlayerView, AI, stores, gateways, persistence, UI, backend, or networking.
+- Do not use Math.random(), Web Crypto, UUIDs, timestamps, or hidden entropy.
+- Do not install dependencies or change package versions.
+- Do not create a Git commit.
+
+Before finishing, run and fix all in-scope failures from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Audit production src/game/** for forbidden entropy.
+
+Return the complete report required by the Task 10 specification, including files, APIs, invariants, every card lifecycle, golden results, exact event order, tests, command results, dependency status, deviations/blockers, scope confirmation, and Git confirmation.

@@ -276,36 +276,55 @@ The engine determines the best legal ratio available to the player. The bank mus
 
 ### Purchase
 
-- Draw the top card from the shuffled development deck.
+- During `ACTION`, pay exactly one Wool, one Grain, and one Ore and draw the top card at deck
+  index `0`.
+- A player may repeat purchases while able to pay and while the deck is non-empty.
 - Keep the card private.
 - A non-victory-point card bought this turn cannot be played this turn.
+- A newly bought hidden Victory Point card counts immediately and can establish victory without
+  consuming the action-card allowance.
 
 ### Per-turn limit
 
-At most one playable development card is activated during a player's turn. Victory-point cards are not activated as actions; they are revealed when establishing victory.
+At most one non-Victory-Point development card is played during a player's turn. An eligible card
+acquired on an earlier turn may be played in `ROLL_REQUIRED` before rolling or during `ACTION`.
+Victory Point cards are never played as actions; they are revealed automatically when establishing
+victory.
 
 ### Knight
 
 - Move robber to a different tile
 - Select an eligible adjacent opponent
 - Steal one random resource if a target exists
-- Increment played-Knight count after valid resolution
+- Mark the Knight played and increment played-Knight count when the card is played
+- Reconcile Largest Army immediately, but finish movement and any theft before establishing a
+  resulting victory
+- Resume `ROLL_REQUIRED` when played before rolling, otherwise resume `ACTION`
+- Do not trigger seven-card discards
 
 ### Road Building
 
-Place up to two free legal roads, one at a time. Normal connectivity, blocking, empty-edge, and piece-supply rules apply.
+Place up to two free legal roads, one at a time. Normal connectivity, blocking, empty-edge, and
+piece-supply rules apply, but no Lumber or Brick is paid. The effect ends after two roads, when the
+piece supply is exhausted, after a winning first road, or through dead-end completion when no legal
+second placement remains.
 
 ### Monopoly
 
-Choose one resource type. Every opponent transfers all cards of that type to the acting player.
+Choose one resource type. In player order, every opponent transfers all cards of that type to the
+acting player. Choosing a type held by no opponent is legal and the bank is unchanged.
 
 ### Invention / Year of Plenty effect
 
-Take any two available bank resource cards. They may be the same or different. Bank availability limits the choices.
+Take exactly two available bank resource cards. They may be the same or different. The card may be
+played only when the bank contains at least two resource cards in total, and the final choice may
+not exceed the bank's supply of either selected type.
 
 ### Victory Point
 
-Counts as one hidden actual victory point. It is revealed when needed to establish victory on the owner's turn.
+Counts as one hidden actual victory point while in hand. It cannot be played and is revealed,
+together with all of the winner's hidden Victory Point cards, when victory is established on the
+owner's turn.
 
 ## 16. Largest Army
 
