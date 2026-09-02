@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–02 provide the React application foundation, pure TypeScript domain contracts, and the deterministic standard 19-tile board topology with stable graph identifiers, coastline ordering, and port slots. Game-rule behaviour and board contents are not implemented yet.
+Tasks 00–03 provide the React application foundation, pure TypeScript domain contracts, the deterministic standard 19-tile board topology, and a responsive accessible raw-SVG topology preview with visible ports. Game-rule behaviour and board contents are not implemented yet.
 
 V1 target:
 
@@ -34,8 +34,9 @@ Read in this order:
 9. `tasks/TASK_00_PROJECT_FOUNDATION.md`
 10. `tasks/TASK_01_DOMAIN_CONTRACTS.md`
 11. `tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md`
+12. `tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md`
 
-The current implementation includes **Task 00: Project Foundation**, **Task 01: Domain Contracts**, and **Task 02: Deterministic Standard Board Topology**. It does not yet implement board contents, game rules, AI behaviour, networking, or persistence.
+The current implementation includes **Task 00: Project Foundation**, **Task 01: Domain Contracts**, **Task 02: Deterministic Standard Board Topology**, and **Task 03: Responsive Raw-SVG Standard Board Renderer**. The board is a static neutral topology preview; it does not yet implement board contents, interaction, game rules, AI behaviour, networking, or persistence.
 
 ## Local development
 

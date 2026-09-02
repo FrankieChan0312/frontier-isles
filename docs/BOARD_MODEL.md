@@ -215,6 +215,24 @@ Domain data must not contain:
 - animation state
 - pointer/hover state
 
+The V1 board renderer uses a flat-top orientation. For axial tile coordinate `(q, r)` and hex
+circumradius `s`, it derives the tile centre as:
+
+```text
+tileCenterX = 3/2 × s × q
+tileCenterY = √3 × s × (r + q/2)
+```
+
+For an accepted Task 02 scaled integer corner `(x, y, z)`, it derives the matching SVG vertex as:
+
+```text
+vertexX = s × x / 2
+vertexY = √3 × s × (x + 2z) / 6
+```
+
+The renderer pairs each calculated integer corner with the corresponding accepted cyclic
+`tile.vertexIds` entry. It never parses tile, vertex, edge, or port ID strings to obtain geometry.
+
 The rendering layer may derive:
 
 ```text
@@ -226,7 +244,14 @@ number-token position
 port icon position and rotation
 ```
 
-A single SVG `viewBox` provides responsive scaling.
+A port marker is placed outward from its coastal-edge midpoint along the normalized vector from
+the board-centre centroid to that midpoint. A single computed SVG `viewBox` contains all tile
+corners, complete port marker rectangles, and padding, and provides responsive scaling without
+placing screen dimensions in domain data.
+
+Task 03 renders only a static, non-interactive topology preview with neutral land surfaces and port
+labels. Terrain, number tokens, occupancy, pieces, legal highlights, and board interaction remain
+outside that task.
 
 ## 10. Interaction layers
 

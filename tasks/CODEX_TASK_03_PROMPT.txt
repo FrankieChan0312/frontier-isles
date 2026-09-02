@@ -1,0 +1,42 @@
+Implement Task 03 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before changing code, read and obey in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/GAME_RULES.md
+4. docs/ARCHITECTURE.md
+5. docs/BOARD_MODEL.md
+6. docs/CODING_STANDARDS.md
+7. docs/adr/ADR-0001-v1-architecture-baseline.md
+8. tasks/TASK_01_DOMAIN_CONTRACTS.md
+9. tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md
+10. tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md
+
+First run `git status --short` and `npm run check`. The accepted Task 02 baseline must be clean and passing apart from the supplied untracked Task 03 files. If `tasks/README.txt` is only a copied handoff note, remove it rather than committing it. Stop and report a blocker if the accepted baseline fails.
+
+Implement the complete Task 03 scope exactly as specified: the pure UI-layer flat-top topology-to-SVG projection, deterministic layout records, outward port layout, computed padded viewBox, exhaustive port labels, responsive accessible raw-SVG `GameBoard`, optional 72-edge/54-vertex/19-label debug overlay, UI-only preview topology, landing-page integration, tests, ADR-0002, and only the authorized documentation updates.
+
+Hard limits:
+- reuse the accepted Task 01 contracts and Task 02 topology/helpers; do not silently change them;
+- do not parse branded tile/vertex/edge/port ID strings to obtain geometry;
+- no new dependency;
+- no changes under `src/game/**` unless a true compile blocker is reported before implementation;
+- no terrain, number tokens, desert, robber, BoardState, occupancy, roads, buildings, legal highlights, interactions, game rules, engine, RNG, Math.random, dice, AI, Zustand, gateway, persistence, routing, backend, networking, animation, audio, deployment, Canvas/WebGL/game engine, official CATAN assets, or Git commit;
+- no locale-dependent ordering or object-insertion-order assumptions;
+- no barrel index files.
+
+Use the exact flat-top formulas, default constants, deterministic ordering, port-label text, static preview port tuple, source layout, SVG layers, accessibility requirements, and acceptance tests in the task document.
+
+Before finishing, run in this order:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+- git diff --check
+
+Fix every failure within Task 03 scope.
+
+Return the completion report required by AGENTS.md plus every Task 03 completion-report addition, including the exact default viewBox/aspect ratio produced for the preview, exact rendered/layout counts, formulas/constants, test counts/results, no-ID-parsing confirmation, no-game-source/contract/topology-change confirmation, scope confirmation, and confirmation that no Git commit was created.
