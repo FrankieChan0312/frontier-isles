@@ -136,8 +136,84 @@ Unresolved risks:
 
 Stage commit:
 
-- Pending creation: `feat: add deterministic core AI player`
+- `dbf4a1e4354be24363336e7a78c7a0b9e80572ae` — `feat: add deterministic core AI player`
 
 Next stage:
 
 - Stage 14 trade AI, personality profiles, mixed-profile simulations, and verification.
+
+### Stage 14 — COMPLETE
+
+Plan:
+
+1. Add explicit Merchant, Builder, and Sentinel weight profiles on the accepted core agent boundary.
+2. Implement visible-information-only marginal resource valuation, offer scoring, safe leader checks,
+   deterministic accept/reject/counter decisions, and bounded initiation.
+3. Enforce no repeated terms, no gifts/credit, at most two AI-initiated negotiations per turn, and
+   the engine's one-counter depth.
+4. Exercise AI-to-AI and AI-to-Human pending flows plus deterministic personality differences.
+5. Run at least 24 mixed-profile fixed-seed games with invariant checks, document decisions, execute
+   the full stage verification matrix, and commit the passing checkpoint.
+
+Design decisions:
+
+- Trade scoring uses only `PlayerView`, public board production, public score/award pressure, and the
+  evaluating player's exact self hand.
+- Deterministic trade IDs derive from turn, player, and bounded attempt counters supplied by
+  orchestration context; no UUID, clock, or random source is used.
+- Profiles adjust weights and thresholds on the same rule-obeying engine; they never change command
+  legality or validation.
+
+Files changed:
+
+- `package.json`
+- `docs/AI_SIMULATION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/TRADE_AI.md`
+- `docs/adr/ADR-0013-visible-information-trade-ai-personalities.md`
+- `src/ai/ai-agent.ts`
+- `src/ai/core-ai-agent.ts`
+- `src/ai/personalities/ai-profiles.ts`
+- `src/ai/personality-ai-agent.ts`
+- `src/ai/personality-ai-agent.test.ts`
+- `src/ai/trade/trade-evaluation.ts`
+- `src/ai/trade/trade-evaluation.test.ts`
+- `src/ai/simulation/core-ai-simulation.ts`
+- `src/ai/simulation/mixed-profile-simulation.ts`
+- `src/ai/simulation/run-mixed-simulations.ts`
+- `src/ai/simulation/mixed-ai-smoke-test-helper.ts`
+- `src/ai/simulation/mixed-ai-smoke-1.test.ts` through `mixed-ai-smoke-6.test.ts`
+
+Verification results:
+
+- Stage 14 `npm run simulate:mixed -- 24`: PASS — 24/24 legal winners, 15,753 total
+  commands, maximum 164 turns, all three profiles covered.
+- Stage 14 `npm run typecheck`: PASS.
+- Stage 14 `npm run lint`: PASS with zero warnings.
+- Stage 14 `npm run test`: PASS — 52 test files, 298 tests, including 24 fixed mixed-profile games.
+- Stage 14 `npm run build`: PASS — 919 modules transformed; production bundle built.
+- Stage 14 `npm run check`: PASS — typecheck, lint, 52 files / 298 tests, build.
+- Stage 14 `git diff --check`: PASS (Git emitted only line-ending conversion notices).
+- Diff review: production trade/personality modules receive only `PlayerView`; `GameState` appears
+  only in test/simulation orchestration. No hidden collections, forbidden entropy, rule duplication,
+  or UI/domain dependency was introduced.
+
+Dependencies:
+
+- None added.
+
+Known limitations:
+
+- Initiated V1 offers search bounded one-for-one terms; the counter path adds one minimal requested
+  card rather than enumerating large bundles.
+- Opponent benefit is deliberately estimated from public production, score, cards, networks, and
+  awards rather than hidden hand composition.
+
+Stage commit:
+
+- Pending creation: `feat: add trade AI and player personalities`
+
+Next stage:
+
+- Stage 15 LocalGameGateway, deterministic AI orchestration, Zustand session/UI stores, and
+  versioned browser persistence.

@@ -23,6 +23,7 @@ export interface CoreAiSimulationOptions {
   readonly limits?: AiSafetyLimits
   readonly maxTurns?: number
   readonly agent?: AiAgent
+  readonly profileIds?: readonly [AiProfileId, AiProfileId, AiProfileId, AiProfileId]
 }
 
 export interface CoreAiSimulationSummary {
@@ -32,9 +33,20 @@ export interface CoreAiSimulationSummary {
   readonly turns: number
   readonly finalStateVersion: number
   readonly finalRandomDrawCount: number
+  readonly profileIds: readonly [AiProfileId, AiProfileId, AiProfileId, AiProfileId]
 }
 
-function simulationConfig(seed: string): GameConfig {
+const DEFAULT_PROFILE_IDS = [
+  'CORE' as AiProfileId,
+  'CORE' as AiProfileId,
+  'CORE' as AiProfileId,
+  'CORE' as AiProfileId,
+] as const
+
+function simulationConfig(
+  seed: string,
+  profileIds: readonly [AiProfileId, AiProfileId, AiProfileId, AiProfileId],
+): GameConfig {
   const [north, east, south, west] = SIMULATION_PLAYER_IDS as unknown as readonly [
     PlayerId,
     PlayerId,
@@ -50,19 +62,19 @@ function simulationConfig(seed: string): GameConfig {
         id: east,
         name: 'East',
         color: 'BLUE',
-        controller: { type: 'AI', profileId: 'CORE' as AiProfileId },
+        controller: { type: 'AI', profileId: profileIds[1] },
       },
       {
         id: south,
         name: 'South',
         color: 'ORANGE',
-        controller: { type: 'AI', profileId: 'CORE' as AiProfileId },
+        controller: { type: 'AI', profileId: profileIds[2] },
       },
       {
         id: west,
         name: 'West',
         color: 'WHITE',
-        controller: { type: 'AI', profileId: 'CORE' as AiProfileId },
+        controller: { type: 'AI', profileId: profileIds[3] },
       },
     ],
   }
@@ -132,13 +144,23 @@ export async function simulateCoreAiGame(
   const limits = options.limits ?? DEFAULT_AI_SAFETY_LIMITS
   const maxTurns = options.maxTurns ?? 2_000
   const agent = options.agent ?? new DeterministicCoreAiAgent()
-  let state = gameEngine.createGame(simulationConfig(seed), seed)
+  const profileIds = options.profileIds ?? DEFAULT_PROFILE_IDS
+  let state = gameEngine.createGame(simulationConfig(seed, profileIds), seed)
+  const profileByPlayerId = new Map<PlayerId, AiProfileId>()
+  for (let seatIndex = 0; seatIndex < SIMULATION_PLAYER_IDS.length; seatIndex += 1) {
+    const playerId = SIMULATION_PLAYER_IDS[seatIndex]
+    const profileId = profileIds[seatIndex]
+    if (playerId === undefined || profileId === undefined) {
+      throw new Error(`Missing simulation seat or profile at index ${seatIndex}.`)
+    }
+    profileByPlayerId.set(playerId as PlayerId, profileId)
+  }
   let commands = 0
   let currentTurnIdentity = turnIdentity(state)
   let commandKeysThisTurn: string[] = []
-  const seenProgressStates = new Set<string>()
+  const seenProgressStates = new Map<string, number>()
   assertTradingState(state)
-  seenProgressStates.add(progressFingerprint(state))
+  seenProgressStates.set(progressFingerprint(state), 1)
 
   while (state.winnerId === null) {
     if (state.turn.turnNumber > maxTurns) {
@@ -160,9 +182,12 @@ export async function simulateCoreAiGame(
     }
     const actorId = nextDecisionActor(state)
     const view = gameEngine.createPlayerView(state, actorId)
+    const profileId = profileByPlayerId.get(actorId)
+    if (profileId === undefined) throw trace(seed, state, actorId, null, 'missing AI profile')
     let command: GameCommand
     try {
       command = await agent.chooseNextCommand(view, {
+        profileId,
         commandNumberThisTurn: commandKeysThisTurn.length,
         commandNumberThisGame: commands,
         previousCommandKeysThisTurn: commandKeysThisTurn,
@@ -187,10 +212,11 @@ export async function simulateCoreAiGame(
     }
     assertTradingState(result.state)
     const progressKey = progressFingerprint(result.state)
-    if (seenProgressStates.has(progressKey)) {
+    const progressOccurrences = (seenProgressStates.get(progressKey) ?? 0) + 1
+    if (progressOccurrences > 4) {
       throw trace(seed, result.state, actorId, command, 'repeated progress state detected')
     }
-    seenProgressStates.add(progressKey)
+    seenProgressStates.set(progressKey, progressOccurrences)
     commandKeysThisTurn.push(createAiCommandKey(command))
     state = result.state
     commands += 1
@@ -203,6 +229,7 @@ export async function simulateCoreAiGame(
     turns: state.turn.turnNumber,
     finalStateVersion: state.stateVersion,
     finalRandomDrawCount: state.random.drawCount,
+    profileIds: [...profileIds],
   }
 }
 

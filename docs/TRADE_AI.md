@@ -232,3 +232,15 @@ Required trade tests later include:
 8. Same state/profile/seed gives deterministic result
 9. Rejected repeated offer does not loop
 10. Trade completion revalidates both hands because state may have changed
+
+## 14. Stage 14 implementation boundary
+
+`PersonalityAiAgent` evaluates only its `PlayerView` and the visible pending offer. Dynamic resource
+values combine current recipes, immediate build unlock or lock, visible production, board scarcity,
+controlled ports, self hand surplus/seven risk, public award pressure, and opponent public score.
+Opponent benefit remains an estimate; hidden hand composition never enters the interface.
+
+Merchant, Builder, and Sentinel are explicit threshold/weight records on one engine. Offers and
+counters use deterministic turn/actor/attempt IDs, at most two negotiations per turn, one engine
+counter depth, direct code-unit tie-breaks, and no repeated identical terms. The mixed-profile smoke
+suite covers 24 fixed games plus focused AI-to-AI and AI-to-Human pending-offer tests.

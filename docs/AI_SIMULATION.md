@@ -26,3 +26,16 @@ Failures report seed, state version, turn, phase, actor, command key, and violat
 The ordinary test suite covers 16 fixed seeds in four parallel batches. The harness controls all
 four seats as AI while preserving the accepted one-Human/three-AI creation contract in authoritative
 state.
+
+## Mixed personality corpus
+
+Run the Stage 14 trade/personality corpus with:
+
+```text
+npm run simulate:mixed -- 32
+```
+
+Seats rotate through Merchant, Builder, and Sentinel profiles. The ordinary suite runs 24 fixed
+mixed-profile games in six parallel batches. Domestic offers, rejections, acceptances, and counters
+remain ordinary commands; a negotiation may revisit the exact pre-offer state, so repeated-state
+detection permits the bounded two-attempt policy before diagnosing a loop.

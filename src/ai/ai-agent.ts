@@ -1,5 +1,6 @@
 import type { GameCommand } from '../game/contracts/commands.ts'
 import type { PlayerView } from '../game/contracts/views.ts'
+import type { AiProfileId } from '../game/model/ids.ts'
 
 export interface AiSafetyLimits {
   readonly maxCommandsPerTurn: number
@@ -8,6 +9,7 @@ export interface AiSafetyLimits {
 }
 
 export interface AiDecisionContext {
+  readonly profileId?: AiProfileId
   readonly commandNumberThisTurn: number
   readonly commandNumberThisGame: number
   readonly previousCommandKeysThisTurn: readonly string[]

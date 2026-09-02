@@ -463,6 +463,14 @@ creates a fresh player view for every AI decision, executes the result through `
 asserts the full invariant stack after every accepted command. Creation retains the frozen
 one-Human/three-AI configuration even when the harness controls all four seats.
 
+### Stage 14 trade AI and personality boundary
+
+Stage 14 wraps the same core agent with Merchant, Builder, and Sentinel weight profiles. Trade
+evaluation uses only a party's `PlayerView`, derives marginal self resource values and public threat,
+and returns accepted trade response/initiation commands. Deterministic turn/actor/attempt trade IDs,
+one counter depth, at most two initiations, and term-history checks keep negotiation finite without
+adding authoritative AI state or randomness.
+
 ## 16. Suggested source structure
 
 ```text

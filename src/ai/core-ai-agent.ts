@@ -360,7 +360,7 @@ export function createAiCommandKey(command: GameCommand): string {
     case 'CHOOSE_MONOPOLY_RESOURCE':
       return `${command.type}:${command.resource}`
     case 'PROPOSE_TRADE':
-      return `${command.type}:${tradeOfferKey(command.offer)}`
+      return `${command.type}:${tradeOfferTermsKey(command.offer)}`
     case 'ACCEPT_TRADE':
     case 'REJECT_TRADE':
       return `${command.type}:${command.tradeId}`
@@ -385,6 +385,16 @@ function tradeOfferKey(offer: TradeOffer): string {
     resourceBagKey(offer.initiatorGives),
     resourceBagKey(offer.counterpartyGives),
     offer.parentTradeId ?? '',
+  ].join(':')
+}
+
+function tradeOfferTermsKey(offer: TradeOffer): string {
+  return [
+    offer.initiatorId,
+    offer.counterpartyId,
+    offer.proposedById,
+    resourceBagKey(offer.initiatorGives),
+    resourceBagKey(offer.counterpartyGives),
   ].join(':')
 }
 
