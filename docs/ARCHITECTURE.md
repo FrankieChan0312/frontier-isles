@@ -89,6 +89,14 @@ Every command is validated by the engine. Human clicks and AI decisions submit t
 
 Game creation is an application/engine operation exposed through `createGame`; it is not an in-game actor command and therefore is not represented by `START_GAME` in `GameCommand`.
 
+Task 05 implements the pure `createGame(config, seed)` boundary. Its deterministic creation order
+is standard board generation, one bounded first-player draw with clockwise rotation, then one
+development-deck shuffle. The shuffled deck uses array index `0` as its top card.
+
+Task 05 also provides a deliberately narrow setup-only command executor for
+`PLACE_INITIAL_SETTLEMENT` and `PLACE_INITIAL_ROAD`. It uses the accepted command envelope,
+engine result, violations, and events without introducing the future complete command router.
+
 Representative commands:
 
 ```text

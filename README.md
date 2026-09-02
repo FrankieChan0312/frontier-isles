@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–04 provide the React application foundation, pure TypeScript domain contracts, the deterministic standard 19-tile topology, a responsive accessible raw-SVG topology preview, and reproducible seeded initial board content with validated terrain, numbers, ports, empty occupancy, and desert robber placement. Game-rule behaviour is not implemented yet.
+Tasks 00–05 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, and the complete four-player snake-order initial setup flow. Normal-turn game-rule behaviour is not implemented yet.
 
 V1 target:
 
@@ -36,8 +36,9 @@ Read in this order:
 11. `tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md`
 12. `tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md`
 13. `tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md`
+14. `tasks/TASK_05_GAME_CREATION_AND_INITIAL_SETUP.md`
 
-The current implementation includes **Task 00: Project Foundation**, **Task 01: Domain Contracts**, **Task 02: Deterministic Standard Board Topology**, **Task 03: Responsive Raw-SVG Standard Board Renderer**, and **Task 04: Deterministic Seeded Standard Board Content**. The landing page remains a static neutral topology preview; generated terrain, number tokens, and robber state are domain-only and are not rendered yet. Interaction, game rules, AI behaviour, networking, and persistence are not implemented.
+The current implementation includes **Tasks 00–05**, through deterministic game creation and complete initial settlement/road setup. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Normal turns, dice, paid building, development-card behaviour, robber resolution, trade, awards, scoring, AI, networking, and persistence are not implemented.
 
 ## Local development
 

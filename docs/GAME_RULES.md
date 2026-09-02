@@ -121,7 +121,7 @@ On each setup placement, the player places:
 
 Setup settlements do not require connection to an existing road, but the distance rule always applies.
 
-After placing the second settlement, the player immediately receives one resource from each adjacent producing terrain hex. Desert contributes nothing. Bank-shortage handling still applies.
+After placing the second settlement, the player immediately receives one resource from each adjacent producing terrain hex. This transfer is committed by the settlement command before that player's setup-road command. Desert contributes nothing. Bank-shortage handling still applies.
 
 The first player begins the first normal turn after all setup placements finish.
 

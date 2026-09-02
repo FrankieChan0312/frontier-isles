@@ -1,0 +1,57 @@
+Implement Task 05 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before changing code, read and obey in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/GAME_RULES.md
+4. docs/ARCHITECTURE.md
+5. docs/BOARD_MODEL.md
+6. docs/CODING_STANDARDS.md
+7. docs/adr/ADR-0001-v1-architecture-baseline.md
+8. docs/adr/ADR-0002-flat-top-raw-svg-board-rendering.md
+9. docs/adr/ADR-0003-deterministic-seeded-board-generation.md
+10. tasks/TASK_01_DOMAIN_CONTRACTS.md
+11. tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md
+12. tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md
+13. tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md
+14. tasks/TASK_05_GAME_CREATION_AND_INITIAL_SETUP.md
+
+First run `git status --short` and `npm run check`. The accepted Task 04 baseline must be clean and passing apart from the supplied untracked Task 05 files. Stop and report a blocker if the accepted baseline fails.
+
+Implement the complete Task 05 scope exactly as specified:
+- strict runtime four-player GameConfig validation;
+- standard fresh 19-card-per-resource bank;
+- exact 25-card source deck, deterministic IDs, index-0 top convention, and fresh shuffled card objects;
+- exact createGame random order: board generation, one first-player draw and clockwise rotation, then deck shuffle;
+- complete authoritative initial setup GameState;
+- narrow setup-only command envelope/executor for PLACE_INITIAL_SETTLEMENT and PLACE_INITIAL_ROAD;
+- setup distance, occupancy, adjacency, finite-piece, actor, version, phase, and invariant checks;
+- immediate round-2 starting-resource transfers and deterministic shortage behavior;
+- exact round-local setup-index semantics and A,B,C,D,D,C,B,A progression;
+- final transition to turn 1 / ROLL_REQUIRED;
+- exact events, immutable state transitions, stateVersion behavior, golden creation fixture, and full 16-command replay fixture;
+- ADR-0004, focused tests, and only the authorized documentation updates.
+
+Hard limits:
+- reuse all accepted Task 01 contracts, Task 02 topology, Task 03 UI/projection, and Task 04 RNG/board behavior exactly;
+- no dependency or package changes;
+- no generic complete GameEngine/router/class yet;
+- no normal-turn dice/production, paid building, development-card behavior, robber, trade, awards, scoring, victory, selectors, PlayerView projection, AI, Zustand, gateway, persistence, routing, backend, networking, UI changes, animation, audio, deployment, or Git commit;
+- no Math.random, Web Crypto randomness, UUID, clock entropy, mutable/global RNG, extra/decorative random draw, seed normalization, locale-dependent ordering, branded-ID parsing, or mutation of accepted constants/input state;
+- no barrel index files or speculative framework.
+
+Use every exact API, source distribution/order, card ID, random-operation order, golden anchor, setup transition, placement ID, resource grant, violation precedence, event order, final-state expectation, invariant, and test requirement defined in the task document. Do not substitute a shuffled player order for the frozen clockwise rotation and do not delay starting-resource grants until the road command.
+
+Before finishing, run in this order:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+- git diff --check
+
+Fix every failure within Task 05 scope.
+
+Return the completion report required by AGENTS.md plus every Task 05 completion-report addition: exact files/APIs/config validation/bank/deck source and IDs; creation random order and all golden random anchors; first-player index/order/full shuffled deck; setup index/order/placement IDs/resource grants; final state/ownership/resources/bank/RNG/deck/event totals; test totals and exact command results; unchanged-prior-work/dependency confirmations; explicit scope confirmation; and confirmation that no Git commit was created.
