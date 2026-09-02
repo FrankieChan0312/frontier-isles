@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00 and 01 provide the React application foundation, minimal landing screen, and pure TypeScript domain contracts for authoritative state, commands, events, violations, and redacted player views. Game-rule behaviour is not implemented yet.
+Tasks 00–02 provide the React application foundation, pure TypeScript domain contracts, and the deterministic standard 19-tile board topology with stable graph identifiers, coastline ordering, and port slots. Game-rule behaviour and board contents are not implemented yet.
 
 V1 target:
 
@@ -33,8 +33,9 @@ Read in this order:
 8. `docs/CODING_STANDARDS.md`
 9. `tasks/TASK_00_PROJECT_FOUNDATION.md`
 10. `tasks/TASK_01_DOMAIN_CONTRACTS.md`
+11. `tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md`
 
-The current implementation includes **Task 00: Project Foundation** and **Task 01: Domain Contracts**. It does not yet implement game rules, board generation, AI behaviour, networking, or persistence.
+The current implementation includes **Task 00: Project Foundation**, **Task 01: Domain Contracts**, and **Task 02: Deterministic Standard Board Topology**. It does not yet implement board contents, game rules, AI behaviour, networking, or persistence.
 
 ## Local development
 
@@ -70,7 +71,7 @@ Run the complete quality suite:
 npm run check
 ```
 
-See the [product documentation](docs/PRODUCT_SCOPE.md), [architecture](docs/ARCHITECTURE.md), [Task 00 specification](tasks/TASK_00_PROJECT_FOUNDATION.md), and [Task 01 specification](tasks/TASK_01_DOMAIN_CONTRACTS.md) for scope and design details.
+See the [product documentation](docs/PRODUCT_SCOPE.md), [architecture](docs/ARCHITECTURE.md), [board model](docs/BOARD_MODEL.md), and task specifications under [tasks](tasks/) for scope and design details.
 
 ## Working ruleset identifier
 

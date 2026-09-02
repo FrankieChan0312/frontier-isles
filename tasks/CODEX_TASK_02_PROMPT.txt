@@ -1,0 +1,41 @@
+Implement Task 02 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making changes, read and obey in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/GAME_RULES.md
+4. docs/ARCHITECTURE.md
+5. docs/BOARD_MODEL.md
+6. docs/CODING_STANDARDS.md
+7. docs/adr/ADR-0001-v1-architecture-baseline.md
+8. tasks/TASK_01_DOMAIN_CONTRACTS.md
+9. tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md
+
+First run `git status --short` and `npm run check`. The accepted Task 01 baseline must be clean and passing apart from the supplied untracked Task 02 files. Stop and report a blocker if it is not.
+
+Implement the complete Task 02 scope exactly as specified: the deterministic standard radius-two 19-tile / 54-vertex / 72-edge graph, integer scaled-cube corner geometry, exact stable IDs, reciprocal adjacency, deterministic 30-edge coastline cycle, nine frozen port slots, the `createStandardBoardTopology(portKinds)` factory, invariant assertion, tests, and only the authorized BOARD_MODEL/README documentation updates.
+
+Hard limits:
+- reuse the accepted Task 01 contracts; do not silently change them;
+- no new dependency;
+- no terrain, number tokens, desert, robber, occupancy, BoardState, game creation, RNG, shuffle, Math.random, dice, rules, commands, events, selectors, AI, stores, gateway, persistence, React, MUI, SVG, backend, networking, deployment, or Git commit;
+- no floating-point/trigonometric corner geometry;
+- no UUIDs, hashes, locale-dependent ordering, array-index IDs, or object-insertion-order assumptions;
+- no Map/Set/Date/function in returned public data;
+- no barrel index files.
+
+Use the exact coordinate formula, corner offsets, ID formats, coastline traversal, port indices, source layout, and acceptance tests in the task document. Temporary local Map/Set construction values are allowed only if they do not escape into returned contracts.
+
+Before finishing, run in this order:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+- git diff --check
+
+Fix every failure within Task 02 scope.
+
+Return the completion report required by AGENTS.md plus every Task 02 completion-report addition, including exact topology counts/distributions, coastline start/first edge, all nine resolved port edge IDs, exact ID-format confirmation, test counts/results, no-contract-change confirmation, scope confirmation, and confirmation that no Git commit was created.

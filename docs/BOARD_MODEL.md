@@ -50,6 +50,19 @@ export interface HexCoordinate {
 
 The radius-two board contains all axial coordinates whose cube-coordinate distance from the origin is at most two.
 
+Task 02 uses exact integer scaled-cube geometry for shared corners. For cube center `(x, y, z)`, each center component is multiplied by three and one of these ordered offsets is added:
+
+```text
+( 2, -1, -1)
+( 1,  1, -2)
+(-1,  2, -1)
+(-2,  1,  1)
+(-1, -1,  2)
+( 1, -2,  1)
+```
+
+Therefore each corner is `(3x, 3y, 3z) + orderedCornerOffset` and remains an exact zero-sum integer triplet. No floating-point or rendering geometry is used to identify shared corners.
+
 Axial coordinates are domain data. The SVG layer converts them into screen coordinates using a consistent pointy-top or flat-top orientation selected in the board-layout module.
 
 ## 4. Topology
@@ -144,16 +157,32 @@ export interface Road {
 
 Identifiers must be deterministic and independent of render order.
 
-Recommended strategy:
+The stable formats are:
 
-- Tile ID derives from axial coordinate
-- Vertex ID derives from a normalized integer geometric corner coordinate
-- Edge ID derives from its two sorted vertex IDs
-- Port ID derives from its coastal edge ID
+```text
+TileId   = tile:${q},${r}
+VertexId = vertex:${x},${y},${z}
+EdgeId   = edge:${lowerVertexId}|${higherVertexId}
+PortId   = port:${edgeId}
+```
+
+Edge endpoints are ordered by direct code-unit comparison of the full vertex-ID strings. Locale-dependent comparison, array indices, insertion order, hashes, and random identifiers are not used.
 
 Do not use array indexes as persistent IDs. Do not use random UUIDs for topology elements.
 
-## 7. Board generation
+## 7. Deterministic coastline and port slots
+
+The 30 coastal edges form one cycle. Its canonical traversal starts at the code-unit-smallest coastal vertex and follows the smaller of that vertex's two coastal neighbours first. The traversal must visit every coastal edge exactly once before returning to its start.
+
+Nine ports attach at zero-based coastline edge indices:
+
+```text
+0, 3, 6, 10, 13, 16, 20, 23, 26
+```
+
+The cyclic gaps are `3, 3, 4, 3, 3, 4, 3, 3, 4`, so selected port edges do not share vertices. Task 02 accepts nine already ordered port kinds and preserves that order; it does not create, validate, or shuffle the eventual port-kind multiset.
+
+## 8. Board generation
 
 The digital variable setup uses the frozen component distribution.
 
@@ -174,7 +203,7 @@ All random operations consume the seeded random source. A generation algorithm v
 boardGeneratorVersion = STANDARD_RADIUS_2_V1
 ```
 
-## 8. Rendering boundary
+## 9. Rendering boundary
 
 Domain data must not contain:
 
@@ -199,7 +228,7 @@ port icon position and rotation
 
 A single SVG `viewBox` provides responsive scaling.
 
-## 9. Interaction layers
+## 10. Interaction layers
 
 Recommended SVG draw order:
 
@@ -216,7 +245,7 @@ Recommended SVG draw order:
 
 Large invisible hit areas may improve usability, but they must map to stable domain IDs.
 
-## 10. Derived board selectors
+## 11. Derived board selectors
 
 Do not duplicate these facts in player state:
 
@@ -232,7 +261,7 @@ Do not duplicate these facts in player state:
 
 They are derived from topology, occupancy, turn state, resources, and rules.
 
-## 11. Longest Road algorithm requirements
+## 12. Longest Road algorithm requirements
 
 The algorithm operates on the acting player's owned-edge subgraph.
 
