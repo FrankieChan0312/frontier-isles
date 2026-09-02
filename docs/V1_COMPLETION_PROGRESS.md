@@ -56,7 +56,7 @@ Stage commits:
 - Stage 12: `52b24ea66d368521a7393e12d3ed43cf7d774f86` — `feat: add unified game engine and redacted player views`
 - Stage 13: `dbf4a1e4354be24363336e7a78c7a0b9e80572ae` — `feat: add deterministic core AI player`
 - Stage 14: `5e53f708aca33733dec58a6f47725597c45ab986` — `feat: add trade AI and player personalities`
-- Stage 15: pending
+- Stage 15: `9306cd432e7fcde2eb1771689af0de3b7940d98b` — `feat: add local game gateway and browser persistence`
 - Stage 16: pending
 - Stage 17: pending
 
@@ -296,8 +296,116 @@ Known limitations:
 
 Stage commit:
 
-- Pending — `feat: add local game gateway and browser persistence`
+- `9306cd432e7fcde2eb1771689af0de3b7940d98b` — `feat: add local game gateway and browser persistence`
 
 Next stage:
 
 - Stage 16 complete interactive MUI and raw SVG browser interface.
+
+### Stage 16 — COMPLETE
+
+Plan:
+
+1. Compose the browser application around one `LocalGameGateway`, a redacted session store, and a
+   presentation-only interaction store.
+2. Implement the Home/New Game and resumable-save workflows with a displayed materialized seed,
+   Human name, original concise help, and recoverable feedback.
+3. Render the accepted board topology as a responsive raw SVG with terrain, tokens, robber, ports,
+   pieces, and keyboard-operable legal targets driven only by `PlayerView.legalActions`.
+4. Add complete Human controls and dialogs for setup, turns, robber/discard, building, development
+   cards, maritime/domestic trades, negotiation responses, victory, saving, and new games.
+5. Add component/workflow/redaction/responsive tests, visually inspect desktop and 480px layouts,
+   document the UI boundary, and run the complete Stage 16 verification matrix.
+
+Design decisions:
+
+- Screen state is local application presentation state; no router dependency is needed for two
+  screens.
+- UI command construction is centralized in a controller hook; components render accepted legal
+  projections and never calculate legality or mutate game facts.
+- SVG coordinates derive from the public board topology already present in `PlayerView`; clickable
+  vertices/edges/tiles exist only when their IDs are present in the relevant legal-action list.
+- Generated seeds are materialized at the browser application boundary and immediately displayed;
+  tests inject deterministic factories.
+
+Files changed:
+
+- `vitest.config.ts`
+- `docs/ARCHITECTURE.md`
+- `docs/UI_DESIGN.md`
+- `docs/V1_COMPLETION_PROGRESS.md`
+- `docs/adr/ADR-0015-redacted-mui-svg-browser-interface.md`
+- `src/app/app.tsx`
+- `src/app/app.test.tsx`
+- `src/app/browser-game.ts`
+- `src/app/browser-runtime.ts`
+- `src/theme/frontier-theme.ts`
+- `src/ui/board/PlayableGameBoard.tsx`
+- `src/ui/board/PlayableGameBoard.test.tsx`
+- `src/ui/controllers/game-command-controller.ts`
+- `src/ui/controllers/game-command-controller.test.ts`
+- `src/ui/dialogs/GameDialogs.tsx`
+- `src/ui/dialogs/GameDialogs.test.tsx`
+- `src/ui/game/ui-format.ts`
+- `src/ui/pages/HomePage.tsx`
+- `src/ui/pages/GamePage.tsx`
+- `src/ui/panels/ActionPanel.tsx`
+- `src/ui/panels/PlayerPanels.tsx`
+- `src/ui/panels/ResourceHand.tsx`
+
+Behaviour implemented:
+
+- Complete Home/New Game, materialized seed, continue/delete save, and original quick-rules screen.
+- Gateway/Zustand-driven game screen with responsive public SVG board, terrain/tokens/robber/ports,
+  public pieces, players, private Human hand, scores/awards, roll, action panel, redacted log, status,
+  save/restart/new-game, and victory UI.
+- Human setup, roll/end, discard, robber/target, paid and free building, development purchase/play,
+  Invention, Monopoly, Road Building finish, maritime trade, domestic propose/respond/counter, and
+  victory workflows, all using projected legal actions and the shared command gateway.
+- Keyboard-operable named SVG targets, visible focus, dialog focus management, reduced-motion rule,
+  wrapped controls, and a no-horizontal-overflow mobile layout.
+
+Verification results:
+
+- Focused Stage 16 UI tests: PASS — 5 files, 10 tests.
+- Stage 16 `npm run typecheck`: PASS.
+- Stage 16 `npm run lint`: PASS with zero warnings.
+- Stage 16 `npm run test`: PASS — 59 test files, 318 tests.
+- Stage 16 `npm run build`: PASS — 990 modules transformed; production bundle built. Vite emitted a
+  non-failing 623.67 kB main-chunk advisory for the combined MUI/local-engine application.
+- Stage 16 `npm run check`: PASS — typecheck, lint, 59 files / 318 tests, build.
+- Stage 16 browser verification: PASS — real `LocalGameGateway` start, AI setup advance,
+  Human settlement/road submissions, save, and next Human boundary; no console warnings/errors.
+- Responsive browser measurements: PASS at 1440×900, 1024×768, and 480×800; scroll width equalled
+  client width at every size, SVG and header controls stayed in bounds, and the temporary viewport
+  override was reset.
+- Stage 16 `git diff --check`: PASS (Git emitted only line-ending conversion notices).
+- Diff/privacy review: production `src/app` and `src/ui` contain no `GameState`, authoritative deck,
+  RNG state, console logging, `Math.random`, or random UUID access. The only entropy is the explicit
+  materialized browser seed factory outside domain/AI code. No router, backend, network, official
+  artwork, or future multiplayer feature was added.
+
+Dependencies:
+
+- None added. The implementation uses the accepted React, MUI, Zustand, and Roboto dependencies.
+
+Tests added or updated:
+
+- App start/continue/delete and real-engine SVG command submission.
+- Public playable board layers and Enter-key target activation.
+- UI controller refusal of non-projected board targets.
+- Exact discard selection and redacted domestic-trade response actions.
+
+Known limitations:
+
+- The tablet/mobile layout is intentionally vertically stacked rather than offering board pan/zoom.
+- The complete local engine plus MUI ships in one 623.67 kB minified entry chunk before Stage 17
+  bundle hardening review.
+
+Stage commit:
+
+- Pending — `feat: add complete interactive game interface`
+
+Next stage:
+
+- Stage 17 release hardening, 100-seed simulation, E2E, documentation, and static deployment setup.

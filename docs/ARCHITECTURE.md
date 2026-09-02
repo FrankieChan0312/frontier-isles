@@ -271,11 +271,14 @@ The UI may disable or highlight based on this projection, but the engine validat
 
 ```ts
 export interface GameGateway {
-  createGame(config: GameConfig): Promise<PlayerView>;
+  createGame(config: GameConfig, seed: string): Promise<PlayerView>;
   submit(command: CommandEnvelope): Promise<CommandResponse>;
   subscribe(listener: (update: GameUpdate) => void): () => void;
   saveGame(): Promise<void>;
   loadGame(gameId: GameId): Promise<PlayerView>;
+  loadLatestGame(): Promise<PlayerView>;
+  hasSavedGame(): Promise<boolean>;
+  deleteSavedGame(): Promise<void>;
 }
 ```
 
@@ -342,6 +345,18 @@ The UI store must never become a second source of authoritative game facts.
 The session store consumes `GameUpdate` and retains only `PlayerView`, redacted events, connection,
 AI-thinking, save, and recoverable-error state. The interaction store contains presentation-only
 hover, selection, build-mode, dialog, zoom, and sidebar state. Neither store imports `GameState`.
+
+### Stage 16 browser UI
+
+The two-screen React application composes `GameGateway` with those stores. Home owns only form and
+screen state. The game screen renders `PlayerView`, redacted events, and gateway status. A central
+UI command controller maps engine-projected board targets to command contracts; every command is
+still revalidated by the gateway engine.
+
+MUI owns forms, panels, actions, dialogs, layout, focus management, and feedback. The board is raw
+responsive SVG derived from public topology and occupancy. Terrain, number tokens, robber, ports,
+roads, settlements, cities, and legal targets are public-view renderings. SVG targets are tabbable,
+named, and activate with Enter or Space. No component receives persistence envelopes or `GameState`.
 
 ## 13. Persistence
 
