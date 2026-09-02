@@ -1,0 +1,56 @@
+Implement Task 06 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making source changes:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the relevant frozen documentation and ADRs under docs/.
+3. Read the accepted Task 01, Task 02, Task 04, and corrected Task 05 specifications.
+4. Read tasks/TASK_06_DICE_PRODUCTION_AND_TURN_LIFECYCLE.md in full and treat it as the execution specification.
+5. Run the required preflight checks.
+
+Implement the complete Task 06 scope exactly as specified:
+
+- pure deterministic rollDice(random);
+- the narrow ROLL_DICE / END_TURN lifecycle command executor;
+- frozen validation precedence;
+- normal resource production from authoritative tile/building state;
+- robber blocking;
+- settlement/city yields;
+- same-player/same-tile allocation aggregation;
+- deterministic tile/player/event ordering;
+- exact single-player and multi-player bank-shortage behavior;
+- non-seven transition to ACTION;
+- rolled-seven transition to accepted DISCARD_REQUIRED or ROBBER_MOVE_REQUIRED pending state without resolving it;
+- clockwise END_TURN advancement and global turn-number increment;
+- focused normal-turn invariants;
+- all required focused, corruption, immutability, shortage, seven-branch, and golden replay tests;
+- required narrow documentation and ADR updates.
+
+Important boundaries:
+
+- The corrected Task 05 behavior is authoritative: its golden setup replay emits 8 per-tile RESOURCE_PRODUCED events and 25 events total.
+- Reuse accepted Task 01 contracts unchanged.
+- Reuse accepted Task 04 RNG functions; do not duplicate bounded random logic.
+- Preserve accepted Task 02 topology, Task 03 SVG/UI, and Task 05 creation/setup behavior.
+- Do not implement a complete generic command router.
+- Do not execute DISCARD_RESOURCES.
+- Do not move the robber or steal a resource.
+- Do not implement paid building, trades, development-card behavior, awards, score, victory, PlayerView, AI, Zustand, gateways, persistence, routing, backend, networking, or UI changes.
+- Do not use Math.random(), Web Crypto randomness, UUIDs, timestamps, or hidden entropy.
+- Do not add dependencies.
+- Do not create a Git commit.
+
+Normal invalid player commands must return the accepted RuleViolation / EngineResult failure branch. Corrupt authoritative state must throw an actionable invariant Error. All successful and failed operations must preserve the immutability requirements in the task.
+
+Before finishing, run and fix all in-scope failures from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Return a completion report containing every item required by AGENTS.md and the Task 06 completion-report section, including exact golden dice/RNG/resource/bank/event results, scope confirmation, dependency confirmation, and confirmation that no Git commit was created.

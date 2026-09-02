@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–05 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, and the complete four-player snake-order initial setup flow. Normal-turn game-rule behaviour is not implemented yet.
+Tasks 00–06 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, and clockwise normal-turn lifecycle advancement. Seven resolution and normal Action-phase rules remain future work.
 
 V1 target:
 
@@ -37,8 +37,9 @@ Read in this order:
 12. `tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md`
 13. `tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md`
 14. `tasks/TASK_05_GAME_CREATION_AND_INITIAL_SETUP.md`
+15. `tasks/TASK_06_DICE_PRODUCTION_AND_TURN_LIFECYCLE.md`
 
-The current implementation includes **Tasks 00–05**, through deterministic game creation and complete initial settlement/road setup. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Normal turns, dice, paid building, development-card behaviour, robber resolution, trade, awards, scoring, AI, networking, and persistence are not implemented.
+The current implementation includes **Tasks 00–06**, through deterministic dice production and `ROLL_DICE`/`END_TURN` lifecycle execution. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Discard execution, robber movement/theft, paid building, development-card behaviour, trade, awards, scoring, AI, networking, persistence, and additional gameplay UI are not implemented.
 
 ## Local development
 

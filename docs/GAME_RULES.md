@@ -85,7 +85,11 @@ Building is illegal when the required piece is unavailable. Upgrading a settleme
 
 The bank begins with 19 cards of each resource type.
 
-When production owes a resource to multiple players but the bank cannot satisfy all of that resource, nobody receives that resource for that production. If the shortage affects only one player, that player receives as many as remain. Other resource types are resolved normally.
+Production shortage is decided independently for each resource type across every matching unblocked
+tile in that roll. When the bank cannot satisfy multiple entitled players, nobody receives that
+resource and its bank supply remains unchanged. When only one player is entitled, that player
+receives as many cards as remain, allocated in deterministic tile order. Other resource types are
+resolved normally, and bank counts never become negative.
 
 ### Development deck
 
@@ -176,7 +180,10 @@ Building a port settlement may therefore improve maritime trade later in the sam
 - A tile occupied by the robber produces nothing
 - Total 7 produces no terrain resources
 
-All dice use the seeded random source.
+All dice use the seeded random source. A successful roll draws the first die and then the second die
+from the immutable random cursor. Producing tiles are processed in ascending axial coordinate order;
+within each tile, allocations follow fixed player order. Multiple buildings owned by one player on
+one tile form one allocation, while allocations from different tiles remain separate.
 
 ## 10. Rolling seven
 
@@ -190,6 +197,11 @@ When the current player rolls seven:
 6. The turn enters `ACTION`.
 
 Development cards do not count toward the seven-card threshold and cannot be stolen by the robber.
+
+Task 06 implements only the transition created by a rolled seven. It records the ordered dice and
+either enters `DISCARD_REQUIRED` with the exact positive discard counts or, when nobody must discard,
+enters `ROBBER_MOVE_REQUIRED`. Discard execution, robber movement, target choice, theft, and the
+eventual transition to `ACTION` remain subsequent rule work.
 
 Playing a Knight moves the robber and may steal a card, but does not trigger discards.
 

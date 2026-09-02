@@ -97,6 +97,18 @@ Task 05 also provides a deliberately narrow setup-only command executor for
 `PLACE_INITIAL_SETTLEMENT` and `PLACE_INITIAL_ROAD`. It uses the accepted command envelope,
 engine result, violations, and events without introducing the future complete command router.
 
+Task 06 adds a second narrow executor for `ROLL_DICE` and `END_TURN`. A roll threads the accepted
+immutable random state through two ordered bounded draws, resolves production from authoritative
+tile/building state, and commits one versioned result. Production candidates are ordered by axial
+tile coordinate and then `playerOrder`; same-player yield is aggregated only within one tile.
+Blocked-production events follow granted allocations in frozen resource-type order. A rolled seven
+creates the accepted discard or robber-move pending decision but does not resolve it.
+
+`turnNumber` is a global one-based player-turn sequence. Each successful `END_TURN` advances to the
+next clockwise `playerOrder` entry, increments this number once, and returns to `ROLL_REQUIRED`.
+The Task 05 setup executor and Task 06 lifecycle executor remain separate until later command
+families can be composed without a misleading incomplete generic router.
+
 Representative commands:
 
 ```text
@@ -341,9 +353,10 @@ XORSHIFT32 then applies shifts `13`, `17`, and `5` in that exact order. Bounded 
 rejection sampling and shuffles use immutable Fisher–Yates. `Math.random()`, Web Crypto entropy,
 clock entropy, seed normalization, and implicit random draws are forbidden.
 
-Board generation threads this state explicitly through the frozen port-first draw sequence. Dice,
-random theft, deck generation, and controlled AI randomness will consume the same explicit source
-in later tasks.
+Board generation threads this state explicitly through the frozen port-first draw sequence. Task 06
+dice rolling consumes two ordered `nextRandomInt(random, 1, 7)` results and stores the second
+successor cursor in authoritative state. Random theft and controlled AI randomness will consume the
+same explicit source in later tasks.
 
 The seed encoding, unsigned transitions, rejection accounting, draw counts, and golden fixtures are
 frozen so a future Java implementation can reproduce TypeScript results exactly.
