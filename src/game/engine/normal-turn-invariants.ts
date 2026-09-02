@@ -2,13 +2,14 @@ import { assertStandardBoardTopology } from '../board/topology-invariants.ts'
 import type { DiceRoll } from '../model/dice.ts'
 import type { GameState } from '../model/game-state.ts'
 import type { EdgeId, PlayerId, TileId, VertexId } from '../model/ids.ts'
-import type { PendingDecision } from '../model/pending-decision.ts'
+import type { PendingDecision, RobberCause } from '../model/pending-decision.ts'
 import { RESOURCE_TYPES } from '../model/resource.ts'
 import {
   GAME_STATE_SCHEMA_VERSION,
   RANDOM_ALGORITHM_ID,
   RULESET_ID,
 } from '../model/ruleset.ts'
+import { deriveEligibleRobberTargetPlayerIds } from '../rules/robber-target-rules.ts'
 import { assertInitialSetupState } from './initial-setup-invariants.ts'
 
 const TERRAIN_TYPES = new Set<string>([
@@ -55,8 +56,8 @@ function assertResources(state: GameState): void {
   for (const resource of RESOURCE_TYPES) {
     const bankCount = state.bank.resources[resource]
     assertInvariant(
-      Number.isInteger(bankCount) && bankCount >= 0,
-      `bank ${resource} must be a non-negative integer.`,
+      Number.isSafeInteger(bankCount) && bankCount >= 0,
+      `bank ${resource} must be a non-negative safe integer.`,
     )
   }
   for (const playerId of state.playerOrder) {
@@ -65,8 +66,8 @@ function assertResources(state: GameState): void {
     for (const resource of RESOURCE_TYPES) {
       const count = player.resources[resource]
       assertInvariant(
-        Number.isInteger(count) && count >= 0,
-        `player ${playerId} ${resource} must be a non-negative integer.`,
+        Number.isSafeInteger(count) && count >= 0,
+        `player ${playerId} ${resource} must be a non-negative safe integer.`,
       )
     }
   }
@@ -128,6 +129,17 @@ function assertBoard(state: GameState): void {
 }
 
 function assertPendingDecision(state: GameState, pending: PendingDecision): void {
+  const assertRobberCause = (cause: RobberCause): void => {
+    const value = cause as { readonly type?: unknown; readonly cardId?: unknown }
+    assertInvariant(value.type === 'DICE_SEVEN' || value.type === 'KNIGHT', 'robber cause is invalid.')
+    if (value.type === 'KNIGHT') {
+      assertInvariant(
+        typeof value.cardId === 'string' && value.cardId.trim().length > 0,
+        'KNIGHT robber cause requires a non-empty card ID.',
+      )
+    }
+  }
+
   switch (pending.type) {
     case 'DISCARD_RESOURCES': {
       assertKnownPlayer(state, pending.triggeringPlayerId, 'discard trigger')
@@ -145,9 +157,11 @@ function assertPendingDecision(state: GameState, pending: PendingDecision): void
     }
     case 'MOVE_ROBBER':
       assertKnownPlayer(state, pending.actingPlayerId, 'move-robber decision')
+      assertRobberCause(pending.cause)
       return
     case 'CHOOSE_ROBBER_TARGET':
       assertKnownPlayer(state, pending.actingPlayerId, 'robber-target decision')
+      assertRobberCause(pending.cause)
       for (const playerId of pending.eligibleTargetPlayerIds) assertKnownPlayer(state, playerId, 'robber target')
       return
     case 'PLACE_FREE_ROADS':
@@ -219,7 +233,7 @@ export function assertNormalTurnState(state: GameState): void {
     assertInvariant(state.turn.lastRoll === null, 'ROLL_REQUIRED must have null lastRoll.')
   } else if (state.turn.phase === 'ACTION') {
     assertInvariant(state.turn.lastRoll !== null, 'ACTION requires lastRoll.')
-    assertInvariant(state.turn.lastRoll.total !== 7, 'ACTION cannot retain a total-seven roll.')
+    assertInvariant(state.pendingDecision === null, 'ACTION must not have a pending decision.')
   }
 
   if (state.pendingDecision !== null) assertPendingDecision(state, state.pendingDecision)
@@ -239,7 +253,47 @@ export function assertNormalTurnState(state: GameState): void {
       state.pendingDecision?.type === 'MOVE_ROBBER',
       'ROBBER_MOVE_REQUIRED requires a MOVE_ROBBER pending decision.',
     )
-    assertInvariant(state.turn.lastRoll?.total === 7, 'ROBBER_MOVE_REQUIRED requires a total-seven lastRoll.')
+    assertInvariant(
+      state.pendingDecision.actingPlayerId === state.turn.currentPlayerId,
+      'ROBBER_MOVE_REQUIRED acting player must be the current player.',
+    )
+    if (state.pendingDecision.cause.type === 'DICE_SEVEN') {
+      assertInvariant(state.turn.lastRoll?.total === 7, 'dice-seven robber movement requires a total-seven lastRoll.')
+    }
+  }
+  if (state.turn.phase === 'ROBBER_TARGET_REQUIRED') {
+    assertInvariant(
+      state.pendingDecision?.type === 'CHOOSE_ROBBER_TARGET',
+      'ROBBER_TARGET_REQUIRED requires a CHOOSE_ROBBER_TARGET pending decision.',
+    )
+    assertInvariant(
+      state.pendingDecision.actingPlayerId === state.turn.currentPlayerId,
+      'ROBBER_TARGET_REQUIRED acting player must be the current player.',
+    )
+    assertInvariant(
+      state.pendingDecision.selectedTileId === state.board.robberTileId,
+      'robber target selected tile must equal the current robber tile.',
+    )
+    assertInvariant(
+      state.pendingDecision.eligibleTargetPlayerIds.length > 0,
+      'robber target decision must contain at least one target.',
+    )
+    const expectedTargets = deriveEligibleRobberTargetPlayerIds(
+      state,
+      state.pendingDecision.selectedTileId,
+      state.pendingDecision.actingPlayerId,
+    )
+    assertInvariant(
+      expectedTargets.length === state.pendingDecision.eligibleTargetPlayerIds.length
+        && expectedTargets.every(
+          (playerId, index) => state.pendingDecision?.type === 'CHOOSE_ROBBER_TARGET'
+            && state.pendingDecision.eligibleTargetPlayerIds[index] === playerId,
+        ),
+      'robber target list must equal authoritative player-order derivation.',
+    )
+    if (state.pendingDecision.cause.type === 'DICE_SEVEN') {
+      assertInvariant(state.turn.lastRoll?.total === 7, 'dice-seven robber targeting requires a total-seven lastRoll.')
+    }
   }
 
   if (state.turn.phase === 'GAME_OVER') {

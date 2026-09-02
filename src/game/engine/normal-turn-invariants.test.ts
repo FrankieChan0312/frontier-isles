@@ -99,7 +99,16 @@ describe('normal-turn invariants', () => {
     expect(() => assertNormalTurnState({
       ...action,
       turn: { ...action.turn, lastRoll: { dice: [6, 1], total: 7 } },
-    })).toThrow(/total-seven/)
+    })).not.toThrow()
+    expect(() => assertNormalTurnState({
+      ...action,
+      turn: { ...action.turn, lastRoll: { dice: [6, 1], total: 7 } },
+      pendingDecision: {
+        type: 'MOVE_ROBBER',
+        actingPlayerId: GOLDEN_PLAYER_IDS.sentinel,
+        cause: { type: 'DICE_SEVEN' },
+      },
+    })).toThrow(/ACTION must not have a pending decision/)
     expect(() => assertNormalTurnState({
       ...action,
       turn: { ...action.turn, lastRoll: { dice: [6, 6], total: 5 } },

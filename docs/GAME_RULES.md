@@ -198,10 +198,18 @@ When the current player rolls seven:
 
 Development cards do not count toward the seven-card threshold and cannot be stolen by the robber.
 
-Task 06 implements only the transition created by a rolled seven. It records the ordered dice and
-either enters `DISCARD_REQUIRED` with the exact positive discard counts or, when nobody must discard,
-enters `ROBBER_MOVE_REQUIRED`. Discard execution, robber movement, target choice, theft, and the
-eventual transition to `ACTION` remain subsequent rule work.
+The digital discard workflow permits affected players to submit their exact selections in any
+order while the rolling player remains current. Each player returns exactly half their resource
+cards, rounded down, to the bank; stored completion IDs remain in fixed player order. Development
+cards never participate.
+
+After all required discards, the rolling player must move the robber to a different authoritative
+land tile. An opponent is eligible for theft only when they own an adjacent settlement or city and
+currently hold at least one resource card. Roads do not create eligibility, and repeated adjacent
+buildings do not duplicate a target. With no eligible opponent, the turn resumes `ACTION`
+immediately. With one or more, an explicit target command is required, including the one-target
+case. One physical resource card is then selected uniformly through the seeded random source in
+the frozen resource-type order and transferred to the rolling player.
 
 Playing a Knight moves the robber and may steal a card, but does not trigger discards.
 

@@ -1,0 +1,74 @@
+Implement Task 07 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making source changes:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the relevant frozen documentation and ADRs under docs/.
+3. Read the accepted Task 01, Task 02, Task 04, corrected Task 05, and Task 06 specifications.
+4. Read tasks/TASK_07_DISCARD_ROBBER_AND_THEFT_WORKFLOW.md in full and treat it as the execution specification.
+5. Run every required preflight check.
+
+Implement the complete Task 07 scope exactly as specified:
+
+- the narrow DISCARD_RESOURCES / MOVE_ROBBER / STEAL_FROM_PLAYER command executor;
+- exact shared validation precedence;
+- non-current affected-player discard handling;
+- exact discard-bag validation;
+- immutable hand-to-bank transfers and RESOURCES_DISCARDED events;
+- arbitrary discard submission order with canonical completed-player ordering;
+- transition from final discard to ROBBER_MOVE_REQUIRED for the original rolling player;
+- legal robber movement to a different authoritative tile;
+- exact authoritative eligible-target derivation;
+- no-target, one-target, and multiple-target transitions;
+- explicit STEAL_FROM_PLAYER even when there is only one eligible target;
+- pure uniform random resource selection through the accepted RNG;
+- exact resource transfer and RESOURCE_STOLEN event;
+- resolved-seven transition to ACTION;
+- the narrowly required Task 06 invariant extension allowing ACTION with total-seven lastRoll and null pending;
+- exact ROBBER_TARGET_REQUIRED invariant support;
+- integration proving accepted END_TURN works after resolved seven;
+- all required focused, corruption, precedence, immutability, conservation, target, RNG, and golden replay tests;
+- required narrow documentation and ADR updates.
+
+Important boundaries:
+
+- Reuse accepted Task 01 contracts unchanged.
+- Reuse accepted Task 02 topology and Task 04 RNG functions; do not duplicate geometry or bounded-random logic.
+- Preserve accepted Task 03 UI and Task 05 creation/setup behavior.
+- Preserve accepted Task 06 dice, production, and END_TURN behavior except the explicitly required normal-turn invariant extension.
+- Do not implement a complete generic command router.
+- Do not implement paid building, trade, development-card purchase/play, awards, scoring, victory, PlayerView, AI, Zustand, gateways, persistence, routing, backend, networking, or UI changes.
+- Do not auto-steal inside MOVE_ROBBER.
+- Do not use Math.random(), Web Crypto randomness, UUIDs, timestamps, or hidden entropy.
+- Do not add dependencies.
+- Do not create a Git commit.
+
+The controlled golden workflow is authoritative:
+
+```text
+Task 05 completed setup, overridden synthetic random 259 / 84
+ROLL_DICE -> [6,1], version 17, random 68079378 / 86
+Human discards BRICK 4 -> version 18
+Builder discards GRAIN 6 -> version 19
+Sentinel discards LUMBER 4 -> version 20, ROBBER_MOVE_REQUIRED
+Sentinel moves robber tile:2,0 -> tile:0,-2 -> version 21
+Eligible targets exactly [player:merchant, player:builder]
+Sentinel steals from Builder
+raw uint32 1618009444, range [0,6), index 4, GRAIN
+final version 22, random 1618009444 / 87, phase ACTION
+```
+
+Normal invalid player commands must return the accepted RuleViolation / EngineResult failure branch. Corrupt authoritative state must throw an actionable invariant Error. All successful and failed operations must preserve the immutability requirements in the task.
+
+Before finishing, run and fix all in-scope failures from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Return a completion report containing every item required by AGENTS.md and the Task 07 completion-report section, including exact discard, target, RNG, final state/resource/bank/event anchors, dependency/scope confirmation, and confirmation that no Git commit was created.

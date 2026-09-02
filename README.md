@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–06 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, and clockwise normal-turn lifecycle advancement. Seven resolution and normal Action-phase rules remain future work.
+Tasks 00–07 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, clockwise turn advancement, and the complete discard/robber/random-theft workflow created by a rolled seven. Normal Action-phase rules remain future work.
 
 V1 target:
 
@@ -38,8 +38,9 @@ Read in this order:
 13. `tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md`
 14. `tasks/TASK_05_GAME_CREATION_AND_INITIAL_SETUP.md`
 15. `tasks/TASK_06_DICE_PRODUCTION_AND_TURN_LIFECYCLE.md`
+16. `tasks/TASK_07_DISCARD_ROBBER_AND_THEFT_WORKFLOW.md`
 
-The current implementation includes **Tasks 00–06**, through deterministic dice production and `ROLL_DICE`/`END_TURN` lifecycle execution. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Discard execution, robber movement/theft, paid building, development-card behaviour, trade, awards, scoring, AI, networking, persistence, and additional gameplay UI are not implemented.
+The current implementation includes **Tasks 00–07**, through deterministic seven resolution with ordered discards, authoritative robber targets, and random resource theft. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Paid building, development-card purchase/play, trade, awards, scoring, AI, networking, persistence, and additional gameplay UI are not implemented.
 
 ## Local development
 

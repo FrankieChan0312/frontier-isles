@@ -109,6 +109,19 @@ next clockwise `playerOrder` entry, increments this number once, and returns to 
 The Task 05 setup executor and Task 06 lifecycle executor remain separate until later command
 families can be composed without a misleading incomplete generic router.
 
+Task 07 adds a third narrow executor for `DISCARD_RESOURCES`, `MOVE_ROBBER`, and
+`STEAL_FROM_PLAYER`. Required non-current players may submit discards without changing
+`turn.currentPlayerId`; successful completion IDs are stored in canonical `playerOrder` order.
+The final discard creates robber movement for the original rolling player. Movement and theft are
+separate commands: post-move targets derive from authoritative adjacent buildings and current hand
+counts, and even one target requires an explicit steal command. Theft threads `RandomState` through
+one accepted bounded draw over the target's resource-card multiset.
+
+A resolved dice-seven workflow enters `ACTION` with the total-seven `lastRoll` retained and a null
+pending decision. `ROBBER_TARGET_REQUIRED` is valid only with a coherent
+`CHOOSE_ROBBER_TARGET` decision whose selected tile is the robber tile and whose ordered targets
+exactly match fresh authoritative derivation.
+
 Representative commands:
 
 ```text
@@ -355,8 +368,9 @@ clock entropy, seed normalization, and implicit random draws are forbidden.
 
 Board generation threads this state explicitly through the frozen port-first draw sequence. Task 06
 dice rolling consumes two ordered `nextRandomInt(random, 1, 7)` results and stores the second
-successor cursor in authoritative state. Random theft and controlled AI randomness will consume the
-same explicit source in later tasks.
+successor cursor in authoritative state. Task 07 random theft consumes one bounded draw over the
+target's physical resource-card count and interprets its index in `RESOURCE_TYPES` order.
+Controlled AI randomness will consume the same explicit source in later tasks.
 
 The seed encoding, unsigned transitions, rejection accounting, draw counts, and golden fixtures are
 frozen so a future Java implementation can reproduce TypeScript results exactly.
