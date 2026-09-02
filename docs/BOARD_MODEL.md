@@ -184,18 +184,42 @@ The cyclic gaps are `3, 3, 4, 3, 3, 4, 3, 3, 4`, so selected port edges do not s
 
 ## 8. Board generation
 
-The digital variable setup uses the frozen component distribution.
+Topology and generated content remain separate. Task 02 constructs the fixed 19/54/72 graph and
+port slots; Task 04 uses seeded randomness to populate a fresh initial `BoardState` without adding
+content or occupancy to topology definitions.
+
+The frozen terrain source order is:
+
+```text
+FOREST×4, HILLS×3, PASTURE×4, FIELDS×4, MOUNTAINS×3, DESERT×1
+```
+
+The four red tokens use source order `6, 6, 8, 8`. The non-red source order is:
+
+```text
+2, 3, 3, 4, 4, 5, 5, 9, 9, 10, 10, 11, 11, 12
+```
+
+The frozen port-kind source order is four generic ports followed by resource ports for Lumber,
+Brick, Wool, Grain, and Ore. Fisher–Yates source order is deterministic input, not presentation
+order.
 
 Generation pipeline:
 
-1. Generate standard topology
-2. Shuffle terrain multiset
-3. Place desert and initial robber
-4. Shuffle number-token multiset
-5. Assign tokens to non-desert tiles while enforcing no adjacent red numbers
-6. Shuffle port multiset
-7. Assign ports to the frozen set of nine spaced coastal slots
-8. Validate all invariants
+1. Shuffle the nine port kinds and create standard topology from that order.
+2. Sort topology tiles by ascending `q`, then `r`.
+3. Shuffle and assign the 19 terrains to those tiles.
+4. Identify the desert and retain the other 18 IDs in sorted order.
+5. Shuffle the 18 non-desert IDs for red-number candidate order.
+6. Select the first four-tile independent set with a finite depth-first combination search.
+7. Shuffle `6, 6, 8, 8` and assign them in selected red-tile order.
+8. Shuffle the 14 non-red tokens and assign them to the remaining sorted non-desert IDs.
+9. Build all tile contents, all-null vertex/edge occupancy, and place the robber on the desert.
+10. Validate the complete initial standard board.
+
+The constructive search guarantees that no accepted topology edge joins two red-number tiles. It
+does not reshuffle or retry board generation. A new initial board has exactly 54 null vertex
+occupancies, 72 null edge occupancies, and the robber on the sole unnumbered desert.
 
 All random operations consume the seeded random source. A generation algorithm version must be saved so future code changes do not silently reinterpret old seeds.
 

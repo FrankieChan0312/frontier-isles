@@ -323,9 +323,22 @@ The planned serializable algorithm is:
 XORSHIFT32_V1
 ```
 
-Random state includes the original seed, current unsigned 32-bit state, and draw count. String seeds are deterministically hashed to a non-zero initial state. Fisher-Yates shuffling, dice, random theft, board generation, deck generation, and controlled AI randomness all consume this source.
+Random state includes the original seed, current unsigned 32-bit state, and draw count. Every
+operation receives an immutable `RandomState` and returns its value plus a fresh successor state;
+there is no hidden mutable singleton.
 
-This simple algorithm is chosen so a future Java implementation can reproduce the same unsigned 32-bit operations.
+Task 04 hashes JavaScript UTF-16 code units with FNV-1a constants `0x811C9DC5` and `0x01000193`,
+using `Math.imul` and unsigned 32-bit coercion. A zero hash is replaced with `0x6D2B79F5`.
+XORSHIFT32 then applies shifts `13`, `17`, and `5` in that exact order. Bounded integers use
+rejection sampling and shuffles use immutable Fisher–Yates. `Math.random()`, Web Crypto entropy,
+clock entropy, seed normalization, and implicit random draws are forbidden.
+
+Board generation threads this state explicitly through the frozen port-first draw sequence. Dice,
+random theft, deck generation, and controlled AI randomness will consume the same explicit source
+in later tasks.
+
+The seed encoding, unsigned transitions, rejection accounting, draw counts, and golden fixtures are
+frozen so a future Java implementation can reproduce TypeScript results exactly.
 
 ## 15. Suggested source structure
 

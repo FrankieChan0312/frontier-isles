@@ -1,0 +1,52 @@
+Implement Task 04 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before changing code, read and obey in order:
+1. AGENTS.md
+2. docs/PRODUCT_SCOPE.md
+3. docs/GAME_RULES.md
+4. docs/ARCHITECTURE.md
+5. docs/BOARD_MODEL.md
+6. docs/CODING_STANDARDS.md
+7. docs/adr/ADR-0001-v1-architecture-baseline.md
+8. docs/adr/ADR-0002-flat-top-raw-svg-board-rendering.md
+9. tasks/TASK_01_DOMAIN_CONTRACTS.md
+10. tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md
+11. tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md
+12. tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md
+
+First run `git status --short` and `npm run check`. The accepted Task 03 baseline must be clean and passing apart from the supplied untracked Task 04 files. Stop and report a blocker if the accepted baseline fails.
+
+Implement the complete Task 04 scope exactly as specified:
+- exact UTF-16-code-unit seed hashing;
+- pure immutable XORSHIFT32 random-state threading;
+- uint32, float, unbiased bounded integer, and immutable Fisher–Yates APIs;
+- frozen standard terrain/number/port source distributions;
+- port-first deterministic generation order;
+- constructive first-valid four-tile red-number independent-set search;
+- complete initial standard `BoardState` with empty occupancy and robber on desert;
+- initial-board invariant validator;
+- all focused tests, golden fixtures, ADR-0003, and only the authorized documentation updates.
+
+Hard limits:
+- reuse accepted Task 01 contracts and Task 02 topology/helpers exactly; do not silently change them;
+- do not change Task 03 UI/projection/preview/landing behavior;
+- no dependency changes;
+- no `Math.random`, Web Crypto randomness, UUID, clock entropy, mutable/global RNG, seed normalization, locale-dependent ordering, or unbounded retry generation;
+- no `GameState`, createGame orchestration, player order, players, bank inventory, development deck, dice rolling, setup state machine, command execution, rules, selectors, AI, Zustand, gateway, persistence, routing, backend, networking, terrain/number/robber UI, animation, audio, deployment, or Git commit;
+- no generic frameworks or barrel index files.
+
+Use every exact public API, constant source order, seed/hash/draw anchor, generation step, red-placement algorithm, golden board fixture, source-layout boundary, invariant, and acceptance test defined in the task document. Do not substitute a different PRNG, seed encoding, modulo sampler, shuffle, or draw order even if it appears equivalent.
+
+Before finishing, run in this order:
+- npm run typecheck
+- npm run lint
+- npm run test
+- npm run build
+- npm run check
+- git diff --check
+
+Fix every failure within Task 04 scope.
+
+Return the completion report required by AGENTS.md plus every Task 04 completion-report addition: exact files/APIs/algorithms/distributions/generation order; golden initial/final random states, draw count, port order, desert/red slots/tile contents; test totals and exact command results; unchanged-contract/topology/UI/dependency confirmations; no-Math.random/no-hidden-RNG/no-retry confirmation; scope confirmation; and confirmation that no Git commit was created.
