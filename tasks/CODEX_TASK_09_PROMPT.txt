@@ -1,0 +1,114 @@
+Implement Task 09 now.
+
+Work directly in the currently opened frontier-isles repository.
+
+Before making source changes:
+
+1. Read and follow the repository-root AGENTS.md.
+2. Read the relevant frozen documentation and accepted ADRs under docs/.
+3. Read the accepted Task 01, 02, 04, corrected 05, 06, 07, and 08 specifications.
+4. Read tasks/TASK_09_AWARDS_SCORING_AND_VICTORY.md in full and treat it as the execution specification.
+5. Run every required preflight check and stop if the accepted Task 08 baseline is not green.
+
+Implement the complete Task 09 scope exactly as specified:
+
+- frozen standard scoring and award constants;
+- exact edge-trail Longest Road calculation over authoritative topology/occupancy;
+- branches, loops, disconnected networks, own-building continuity, and opponent-building interruption;
+- Longest Road acquisition, retained ties, strict transfer, interruption transfer, and removal-to-null semantics;
+- Largest Army derivation from playedKnights with threshold, retained ties, and strict transfer;
+- exact LONGEST_ROAD_CHANGED and LARGEST_ARMY_CHANGED events only on holder changes;
+- derived settlement, city, award, hidden-card, public, and actual victory points;
+- hidden IN_HAND versus public REVEALED Victory Point card treatment;
+- current-player-only victory at 10 or more actual points;
+- automatic revelation of the winner's in-hand Victory Point cards without a DEVELOPMENT_CARD_PLAYED event;
+- GAME_OVER/winner transition and exact GAME_WON event;
+- a no-version/no-RNG scoring reconciliation boundary reusable by future development-card work;
+- paid-building integration with build event first, award events next, and GAME_WON last;
+- END_TURN integration so an already-qualified next player wins before rolling;
+- scoring/award/game-over invariants;
+- all exact golden and focused fixtures in Task 09;
+- required documentation and ADR updates.
+
+Important boundaries:
+
+- Preserve accepted Task 00–08 behaviour except for the intentional scoring integration described by Task 09.
+- Reuse accepted topology, occupancy, piece-count, development-card, paid-building, turn-lifecycle, and invariant helpers.
+- Do not store road length, score, or piece ownership redundantly in GameState or PlayerState.
+- Do not parse branded IDs for graph traversal.
+- Do not use total road count as Longest Road length.
+- Do not count an edge more than once in a candidate route.
+- Another player's building ends traversal through that vertex; the owner's own building does not.
+- Current Longest Road and Largest Army holders retain a tied qualifying lead.
+- Only the current player can win.
+- Reconciliation itself must not increment stateVersion or consume randomness.
+- A successful paid-building command still increments stateVersion exactly once.
+- An END_TURN command still increments stateVersion exactly once.
+- Failed commands must not reconcile, reveal, emit scoring events, consume RNG, or mutate inputs.
+- Keep the accepted Task 01 command/event/violation contracts unchanged.
+- Do not create a generic command router.
+- Do not implement development-card purchase/play, Knight robber execution, free roads, trade, PlayerView/legal actions, AI, Zustand, gateway, persistence, routing, backend, networking, deployment, or UI changes.
+- Do not add dependencies.
+- Do not use Math.random(), Web Crypto randomness, UUIDs, timestamps, or hidden entropy.
+- Do not create a Git commit.
+
+The Task 09 exact anchors are authoritative, including:
+
+```text
+Golden road acquisition from Task 08 final state:
+
+v21 BUILD_ROAD
+edge:vertex:2,-1,-1|vertex:4,-2,-2
+-> v22, longest length 4, no holder change
+
+v22 BUILD_ROAD
+edge:vertex:4,-2,-2|vertex:5,-4,-1
+-> v23, longest length 5
+-> LONGEST_ROAD_CHANGED null -> player:sentinel
+-> Sentinel score 6
+-> RNG remains 1264537981 / 86
+```
+
+```text
+Golden victory fixture:
+
+Before v23 UPGRADE_CITY at vertex:5,-4,-1:
+Sentinel = 3 cities + 1 settlement + Longest Road = 9 points
+
+After command:
+v24, 4 cities, 0 settlements
+phase GAME_OVER
+winner player:sentinel
+CITY_BUILT then GAME_WON(10)
+RNG unchanged
+```
+
+```text
+Paid-settlement interruption:
+Human builds at vertex:-1,2,-1
+Sentinel length 5 is split to maximum 3
+Builder remains unique length 5
+SETTLEMENT_BUILT then LONGEST_ROAD_CHANGED Sentinel -> Builder
+```
+
+```text
+Turn-start hidden-card victory:
+Human has public 5, actual 10 while Sentinel is current
+Sentinel END_TURN
+TURN_ENDED, TURN_STARTED Human, GAME_WON Human
+all five Human VP cards become REVEALED
+no dice roll and no RNG draw
+```
+
+Before finishing, run and fix every in-scope failure from:
+
+npm run typecheck
+npm run lint
+npm run test
+npm run build
+npm run check
+git diff --check
+
+Perform and report the required production-source entropy audit.
+
+Return a completion report containing every item required by AGENTS.md and the Task 09 completion-report section, including exact APIs, Longest Road semantics, award transitions, score formulas, golden states/events, turn-start victory, test counts, command results, dependency/scope confirmation, and confirmation that no Git commit was created.

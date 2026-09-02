@@ -313,6 +313,8 @@ Counts as one hidden actual victory point. It is revealed when needed to establi
 - First qualifying player receives the award and 2 VP
 - A challenger must have strictly more played Knights than the current holder
 - A tie leaves the award with the current holder
+- With no current holder, only one unique qualifying maximum receives the award; a tied maximum
+  remains unheld.
 
 ## 17. Longest Road
 
@@ -325,6 +327,8 @@ Counts as one hidden actual victory point. It is revealed when needed to establi
 - A challenger must have a strictly longer qualifying road than the current holder
 - A tie leaves the award with the current holder when the holder still qualifies
 - If an interruption creates a situation where no single player uniquely qualifies under the frozen tie rules, the award can become unheld; exact award-recalculation cases require dedicated tests
+- Award reconciliation occurs after every successful paid road, settlement, or city build,
+  including settlement interruption of another player's route.
 
 Longest Road is a graph problem and must not be calculated as total roads owned.
 
@@ -338,7 +342,14 @@ Actual victory points are derived from:
 - Largest Army award: 2
 - Hidden Victory Point development cards: 1 each
 
-When the current player has at least 10 actual points during their own turn, the engine emits `GAME_WON`, reveals the necessary hidden VP cards, sets the winner, and stops further commands except safe viewing/restart actions.
+Public victory points include settlements, cities, both awards, and revealed Victory Point cards.
+Actual victory points add in-hand hidden Victory Point cards. Other development-card types never
+score, and a Victory Point card may not have `PLAYED` status.
+
+When the current player has at least 10 actual points during their own turn, the engine reveals all
+of that player's hidden Victory Point cards, emits `GAME_WON`, sets the winner, and enters
+`GAME_OVER`. A non-current player at 10 does not win until their turn begins; `END_TURN` performs
+that check for the newly current player before any dice roll.
 
 ## 19. Mandatory edge-case tests for later tasks
 

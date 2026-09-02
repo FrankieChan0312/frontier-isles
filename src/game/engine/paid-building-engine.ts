@@ -13,7 +13,8 @@ import { validateCityUpgrade } from '../rules/city-upgrade-rules.ts'
 import { validatePaidRoadPlacement } from '../rules/paid-road-rules.ts'
 import { validatePaidSettlementPlacement } from '../rules/paid-settlement-rules.ts'
 import { payResourceCostToBank } from '../rules/resource-payment.ts'
-import { assertPaidBuildingState } from './paid-building-invariants.ts'
+import { reconcileAwardsAndCurrentPlayerVictory } from './scoring-reconciliation.ts'
+import { assertScoringState } from './scoring-invariants.ts'
 
 export type PaidBuildingCommand = Extract<
   GameCommand,
@@ -107,15 +108,16 @@ function executeBuild(state: GameState, envelope: PaidBuildingCommandEnvelope): 
     },
     bank: { ...state.bank, resources: payment.bankResources },
   }
-  assertPaidBuildingState(nextState)
-  return { ok: true, state: nextState, events: [event] }
+  const scoring = reconcileAwardsAndCurrentPlayerVictory(nextState)
+  assertScoringState(scoring.state)
+  return { ok: true, state: scoring.state, events: [event, ...scoring.events] }
 }
 
 export function executePaidBuildingCommand(
   state: GameState,
   envelope: PaidBuildingCommandEnvelope,
 ): EngineResult {
-  assertPaidBuildingState(state)
+  assertScoringState(state)
   if (envelope.expectedStateVersion !== state.stateVersion) {
     return failure('STALE_STATE_VERSION', {
       expected: envelope.expectedStateVersion,

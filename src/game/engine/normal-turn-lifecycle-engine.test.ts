@@ -1,6 +1,6 @@
 import type { GameEvent } from '../contracts/events.ts'
 import type { GameState } from '../model/game-state.ts'
-import type { CommandId, PlayerId, TileId } from '../model/ids.ts'
+import type { CommandId, DevelopmentCardId, PlayerId, TileId } from '../model/ids.ts'
 import type { ResourceBag } from '../model/resource.ts'
 import { nextRandomUint32 } from '../random/seeded-random.ts'
 import {
@@ -206,6 +206,18 @@ describe('normal-turn lifecycle engine', () => {
 
     const gameOverState: GameState = {
       ...state,
+      players: {
+        ...state.players,
+        [GOLDEN_PLAYER_IDS.sentinel]: {
+          ...state.players[GOLDEN_PLAYER_IDS.sentinel],
+          developmentCards: Array.from({ length: 10 }, (_, index) => ({
+            id: `development-card:test:lifecycle-winner:${index}` as DevelopmentCardId,
+            type: 'VICTORY_POINT' as const,
+            acquiredTurnNumber: 1,
+            status: 'REVEALED' as const,
+          })),
+        },
+      },
       turn: { ...state.turn, phase: 'GAME_OVER' },
       winnerId: GOLDEN_PLAYER_IDS.sentinel,
     }

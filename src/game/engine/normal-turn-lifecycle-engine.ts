@@ -7,7 +7,8 @@ import type { PlayerId } from '../model/ids.ts'
 import { RESOURCE_TYPES } from '../model/resource.ts'
 import { rollDice } from '../random/roll-dice.ts'
 import { produceResourcesForRoll } from '../rules/resource-production.ts'
-import { assertNormalTurnState } from './normal-turn-invariants.ts'
+import { resolveCurrentPlayerVictory } from './scoring-reconciliation.ts'
+import { assertScoringState } from './scoring-invariants.ts'
 
 export type NormalTurnLifecycleCommand = Extract<
   GameCommand,
@@ -73,7 +74,7 @@ function executeRoll(state: GameState): EngineResult {
             cause: { type: 'DICE_SEVEN' },
           },
     }
-    assertNormalTurnState(nextState)
+    assertScoringState(nextState)
     return { ok: true, state: nextState, events: [diceEvent] }
   }
 
@@ -92,7 +93,7 @@ function executeRoll(state: GameState): EngineResult {
     },
     pendingDecision: null,
   }
-  assertNormalTurnState(nextState)
+  assertScoringState(nextState)
   return { ok: true, state: nextState, events: [diceEvent, ...production.events] }
 }
 
@@ -119,13 +120,15 @@ function executeEndTurn(state: GameState): EngineResult {
     },
     pendingDecision: null,
   }
-  assertNormalTurnState(nextState)
+  const victory = resolveCurrentPlayerVictory(nextState)
+  assertScoringState(victory.state)
   return {
     ok: true,
-    state: nextState,
+    state: victory.state,
     events: [
       { type: 'TURN_ENDED', playerId: state.turn.currentPlayerId, turnNumber: state.turn.turnNumber },
       { type: 'TURN_STARTED', playerId: nextPlayerId, turnNumber: nextTurnNumber },
+      ...victory.events,
     ],
   }
 }
@@ -134,7 +137,7 @@ export function executeNormalTurnLifecycleCommand(
   state: GameState,
   envelope: NormalTurnLifecycleCommandEnvelope,
 ): EngineResult {
-  assertNormalTurnState(state)
+  assertScoringState(state)
   if (envelope.expectedStateVersion !== state.stateVersion) {
     return failure('STALE_STATE_VERSION', {
       expected: envelope.expectedStateVersion,

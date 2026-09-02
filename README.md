@@ -4,7 +4,7 @@
 
 ## Current status
 
-Tasks 00–08 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, clockwise turn advancement, the complete discard/robber/random-theft workflow created by a rolled seven, and authoritative paid road, settlement, and city actions. Remaining Action-phase rules are future work.
+Tasks 00–09 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation, complete four-player snake-order setup, deterministic dice production, clockwise turn advancement, the complete discard/robber/random-theft workflow created by a rolled seven, authoritative paid road, settlement, and city actions, and derived awards, scoring, and own-turn victory. Remaining Action-phase rules are future work.
 
 V1 target:
 
@@ -40,8 +40,13 @@ Read in this order:
 15. `tasks/TASK_06_DICE_PRODUCTION_AND_TURN_LIFECYCLE.md`
 16. `tasks/TASK_07_DISCARD_ROBBER_AND_THEFT_WORKFLOW.md`
 17. `tasks/TASK_08_PAID_BUILDING_ACTIONS.md`
+18. `tasks/TASK_09_AWARDS_SCORING_AND_VICTORY.md`
 
-The current implementation includes **Tasks 00–08**, through deterministic seven resolution and paid Action-phase road, settlement, and city construction. The landing page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings, and roads are not rendered. Development-card purchase/play, trade, awards, scoring, AI, networking, persistence, and additional gameplay UI are not implemented.
+The current implementation includes **Tasks 00–09**, through deterministic seven resolution,
+paid Action-phase construction, Longest Road and Largest Army reconciliation, public/actual score
+derivation, and current-turn victory. The landing page remains a static neutral topology preview;
+authoritative terrain, numbers, robber, buildings, and roads are not rendered. Development-card
+purchase/play, trade, AI, networking, persistence, and additional gameplay UI are not implemented.
 
 ## Local development
 

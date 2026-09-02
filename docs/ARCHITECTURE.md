@@ -383,7 +383,20 @@ Controlled AI randomness will consume the same explicit source in later tasks.
 The seed encoding, unsigned transitions, rejection accounting, draw counts, and golden fixtures are
 frozen so a future Java implementation can reproduce TypeScript results exactly.
 
-## 15. Suggested source structure
+## 15. Scoring reconciliation boundary
+
+Task 09 keeps score and Longest Road length derived rather than stored. `deriveLongestRoadLength`
+searches authoritative topology and edge occupancy as an edge trail, while score selectors combine
+current buildings, awards, and Victory Point card visibility.
+
+`reconcileAwardsAndCurrentPlayerVictory(state)` is a pure state-reconciliation boundary. It
+recalculates Longest Road, then Largest Army, then resolves victory for only the current player.
+Award events precede `GAME_WON`. The helper never increments `stateVersion` and never consumes or
+replaces `RandomState`; command executors own their existing one-version transition. Successful
+paid builds call the full boundary after applying payment and occupancy. `END_TURN` calls the
+narrow current-player victory helper after clockwise advancement, because no award facts changed.
+
+## 16. Suggested source structure
 
 ```text
 src/
@@ -423,7 +436,7 @@ tests/
   e2e/
 ```
 
-## 16. Architectural acceptance tests
+## 17. Architectural acceptance tests
 
 Later tasks must prove:
 

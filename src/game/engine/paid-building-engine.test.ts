@@ -2,7 +2,7 @@ import { expectTypeOf } from 'vitest'
 import type { CommandEnvelope, GameCommand } from '../contracts/commands.ts'
 import type { GameEvent } from '../contracts/events.ts'
 import type { GameState } from '../model/game-state.ts'
-import type { CommandId, EdgeId, PlayerId, VertexId } from '../model/ids.ts'
+import type { CommandId, DevelopmentCardId, EdgeId, PlayerId, VertexId } from '../model/ids.ts'
 import { RESOURCE_TYPES } from '../model/resource.ts'
 import { executeNormalTurnLifecycleCommand } from './normal-turn-lifecycle-engine.ts'
 import {
@@ -423,6 +423,18 @@ describe('paid-building engine', () => {
 
     const gameOver: GameState = {
       ...state,
+      players: {
+        ...state.players,
+        [GOLDEN_PLAYER_IDS.sentinel]: {
+          ...state.players[GOLDEN_PLAYER_IDS.sentinel],
+          developmentCards: Array.from({ length: 10 }, (_, index) => ({
+            id: `development-card:test:paid-winner:${index}` as DevelopmentCardId,
+            type: 'VICTORY_POINT' as const,
+            acquiredTurnNumber: 1,
+            status: 'REVEALED' as const,
+          })),
+        },
+      },
       turn: { ...state.turn, phase: 'GAME_OVER' },
       winnerId: GOLDEN_PLAYER_IDS.sentinel,
     }
