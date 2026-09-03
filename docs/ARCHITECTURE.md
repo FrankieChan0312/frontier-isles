@@ -497,6 +497,15 @@ opponent private collections. `PlayerEventView` is a separate viewer-specific ev
 composition, bought-card identity, unresolved offer terms, and stolen-resource identity are redacted
 when the viewer is not entitled to them. The frozen `GameEvent` contract is unchanged.
 
+`PublicBankState` contains a cloned five-resource supply bag and the remaining Development Card
+count. React renders this projection directly; the gateway and Zustand session store do not create
+another bank, and deck identities/order remain confined to authoritative `GameState` and saves.
+
+The self-only legal projection includes per-owned-development-card playability and a bounded reason
+code. This lets presentation explain disabled actions without reimplementing legality. Opponent
+views still contain only public development-card counts and public played/revealed information;
+identities, lifecycle state, and reason metadata never cross the viewer boundary.
+
 ### Stage 13 deterministic AI boundary
 
 Stage 13 adds a redacted-view-only `AiAgent` under `src/ai/**`. It returns a `GameCommand`; callers

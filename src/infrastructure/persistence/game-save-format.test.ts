@@ -1,5 +1,6 @@
 import type { AiProfileId, PlayerId } from '../../game/model/ids.ts'
 import { createCompletedGoldenSetup, GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
+import { moveStandardCardToPlayer } from '../../game/engine/task-10-development-card.test-helper.ts'
 import {
   GAME_SAVE_SCHEMA_VERSION,
   parseGameSave,
@@ -38,6 +39,35 @@ describe('versioned game save format', () => {
     if (parsed.ok) expect(parsed.save.state).toEqual(save.state)
   })
 
+  it('round-trips exact owner development-card identities and lifecycle state', () => {
+    let state = createCompletedGoldenSetup()
+    state = moveStandardCardToPlayer(state, GOLDEN_PLAYER_IDS.human, 'KNIGHT', 'IN_HAND', 0)
+    state = moveStandardCardToPlayer(state, GOLDEN_PLAYER_IDS.human, 'VICTORY_POINT', 'REVEALED', 0)
+    const base = validSave()
+    const save: GameSaveEnvelope = { ...base, state, gameId: state.gameId, displaySeed: state.random.seed }
+    const parsed = parseGameSave(serializeGameSave(save))
+
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      expect(parsed.save.state.players[GOLDEN_PLAYER_IDS.human]?.developmentCards).toEqual(
+        state.players[GOLDEN_PLAYER_IDS.human]?.developmentCards,
+      )
+    }
+  })
+
+  it('preserves exact authoritative bank resources and remaining deck count', () => {
+    const save = validSave()
+    const expectedResources = structuredClone(save.state.bank.resources)
+    const expectedDeckCount = save.state.bank.developmentDeck.length
+    const parsed = parseGameSave(serializeGameSave(save))
+
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      expect(parsed.save.state.bank.resources).toEqual(expectedResources)
+      expect(parsed.save.state.bank.developmentDeck).toHaveLength(expectedDeckCount)
+    }
+  })
+
   it('rejects malformed JSON, unsupported versions, and corrupt authoritative state cleanly', () => {
     expect(parseGameSave('{')).toEqual({ ok: false, error: 'Saved game is not valid JSON.' })
     expect(parseGameSave(JSON.stringify({ ...validSave(), schemaVersion: 99 })))
@@ -56,6 +86,27 @@ describe('versioned game save format', () => {
     const parsed = parseGameSave(JSON.stringify(corrupt))
     expect(parsed.ok).toBe(false)
     if (!parsed.ok) expect(parsed.error).toMatch(/Saved authoritative state is invalid/)
+  })
+
+  it.each([
+    ['negative', { LUMBER: 19, BRICK: 14, WOOL: 18, GRAIN: 17, ORE: -1 }],
+    ['fractional', { LUMBER: 19, BRICK: 14, WOOL: 18, GRAIN: 17.5, ORE: 19 }],
+    ['missing', { LUMBER: 19, BRICK: 14, WOOL: 18, GRAIN: 17 }],
+    ['extra', { LUMBER: 19, BRICK: 14, WOOL: 18, GRAIN: 17, ORE: 19, GOLD: 1 }],
+    ['impossible conserved total', { LUMBER: 20, BRICK: 14, WOOL: 18, GRAIN: 17, ORE: 19 }],
+  ])('rejects %s bank resource data safely', (_name, resources) => {
+    const save = validSave()
+    const corrupt = {
+      ...save,
+      state: {
+        ...save.state,
+        bank: { ...save.state.bank, resources },
+      },
+    }
+
+    const parsed = parseGameSave(JSON.stringify(corrupt))
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) expect(parsed.error).toMatch(/^Saved authoritative state is invalid:/)
   })
 
   it('rejects mismatched Human identity and incomplete AI metadata', () => {

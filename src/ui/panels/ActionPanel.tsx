@@ -72,17 +72,6 @@ export function ActionPanel({
         {actions.canBuyDevelopmentCard ? (
           <Button disabled={busy} onClick={() => onCommand({ type: 'BUY_DEVELOPMENT_CARD' })} variant="outlined">Buy development</Button>
         ) : null}
-        {actions.playableDevelopmentCardIds.map((cardId) => {
-          const card = view.self.developmentCards.find((candidate) => candidate.id === cardId)
-          return (
-            <Button
-              key={cardId}
-              disabled={busy}
-              onClick={() => onCommand({ type: 'PLAY_DEVELOPMENT_CARD', cardId })}
-              variant="outlined"
-            >Play {card?.type.replaceAll('_', ' ').toLowerCase() ?? 'development card'}</Button>
-          )
-        })}
         {actions.legalMaritimeTradeOptions.length > 0 ? (
           <Button disabled={busy} onClick={onOpenMaritimeTrade} variant="outlined">Maritime trade</Button>
         ) : null}

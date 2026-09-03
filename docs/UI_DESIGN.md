@@ -32,9 +32,17 @@ and option lists. `LocalGameGateway` and `GameEngine` remain the final legality 
 - Building: road, settlement, and city modes expose only projected SVG targets.
 - Development: buy and play projected card IDs; invention and monopoly use projected choices;
   Road Building uses projected edges and supports legal early finish.
+- The private Development Cards section names every owned card, explains its original effect, and
+  shows bought-this-turn, playable, already-played, or hidden/revealed Victory Point status. Only
+  non-Victory-Point cards have Play controls; unavailable controls include a projected reason.
+- Bank / Supply: a responsive public panel always shows all five resource counts, including zero,
+  plus only the number of Development Cards remaining. Values come directly from the latest
+  `PlayerView.publicGame.bank` and update after accepted gateway commands and save reloads.
 - Maritime trade: choose one projected give/receive/ratio option.
 - Domestic trade: choose projected AI counterparty and explicit resource bundles; accept, reject, or
-  submit a one-depth counter to incoming offers.
+  submit a one-depth counter to incoming offers. A counter replaces both complete bundles under the
+  fixed labels `AI gives / You receive` and `You give / AI receives`. Only the Human-authored
+  outgoing bundle receives a hand-based maximum; requested AI quantities expose no private cap.
 - Game lifecycle: autosave status, manual save, same-seed restart when started locally, continue,
   delete save, victory dialog, and return to new game.
 

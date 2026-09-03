@@ -244,3 +244,9 @@ Merchant, Builder, and Sentinel are explicit threshold/weight records on one eng
 counters use deterministic turn/actor/attempt IDs, at most two negotiations per turn, one engine
 counter depth, direct code-unit tie-breaks, and no repeated identical terms. The mixed-profile smoke
 suite covers 24 fixed games plus focused AI-to-AI and AI-to-Human pending-offer tests.
+
+When a Human authors the single counter to an AI-initiated offer, the AI evaluates the complete
+current counter from its own give/receive direction. A favorable counter may be accepted; an
+unfavorable or unaffordable counter is rejected. Depth one is an accept-or-reject terminal response,
+so the personality agent cannot emit another `COUNTER_TRADE`. Affordability is evaluated inside the
+redacted AI boundary and is never returned to the Human as hand details.

@@ -4,6 +4,7 @@ import { GOLDEN_PLAYER_IDS } from '../game/engine/task-05-golden-fixture.test-he
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
+  EMPTY_TRADE_BAG,
 } from '../game/engine/task-11-trading.test-helper.ts'
 import { DEFAULT_AI_SAFETY_LIMITS, type AiDecisionContext } from './ai-agent.ts'
 import { createAiCommandKey } from './core-ai-agent.ts'
@@ -11,6 +12,41 @@ import { asAiProfileId } from './personalities/ai-profiles.ts'
 import { PersonalityAiAgent } from './personality-ai-agent.ts'
 
 const agent = new PersonalityAiAgent()
+
+function depthOneAiView(
+  tradeId: TradeId,
+  initiatorGives: typeof EMPTY_TRADE_BAG,
+  counterpartyGives: typeof EMPTY_TRADE_BAG,
+) {
+  const initialState = createGoldenDomesticTradeStart()
+  const initial = createInitialGoldenOffer()
+  const proposed = gameEngine.execute(initialState, {
+    commandId: 'command:personality:counter-fixture:proposal' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.sentinel,
+    expectedStateVersion: initialState.stateVersion,
+    command: { type: 'PROPOSE_TRADE', offer: initial },
+  })
+  if (!proposed.ok) throw new Error(`AI proposal fixture failed: ${proposed.violation.code}.`)
+  const countered = gameEngine.execute(proposed.state, {
+    commandId: 'command:personality:counter-fixture:counter' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.human,
+    expectedStateVersion: proposed.state.stateVersion,
+    command: {
+      type: 'COUNTER_TRADE',
+      previousTradeId: initial.tradeId,
+      offer: {
+        ...initial,
+        tradeId,
+        proposedById: GOLDEN_PLAYER_IDS.human,
+        parentTradeId: initial.tradeId,
+        initiatorGives,
+        counterpartyGives,
+      },
+    },
+  })
+  if (!countered.ok) throw new Error(`Human counter fixture failed: ${countered.violation.code}.`)
+  return gameEngine.createPlayerView(countered.state, GOLDEN_PLAYER_IDS.sentinel)
+}
 
 function context(profile: 'MERCHANT' | 'BUILDER' | 'SENTINEL'): AiDecisionContext {
   return {
@@ -107,6 +143,43 @@ describe('personality AI agent', () => {
     }
     const depthOne = await agent.chooseNextCommand(counteredView, context('SENTINEL'))
     expect(depthOne.type).not.toBe('COUNTER_TRADE')
+  })
+
+  it.each([
+    {
+      name: 'favorable',
+      tradeId: 'trade:personality:favorable' as TradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, LUMBER: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 2 },
+      expectedType: 'ACCEPT_TRADE',
+    },
+    {
+      name: 'unfavorable',
+      tradeId: 'trade:personality:unfavorable' as TradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, LUMBER: 2, WOOL: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 1 },
+      expectedType: 'REJECT_TRADE',
+    },
+    {
+      name: 'unaffordable',
+      tradeId: 'trade:personality:unaffordable' as TradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, ORE: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 1 },
+      expectedType: 'REJECT_TRADE',
+    },
+  ])('makes a deterministic $expectedType decision for a $name depth-one counter', async ({
+    tradeId,
+    initiatorGives,
+    counterpartyGives,
+    expectedType,
+  }) => {
+    const view = depthOneAiView(tradeId, initiatorGives, counterpartyGives)
+    const first = await agent.chooseNextCommand(view, context('SENTINEL'))
+    const second = await agent.chooseNextCommand(view, context('SENTINEL'))
+
+    expect(first).toEqual(second)
+    expect(first.type).toBe(expectedType)
+    expect(first.type).not.toBe('COUNTER_TRADE')
   })
 
   it('does not repeat identical proposal terms and never exceeds two attempts', async () => {

@@ -151,6 +151,11 @@ describe('App', () => {
 
     expect(await screen.findByRole('img', { name: /Frontier Isles game board/ })).toBeInTheDocument()
     expect(screen.getByText(/Turn 0 · Avery · Setup settlement/)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Bank / Supply' })).toBeVisible()
+    for (const resource of ['Lumber', 'Brick', 'Wool', 'Grain', 'Ore']) {
+      expect(screen.getByLabelText(`${resource} remaining: 19`)).toBeVisible()
+    }
+    expect(screen.getByLabelText('Development Cards remaining: 25')).toBeVisible()
     expect(container.querySelectorAll('[data-layer="tiles"] [data-tile-id]')).toHaveLength(19)
     const legalTargets = await screen.findAllByRole('button', { name: /Build on vertex:/ })
     const firstTarget = legalTargets[0]
@@ -159,6 +164,7 @@ describe('App', () => {
 
     await waitFor(() => expect(gateway.submitted[0]?.command.type).toBe('PLACE_INITIAL_SETTLEMENT'))
     expect(document.body.textContent).not.toContain('developmentDeck')
+    expect(container.innerHTML).not.toContain('development-card:')
     expect(document.body.textContent).not.toContain('random')
   })
 

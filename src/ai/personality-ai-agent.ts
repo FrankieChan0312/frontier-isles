@@ -58,7 +58,7 @@ function pendingTradeResponse(
   if (evaluation.type === 'ACCEPT') {
     return { type: 'ACCEPT_TRADE', tradeId: pending.offer.tradeId }
   }
-  if (evaluation.type === 'COUNTER') {
+  if (evaluation.type === 'COUNTER' && pending.counterDepth === 0) {
     const counter = createDeterministicCounterOffer(
       view,
       pending.offer,

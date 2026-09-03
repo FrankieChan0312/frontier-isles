@@ -19,6 +19,10 @@ import type { PlayerId, TradeId } from '../../game/model/ids.ts'
 import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '../../game/model/resource.ts'
 import type { TradeOffer } from '../../game/model/trade.ts'
 import {
+  hasPositiveResourceOverlap,
+  hasValidTradeBundles,
+} from '../../game/rules/domestic-trade-rules.ts'
+import {
   emptyResourceBag,
   formatResourceBag,
   RESOURCE_LABELS,
@@ -44,6 +48,7 @@ function ResourceBagEditor({ label, value, maximum, onChange }: ResourceBagEdito
               'aria-label': `${label} ${RESOURCE_LABELS[resource]}`,
               max: maximum?.[resource],
               min: 0,
+              step: 1,
             } }}
             label={RESOURCE_LABELS[resource]}
             onChange={(event) => {
@@ -234,11 +239,33 @@ export function DomesticTradeDialog({
   const resolvedCounterpartyId = previousOffer?.counterpartyId ?? counterpartyId
   const selfIsInitiator = view.self.id === initiatorId
   const selfOutgoing = selfIsInitiator ? initiatorGives : counterpartyGives
-  const canSubmit = resolvedCounterpartyId !== ''
-    && resourceBagTotal(initiatorGives) > 0
-    && resourceBagTotal(counterpartyGives) > 0
-    && RESOURCE_TYPES.every((resource) => selfOutgoing[resource] <= view.self.resources[resource])
-  const selectedName = view.opponents.find((player) => player.id === resolvedCounterpartyId)?.name ?? 'AI player'
+  const otherPartyId = selfIsInitiator ? resolvedCounterpartyId : initiatorId
+  const otherName = view.opponents.find((player) => player.id === otherPartyId)?.name ?? 'AI player'
+  const draftOffer: TradeOffer | null = resolvedCounterpartyId === '' ? null : {
+    tradeId,
+    initiatorId,
+    counterpartyId: resolvedCounterpartyId,
+    proposedById: view.self.id,
+    initiatorGives,
+    counterpartyGives,
+    parentTradeId: previousOffer?.tradeId ?? null,
+  }
+  const bundlesValid = draftOffer !== null && hasValidTradeBundles(draftOffer)
+  const hasOverlap = draftOffer !== null && hasPositiveResourceOverlap(
+    draftOffer.initiatorGives,
+    draftOffer.counterpartyGives,
+  )
+  const canProvideSelf = RESOURCE_TYPES.every(
+    (resource) => selfOutgoing[resource] <= view.self.resources[resource],
+  )
+  const canSubmit = bundlesValid && !hasOverlap && canProvideSelf
+  const validationMessage = !bundlesValid
+    ? 'Both sides must give at least one resource.'
+    : hasOverlap
+      ? 'The same resource cannot appear on both sides.'
+      : !canProvideSelf
+        ? 'You cannot offer more resources than you hold.'
+        : null
 
   return (
     <Dialog aria-labelledby="domestic-trade-title" fullWidth maxWidth="md" onClose={onClose} open={open}>
@@ -261,19 +288,19 @@ export function DomesticTradeDialog({
                 ))}
               </Select>
             </FormControl>
-          ) : <Typography>Revise the terms with {selectedName}.</Typography>}
+          ) : <Typography>Replace the complete terms with {otherName}.</Typography>}
           <ResourceBagEditor
-            label={`${view.self.name} gives`}
-            {...(selfIsInitiator ? { maximum: view.self.resources } : {})}
-            onChange={selfIsInitiator ? setInitiatorGives : setCounterpartyGives}
-            value={selfIsInitiator ? initiatorGives : counterpartyGives}
-          />
-          <ResourceBagEditor
-            label={`${selectedName} gives`}
-            {...(selfIsInitiator ? {} : { maximum: view.self.resources })}
+            label="AI gives / You receive"
             onChange={selfIsInitiator ? setCounterpartyGives : setInitiatorGives}
             value={selfIsInitiator ? counterpartyGives : initiatorGives}
           />
+          <ResourceBagEditor
+            label="You give / AI receives"
+            maximum={view.self.resources}
+            onChange={selfIsInitiator ? setInitiatorGives : setCounterpartyGives}
+            value={selfIsInitiator ? initiatorGives : counterpartyGives}
+          />
+          {validationMessage === null ? null : <Alert severity="info">{validationMessage}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -281,16 +308,7 @@ export function DomesticTradeDialog({
         <Button
           disabled={busy || !canSubmit}
           onClick={() => {
-            if (resolvedCounterpartyId === '') return
-            onSubmit({
-              tradeId,
-              initiatorId,
-              counterpartyId: resolvedCounterpartyId,
-              proposedById: view.self.id,
-              initiatorGives,
-              counterpartyGives,
-              parentTradeId: previousOffer?.tradeId ?? null,
-            })
+            if (draftOffer !== null) onSubmit(draftOffer)
           }}
           variant="contained"
         >{previousOffer === undefined ? 'Send offer' : 'Send counter'}</Button>

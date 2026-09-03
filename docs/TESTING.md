@@ -51,6 +51,17 @@ setup interactions, roll/end, a paid build, a controlled seven, maritime trade, 
 negotiation, save/reload, deterministic victory, starting again, a 480px overflow smoke check,
 accessible roles/names, and browser console/page errors.
 
+The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
+counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without
+a second counter, and buy a known schema-valid Development Card. The card path asserts the exact
+owner-only type, original description, lifecycle status, disabled reason, confirmation event, and
+save/reload retention.
+
+Bank/supply regressions assert the initial 19×5 resource supply and 25-card count, view redaction,
+visible zeroes, accepted build/discard/maritime/purchase deltas, exact save/reload retention, and
+fail-closed negative, fractional, malformed, extra-key, and conservation-breaking save data. E2E
+DOM checks reject authoritative deck fields and card identities while verifying immediate updates.
+
 Long setup paths use schema-valid localStorage saves constructed with accepted engine test helpers
 and serialized through the production save format. No fixture switch, debug route, or test backdoor
 is compiled into production code.

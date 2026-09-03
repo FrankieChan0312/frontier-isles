@@ -38,6 +38,8 @@ import {
 } from '../dialogs/GameDialogs.tsx'
 import { formatEvent, formatPhase } from '../game/ui-format.ts'
 import { ActionPanel } from '../panels/ActionPanel.tsx'
+import { BankSupplyPanel } from '../panels/BankSupplyPanel.tsx'
+import { DevelopmentCardHand } from '../panels/DevelopmentCardHand.tsx'
 import { PlayerPanels } from '../panels/PlayerPanels.tsx'
 import { ResourceHand } from '../panels/ResourceHand.tsx'
 
@@ -156,8 +158,14 @@ export function GamePage({
               />
             </Paper>
             <ResourceHand view={view} />
+            <DevelopmentCardHand
+              busy={busy}
+              onPlay={(cardId) => onCommand({ type: 'PLAY_DEVELOPMENT_CARD', cardId })}
+              view={view}
+            />
           </Stack>
           <Stack spacing={2} sx={{ minWidth: 0, order: 3 }}>
+            <BankSupplyPanel view={view} />
             <ActionPanel
               buildMode={buildMode}
               busy={busy}

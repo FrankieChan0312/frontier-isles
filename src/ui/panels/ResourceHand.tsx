@@ -18,7 +18,7 @@ export function ResourceHand({ view }: { readonly view: PlayerView }): React.JSX
         ))}
       </Stack>
       <Typography color="text.secondary" sx={{ mt: 1.5 }} variant="caption">
-        Development cards: {view.self.developmentCards.length} · Hidden points included in your total: {view.self.actualVictoryPoints} VP
+        Hidden points are included in your private total: {view.self.actualVictoryPoints} VP
       </Typography>
     </Paper>
   )

@@ -91,6 +91,40 @@ function responderView(state: GameState, terms: TradeOffer) {
   return gameEngine.createPlayerView(proposal.state, GOLDEN_PLAYER_IDS.human)
 }
 
+function aiCounterResponderView(
+  state: GameState,
+  initial: TradeOffer,
+  initiatorGives: ResourceBag,
+  counterpartyGives: ResourceBag,
+): { readonly view: ReturnType<typeof gameEngine.createPlayerView>; readonly counter: TradeOffer } {
+  const proposal = gameEngine.execute(state, {
+    commandId: 'command:trade-ai:initial' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.sentinel,
+    expectedStateVersion: state.stateVersion,
+    command: { type: 'PROPOSE_TRADE', offer: initial },
+  })
+  if (!proposal.ok) throw new Error(`Trade proposal failed: ${proposal.violation.code}.`)
+  const counter: TradeOffer = {
+    ...initial,
+    tradeId: 'trade:ai-evaluation:human-counter' as TradeId,
+    proposedById: GOLDEN_PLAYER_IDS.human,
+    parentTradeId: initial.tradeId,
+    initiatorGives,
+    counterpartyGives,
+  }
+  const result = gameEngine.execute(proposal.state, {
+    commandId: 'command:trade-ai:counter' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.human,
+    expectedStateVersion: proposal.state.stateVersion,
+    command: { type: 'COUNTER_TRADE', previousTradeId: initial.tradeId, offer: counter },
+  })
+  if (!result.ok) throw new Error(`Human counter failed: ${result.violation.code}.`)
+  return {
+    view: gameEngine.createPlayerView(result.state, GOLDEN_PLAYER_IDS.sentinel),
+    counter,
+  }
+}
+
 describe('trade AI evaluation', () => {
   it('accepts a one-for-one offer that immediately unlocks a settlement', () => {
     const state = actionState(
@@ -180,5 +214,89 @@ describe('trade AI evaluation', () => {
     expect(merchant).not.toEqual(sentinel)
     expect(scoreTradeOffer(view, terms, AI_PROFILES.MERCHANT).total)
       .not.toBe(scoreTradeOffer(view, terms, AI_PROFILES.SENTINEL).total)
+  })
+
+  it('accepts a clearly favorable complete Human counter as the AI initiator', () => {
+    const state = actionState(
+      { ...EMPTY, BRICK: 2, GRAIN: 1 },
+      { ...EMPTY, LUMBER: 2, WOOL: 1 },
+    )
+    const initial = offer({ ...EMPTY, LUMBER: 1 }, { ...EMPTY, BRICK: 1 })
+    const { view, counter } = aiCounterResponderView(
+      state,
+      initial,
+      { ...EMPTY, LUMBER: 1 },
+      { ...EMPTY, BRICK: 2 },
+    )
+
+    expect(view.pendingDecision).toMatchObject({
+      type: 'RESPOND_TO_TRADE',
+      counterDepth: 1,
+      offer: counter,
+    })
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1)).toMatchObject({
+      type: 'ACCEPT',
+      reasonCode: 'ACCEPTABLE_VALUE',
+    })
+  })
+
+  it('rejects a clearly unfavorable complete Human counter', () => {
+    const state = actionState(
+      { ...EMPTY, BRICK: 2, GRAIN: 1 },
+      { ...EMPTY, LUMBER: 2, WOOL: 1 },
+    )
+    const initial = offer({ ...EMPTY, LUMBER: 1 }, { ...EMPTY, BRICK: 1 })
+    const { view, counter } = aiCounterResponderView(
+      state,
+      initial,
+      { ...EMPTY, LUMBER: 2, WOOL: 1 },
+      { ...EMPTY, BRICK: 1 },
+    )
+
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1)).toMatchObject({
+      type: 'REJECT',
+      reasonCode: 'NOT_ENOUGH_VALUE',
+    })
+  })
+
+  it('rejects an unaffordable request without inspecting or describing another hand', () => {
+    const state = actionState(
+      { ...EMPTY, BRICK: 2, GRAIN: 1 },
+      { ...EMPTY, LUMBER: 2, WOOL: 1 },
+    )
+    const initial = offer({ ...EMPTY, LUMBER: 1 }, { ...EMPTY, BRICK: 1 })
+    const { view, counter } = aiCounterResponderView(
+      state,
+      initial,
+      { ...EMPTY, ORE: 1 },
+      { ...EMPTY, BRICK: 1 },
+    )
+
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1)).toEqual({
+      type: 'REJECT',
+      score: Number.NEGATIVE_INFINITY,
+      reasonCode: 'CANNOT_AFFORD',
+    })
+    expect(view.pendingDecision).toMatchObject({ type: 'RESPOND_TO_TRADE', offer: counter })
+  })
+
+  it('allows deterministic profile differences on the same depth-one counter', () => {
+    const state = actionState(
+      { ...EMPTY, BRICK: 2, GRAIN: 1 },
+      { ...EMPTY, LUMBER: 2, WOOL: 1 },
+    )
+    const initial = offer({ ...EMPTY, LUMBER: 1 }, { ...EMPTY, BRICK: 1 })
+    const { view, counter } = aiCounterResponderView(
+      state,
+      initial,
+      { ...EMPTY, LUMBER: 2 },
+      { ...EMPTY, BRICK: 2 },
+    )
+
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.MERCHANT, 1).type).toBe('ACCEPT')
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.BUILDER, 1).type).toBe('ACCEPT')
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1).type).toBe('REJECT')
+    expect(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1))
+      .toEqual(evaluateTradeOffer(view, counter, AI_PROFILES.SENTINEL, 1))
   })
 })

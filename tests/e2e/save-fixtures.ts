@@ -1,4 +1,5 @@
 import type { GameState } from '../../src/game/model/game-state.ts'
+import type { ResourceBag } from '../../src/game/model/resource.ts'
 import type {
   AiProfileId,
   CommandId,
@@ -14,8 +15,11 @@ import { createBalancedDiscardState } from '../../src/game/engine/task-07-contro
 import { createGoldenPaidBuildingStart } from '../../src/game/engine/task-08-paid-building.test-helper.ts'
 import {
   createGoldenDomesticTradeStart,
+  createInitialGoldenOffer,
   createGoldenMaritimeTradeStart,
+  EMPTY_TRADE_BAG,
 } from '../../src/game/engine/task-11-trading.test-helper.ts'
+import { gameEngine } from '../../src/game/engine/game-engine.ts'
 import {
   GAME_SAVE_SCHEMA_VERSION,
   serializeGameSave,
@@ -52,7 +56,11 @@ function withHumanController(state: GameState, humanPlayerId: PlayerId): GameSta
   return { ...state, players }
 }
 
-function envelope(state: GameState, humanPlayerId: PlayerId): GameSaveEnvelope {
+function envelope(
+  state: GameState,
+  humanPlayerId: PlayerId,
+  commandKeysThisTurn: readonly string[] = [],
+): GameSaveEnvelope {
   const assignments = {} as Record<PlayerId, AiProfileId>
   for (const playerId of state.playerOrder) {
     const player = state.players[playerId]
@@ -69,15 +77,19 @@ function envelope(state: GameState, humanPlayerId: PlayerId): GameSaveEnvelope {
       commandCounter: state.stateVersion,
       commandCountThisGame: state.stateVersion,
       turnIdentity: turnIdentity(state),
-      commandKeysThisTurn: [],
+      commandKeysThisTurn: [...commandKeysThisTurn],
     },
     state,
   }
 }
 
-function save(state: GameState, humanPlayerId: PlayerId): string {
+function save(
+  state: GameState,
+  humanPlayerId: PlayerId,
+  commandKeysThisTurn: readonly string[] = [],
+): string {
   const controlled = withHumanController(state, humanPlayerId)
-  return serializeGameSave(envelope(controlled, humanPlayerId))
+  return serializeGameSave(envelope(controlled, humanPlayerId, commandKeysThisTurn))
 }
 
 export function paidBuildSave(): string {
@@ -94,6 +106,52 @@ export function maritimeTradeSave(): string {
 
 export function domesticTradeSave(): string {
   return save(createGoldenDomesticTradeStart(), GOLDEN_PLAYER_IDS.sentinel)
+}
+
+export function incomingAiTradeSave(): string {
+  const state = createGoldenDomesticTradeStart()
+  const result = gameEngine.execute(state, {
+    commandId: 'command:e2e:incoming-ai-trade' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.sentinel,
+    expectedStateVersion: state.stateVersion,
+    command: { type: 'PROPOSE_TRADE', offer: createInitialGoldenOffer() },
+  })
+  if (!result.ok) throw new Error(`Incoming AI trade fixture failed: ${result.violation.code}.`)
+  return save(result.state, GOLDEN_PLAYER_IDS.human, ['PROPOSE_TRADE:existing-ai-offer'])
+}
+
+function developmentCardPurchaseState(): GameState {
+  const base = createGoldenPaidBuildingStart()
+  const human = base.players[GOLDEN_PLAYER_IDS.sentinel]
+  if (human === undefined) throw new Error('Missing development-card fixture player.')
+  const resources: ResourceBag = { ...EMPTY_TRADE_BAG, WOOL: 1, GRAIN: 1, ORE: 1 }
+  const bankResources = Object.fromEntries(
+    Object.keys(resources).map((key) => {
+      const resource = key as keyof ResourceBag
+      return [resource, base.bank.resources[resource] + human.resources[resource] - resources[resource]]
+    }),
+  ) as ResourceBag
+  const knight = base.bank.developmentDeck.find((card) => card.type === 'KNIGHT')
+  if (knight === undefined) throw new Error('Missing Knight in development-card fixture deck.')
+  return {
+    ...base,
+    bank: {
+      ...base.bank,
+      resources: bankResources,
+      developmentDeck: [
+        knight,
+        ...base.bank.developmentDeck.filter((card) => card.id !== knight.id),
+      ],
+    },
+    players: {
+      ...base.players,
+      [human.id]: { ...human, resources },
+    },
+  }
+}
+
+export function developmentCardPurchaseSave(): string {
+  return save(developmentCardPurchaseState(), GOLDEN_PLAYER_IDS.sentinel)
 }
 
 function createVictoryState(): GameState {

@@ -93,7 +93,10 @@ class CountingRepository implements GameSaveRepository {
   }
 }
 
-function saveForState(state: GameState): GameSaveEnvelope {
+function saveForState(
+  state: GameState,
+  commandKeysThisTurn: readonly string[] = [],
+): GameSaveEnvelope {
   const human = Object.values(state.players).find((player) => player.controller.type === 'HUMAN')
   if (human === undefined) throw new Error('Fixture has no Human player.')
   const assignments = {} as Record<PlayerId, AiProfileId>
@@ -112,10 +115,44 @@ function saveForState(state: GameState): GameSaveEnvelope {
       commandCounter: state.stateVersion,
       commandCountThisGame: state.stateVersion,
       turnIdentity: `turn:${state.turn.turnNumber}:${state.turn.currentPlayerId}`,
-      commandKeysThisTurn: [],
+      commandKeysThisTurn: [...commandKeysThisTurn],
     },
     state,
   }
+}
+
+function pendingAiOfferState(): GameState {
+  const state = createGoldenDomesticTradeStart()
+  const result = gameEngine.execute(state, {
+    commandId: 'command:gateway:pending-ai-offer' as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.sentinel,
+    expectedStateVersion: state.stateVersion,
+    command: { type: 'PROPOSE_TRADE', offer: createInitialGoldenOffer() },
+  })
+  if (!result.ok) throw new Error(`Gateway trade fixture failed: ${result.violation.code}.`)
+  return result.state
+}
+
+async function submitHumanCounter(offer: TradeOffer): Promise<Extract<Awaited<ReturnType<LocalGameGateway['submit']>>, { readonly ok: true }>> {
+  const state = pendingAiOfferState()
+  const repository = new InMemoryGameSaveRepository(serializeGameSave(saveForState(
+    state,
+    ['PROPOSE_TRADE:existing-ai-offer'],
+  )))
+  const gateway = new LocalGameGateway({ saveRepository: repository })
+  const view = await gateway.loadLatestGame()
+  const response = await gateway.submit({
+    commandId: `command:gateway:counter:${offer.tradeId}` as CommandId,
+    actorId: GOLDEN_PLAYER_IDS.human,
+    expectedStateVersion: view.stateVersion,
+    command: {
+      type: 'COUNTER_TRADE',
+      previousTradeId: createInitialGoldenOffer().tradeId,
+      offer,
+    },
+  })
+  if (!response.ok) throw new Error(`Human counter failed: ${response.violation.code}.`)
+  return response
 }
 
 class ScriptedTradeAgent implements AiAgent {
@@ -287,6 +324,65 @@ describe('LocalGameGateway', () => {
       expect(response.view.publicGame.turn.currentPlayerId).toBe(GOLDEN_PLAYER_IDS.human)
       expect(response.events.some((event) => event.type === 'TRADE_REJECTED')).toBe(true)
     }
+  })
+
+  it('accepts a favorable complete Human counter and transfers resources in offer direction', async () => {
+    const initial = createInitialGoldenOffer()
+    const response = await submitHumanCounter({
+      ...initial,
+      tradeId: 'trade:gateway:favorable-counter' as TradeId,
+      proposedById: GOLDEN_PLAYER_IDS.human,
+      parentTradeId: initial.tradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, LUMBER: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 2 },
+    })
+
+    expect(response.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'TRADE_COUNTERED',
+      'TRADE_COMPLETED',
+    ]))
+    expect(response.events.some((event) => event.type === 'TRADE_REJECTED')).toBe(false)
+    expect(response.view.self.resources).toMatchObject({ LUMBER: 1, BRICK: 0 })
+    expect(response.view.pendingDecision).toBeNull()
+  })
+
+  it('rejects an unfavorable depth-one Human counter without producing another counter', async () => {
+    const initial = createInitialGoldenOffer()
+    const response = await submitHumanCounter({
+      ...initial,
+      tradeId: 'trade:gateway:unfavorable-counter' as TradeId,
+      proposedById: GOLDEN_PLAYER_IDS.human,
+      parentTradeId: initial.tradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, LUMBER: 2, WOOL: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 1 },
+    })
+
+    expect(response.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'TRADE_COUNTERED',
+      'TRADE_REJECTED',
+    ]))
+    expect(response.events.filter((event) => event.type === 'TRADE_COUNTERED')).toHaveLength(1)
+    expect(response.events.some((event) => event.type === 'TRADE_COMPLETED')).toBe(false)
+    expect(response.view.pendingDecision).toBeNull()
+  })
+
+  it('rejects an unaffordable Human counter through the real AI gateway path', async () => {
+    const initial = createInitialGoldenOffer()
+    const response = await submitHumanCounter({
+      ...initial,
+      tradeId: 'trade:gateway:unaffordable-counter' as TradeId,
+      proposedById: GOLDEN_PLAYER_IDS.human,
+      parentTradeId: initial.tradeId,
+      initiatorGives: { ...EMPTY_TRADE_BAG, ORE: 1 },
+      counterpartyGives: { ...EMPTY_TRADE_BAG, BRICK: 1 },
+    })
+
+    expect(response.events.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'TRADE_COUNTERED',
+      'TRADE_REJECTED',
+    ]))
+    expect(response.events.some((event) => event.type === 'TRADE_COMPLETED')).toBe(false)
+    expect(response.view.pendingDecision).toBeNull()
   })
 
   it('loads an equivalent valid save, deletes it, and reports corrupt saves recoverably', async () => {

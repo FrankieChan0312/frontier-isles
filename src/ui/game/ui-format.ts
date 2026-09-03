@@ -1,6 +1,10 @@
 import type { PlayerEventView } from '../../game/contracts/player-events.ts'
 import type { PlayerView } from '../../game/contracts/views.ts'
 import type { PlayerId } from '../../game/model/ids.ts'
+import type {
+  DevelopmentCardType,
+  OwnedDevelopmentCard,
+} from '../../game/model/development-card.ts'
 import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '../../game/model/resource.ts'
 
 export const RESOURCE_LABELS: Readonly<Record<ResourceType, string>> = {
@@ -19,12 +23,53 @@ export const RESOURCE_SYMBOLS: Readonly<Record<ResourceType, string>> = {
   ORE: '⛰',
 }
 
+export const DEVELOPMENT_CARD_LABELS: Readonly<Record<DevelopmentCardType, string>> = {
+  KNIGHT: 'Knight',
+  ROAD_BUILDING: 'Road Building',
+  INVENTION: 'Invention',
+  MONOPOLY: 'Monopoly',
+  VICTORY_POINT: 'Victory Point',
+}
+
+export const DEVELOPMENT_CARD_DESCRIPTIONS: Readonly<Record<DevelopmentCardType, string>> = {
+  KNIGHT: 'Move the robber and steal one random resource from an adjacent opponent. It does not trigger discards.',
+  ROAD_BUILDING: 'Build up to two legal roads without paying resources.',
+  INVENTION: 'Take exactly two available resources from the bank; both may be the same type.',
+  MONOPOLY: 'Choose one resource type and take all cards of that type from every opponent.',
+  VICTORY_POINT: 'A hidden +1 victory point that is automatically revealed when required to win.',
+}
+
+export type DevelopmentCardDisplayStatus =
+  | 'Bought this turn'
+  | 'Playable'
+  | 'Already played'
+  | 'Hidden Victory Point'
+  | 'Revealed Victory Point'
+
+export function developmentCardDisplayStatus(
+  card: OwnedDevelopmentCard,
+  turnNumber: number,
+): DevelopmentCardDisplayStatus {
+  if (card.type === 'VICTORY_POINT') {
+    return card.status === 'REVEALED' ? 'Revealed Victory Point' : 'Hidden Victory Point'
+  }
+  if (card.status === 'PLAYED') return 'Already played'
+  return card.acquiredTurnNumber >= turnNumber ? 'Bought this turn' : 'Playable'
+}
+
 export function emptyResourceBag(): ResourceBag {
   return { LUMBER: 0, BRICK: 0, WOOL: 0, GRAIN: 0, ORE: 0 }
 }
 
 export function resourceBagTotal(resources: ResourceBag): number {
   return RESOURCE_TYPES.reduce((total, resource) => total + resources[resource], 0)
+}
+
+export function formatRuleViolation(code: string): string {
+  if (code === 'BANK_RESOURCE_UNAVAILABLE') {
+    return 'That resource is currently unavailable from the supply.'
+  }
+  return code.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + '.'
 }
 
 export function formatResourceBag(resources: ResourceBag): string {
@@ -61,9 +106,11 @@ export function formatEvent(event: PlayerEventView, view: PlayerView): string {
     case 'CITY_BUILT':
       return `${playerName(view, event.ownerId)} upgraded a city.`
     case 'DEVELOPMENT_CARD_BOUGHT':
-      return `${playerName(view, event.ownerId)} bought a development card.`
+      return event.ownerId === view.self.id && event.cardType !== null
+        ? `You bought ${DEVELOPMENT_CARD_LABELS[event.cardType]}.`
+        : `${playerName(view, event.ownerId)} bought a development card.`
     case 'DEVELOPMENT_CARD_PLAYED':
-      return `${playerName(view, event.ownerId)} played ${event.cardType.replaceAll('_', ' ').toLowerCase()}.`
+      return `${playerName(view, event.ownerId)} played ${DEVELOPMENT_CARD_LABELS[event.cardType]}.`
     case 'TRADE_PROPOSED':
       return `${playerName(view, event.initiatorId)} proposed a domestic trade.`
     case 'TRADE_REJECTED':

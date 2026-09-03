@@ -7,6 +7,7 @@ import { createGameSessionStore } from '../application/stores/game-session-store
 import { createUiInteractionStore } from '../application/stores/ui-interaction-store.ts'
 import { HomePage } from '../ui/pages/HomePage.tsx'
 import { GamePage } from '../ui/pages/GamePage.tsx'
+import { formatRuleViolation } from '../ui/game/ui-format.ts'
 import {
   createBrowserGameConfig,
   createBrowserSeed,
@@ -25,10 +26,6 @@ interface ActiveGameSetup {
 }
 
 type AppScreen = 'HOME' | 'GAME'
-
-function friendlyViolation(code: string): string {
-  return code.replaceAll('_', ' ').toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + '.'
-}
 
 export function App({ gateway: providedGateway, seedFactory = createBrowserSeed }: AppProps): React.JSX.Element {
   const gateway = useMemo(() => providedGateway ?? createBrowserGateway(), [providedGateway])
@@ -93,7 +90,7 @@ export function App({ gateway: providedGateway, seedFactory = createBrowserSeed 
         command,
       })
       if (!response.ok) {
-        setLocalError(friendlyViolation(response.violation.code))
+        setLocalError(formatRuleViolation(response.violation.code))
         return
       }
       uiStore.getState().setSelectedBuildMode(null)

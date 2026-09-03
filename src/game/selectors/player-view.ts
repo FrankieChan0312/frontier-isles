@@ -1,4 +1,6 @@
 import type {
+  DevelopmentCardPlayabilityReason,
+  DevelopmentCardPlayabilityView,
   LegalActionView,
   LegalInventionSelection,
   PendingDecisionView,
@@ -39,6 +41,30 @@ import { assertTradingState } from '../engine/trading-invariants.ts'
 
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
+}
+
+function developmentCardPlayabilityReason(
+  state: GameState,
+  viewerId: PlayerId,
+  card: GameState['players'][PlayerId]['developmentCards'][number],
+): DevelopmentCardPlayabilityReason {
+  if (card.type === 'VICTORY_POINT') return 'VICTORY_POINT'
+  if (card.status !== 'IN_HAND') return 'ALREADY_PLAYED'
+  if (state.winnerId !== null || state.turn.phase === 'GAME_OVER') return 'GAME_OVER'
+  if (state.turn.currentPlayerId !== viewerId) return 'NOT_YOUR_TURN'
+  if (state.pendingDecision !== null) return 'PENDING_DECISION'
+  if (state.turn.phase !== 'ROLL_REQUIRED' && state.turn.phase !== 'ACTION') return 'WRONG_PHASE'
+  if (card.acquiredTurnNumber >= state.turn.turnNumber) return 'BOUGHT_THIS_TURN'
+  if (state.turn.developmentCardPlayedThisTurn) return 'CARD_LIMIT_REACHED'
+  if (validateActionCardPlayability(state, viewerId, card.id) !== null) return 'EFFECT_UNAVAILABLE'
+  if (card.type === 'ROAD_BUILDING' && remainingFreeRoadCount(state, viewerId) === null) {
+    return 'EFFECT_UNAVAILABLE'
+  }
+  if (
+    card.type === 'INVENTION'
+    && RESOURCE_TYPES.reduce((total, resource) => total + state.bank.resources[resource], 0) < 2
+  ) return 'EFFECT_UNAVAILABLE'
+  return 'PLAYABLE'
 }
 
 function cloneResourceBag(resources: ResourceBag): ResourceBag {
@@ -258,25 +284,15 @@ function createLegalActions(state: GameState, viewerId: PlayerId): LegalActionVi
     && state.turn.phase === 'ACTION'
     && state.bank.developmentDeck.length > 0
     && canAffordResourceCost(player.resources, STANDARD_DEVELOPMENT_CARD_COST)
-  const playableDevelopmentCardIds = !isGameOver
-    && isCurrent
-    && noPending
-    && (state.turn.phase === 'ROLL_REQUIRED' || state.turn.phase === 'ACTION')
-    ? player.developmentCards
-        .filter((card) => {
-          if (validateActionCardPlayability(state, viewerId, card.id) !== null) return false
-          if (card.type === 'ROAD_BUILDING') return remainingFreeRoadCount(state, viewerId) !== null
-          if (card.type === 'INVENTION') {
-            return RESOURCE_TYPES.reduce(
-              (total, resource) => total + state.bank.resources[resource],
-              0,
-            ) >= 2
-          }
-          return true
-        })
-        .map((card) => card.id)
-        .sort(compareCodeUnits)
-    : []
+  const developmentCardPlayability: readonly DevelopmentCardPlayabilityView[] =
+    player.developmentCards.map((card) => {
+      const reason = developmentCardPlayabilityReason(state, viewerId, card)
+      return { cardId: card.id, canPlay: reason === 'PLAYABLE', reason }
+    })
+  const playableDevelopmentCardIds = developmentCardPlayability
+    .filter((card) => card.canPlay)
+    .map((card) => card.cardId)
+    .sort(compareCodeUnits)
 
   const discardPending = state.pendingDecision?.type === 'DISCARD_RESOURCES'
     ? state.pendingDecision
@@ -394,6 +410,7 @@ function createLegalActions(state: GameState, viewerId: PlayerId): LegalActionVi
     requiredDiscardCount,
     discardableResources: requiredDiscardCount === null ? null : cloneResourceBag(player.resources),
     playableDevelopmentCardIds,
+    developmentCardPlayability,
     legalInventionSelections,
     legalMonopolyResourceTypes,
     legalMaritimeTradeOptions,

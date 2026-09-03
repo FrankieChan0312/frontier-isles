@@ -59,6 +59,24 @@ export interface LegalTradeResponseView {
   readonly canCounter: boolean
 }
 
+export type DevelopmentCardPlayabilityReason =
+  | 'PLAYABLE'
+  | 'BOUGHT_THIS_TURN'
+  | 'ALREADY_PLAYED'
+  | 'VICTORY_POINT'
+  | 'NOT_YOUR_TURN'
+  | 'PENDING_DECISION'
+  | 'WRONG_PHASE'
+  | 'CARD_LIMIT_REACHED'
+  | 'EFFECT_UNAVAILABLE'
+  | 'GAME_OVER'
+
+export interface DevelopmentCardPlayabilityView {
+  readonly cardId: DevelopmentCardId
+  readonly canPlay: boolean
+  readonly reason: DevelopmentCardPlayabilityReason
+}
+
 export interface LegalActionView {
   readonly permittedCommandTypes?: readonly GameCommand['type'][]
   readonly canRollDice: boolean
@@ -76,6 +94,7 @@ export interface LegalActionView {
   readonly requiredDiscardCount: number | null
   readonly discardableResources?: ResourceBag | null
   readonly playableDevelopmentCardIds: readonly DevelopmentCardId[]
+  readonly developmentCardPlayability?: readonly DevelopmentCardPlayabilityView[]
   readonly legalInventionSelections?: readonly ResourceBag[]
   readonly legalMonopolyResourceTypes?: readonly ResourceType[]
   readonly legalMaritimeTradeOptions: readonly LegalMaritimeTradeOption[]
