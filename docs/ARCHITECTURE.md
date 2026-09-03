@@ -358,6 +358,23 @@ responsive SVG derived from public topology and occupancy. Terrain, number token
 roads, settlements, cities, and legal targets are public-view renderings. SVG targets are tabbable,
 named, and activate with Enter or Space. No component receives persistence envelopes or `GameState`.
 
+### Stage 17 release-verification boundary
+
+Release simulation and E2E code remain consumers of public application and engine boundaries:
+
+- The 100-seed runner reuses mixed-profile simulation orchestration, routes commands through
+  `GameEngine`, and asserts all accepted invariant families after every state transition.
+- Playwright fixtures are assembled under `tests/e2e` with accepted engine helpers, validated and
+  serialized through the production save format, then injected through the same localStorage key a
+  normal browser save uses.
+- Production source contains no fixture switch, debug route, global state escape hatch, or test-only
+  command path.
+- Browser tests observe accessible UI, public SVG/DOM output, redacted log text, and console/page
+  errors. They do not import or call production engine modules from the browser context.
+
+The shipping artifact remains a static Vite build. `netlify.toml` is provider configuration only;
+it introduces no runtime hosting SDK, secret, network dependency, or deployment authorization.
+
 ## 13. Persistence
 
 Persistence is behind `GameSaveRepository`.

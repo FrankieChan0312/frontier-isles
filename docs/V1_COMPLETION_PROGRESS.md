@@ -57,8 +57,8 @@ Stage commits:
 - Stage 13: `dbf4a1e4354be24363336e7a78c7a0b9e80572ae` — `feat: add deterministic core AI player`
 - Stage 14: `5e53f708aca33733dec58a6f47725597c45ab986` — `feat: add trade AI and player personalities`
 - Stage 15: `9306cd432e7fcde2eb1771689af0de3b7940d98b` — `feat: add local game gateway and browser persistence`
-- Stage 16: pending
-- Stage 17: pending
+- Stage 16: `bc71f641e8e41dbdccc9fad995752f9589e86896` — `feat: add complete interactive game interface`
+- Stage 17: this final stage commit — `chore: harden browser V1 release candidate`
 
 Unresolved risks:
 
@@ -404,8 +404,103 @@ Known limitations:
 
 Stage commit:
 
-- Pending — `feat: add complete interactive game interface`
+- `bc71f641e8e41dbdccc9fad995752f9589e86896` — `feat: add complete interactive game interface`
 
 Next stage:
 
 - Stage 17 release hardening, 100-seed simulation, E2E, documentation, and static deployment setup.
+
+### Stage 17 — COMPLETE
+
+Plan:
+
+1. Add a deterministic `npm run simulate` release corpus of at least 100 fixed mixed-profile seeds,
+   preserving per-command invariant checks, bounded progress, stable summaries, and complete traces.
+2. Add Playwright E2E with schema-valid saves derived from accepted engine helpers and cover new
+   game/setup, normal turns/building, seven, maritime/domestic trade, save/reload, victory, and
+   starting again without production backdoors.
+3. Perform release security, hidden-information, entropy, asset, dependency, and bundle audits;
+   improve only concrete release issues.
+4. Update the README and architecture/testing docs; add deployment, release checklist, known
+   limitations, static-host configuration, and a final ADR.
+5. Run the complete Stage 17 and final clean-install command matrices from the committed release
+   candidate, create the final stage commit, and leave a clean tree.
+
+Initial design decisions:
+
+- The 100-seed corpus is separate from ordinary Vitest and uses the accepted mixed-profile
+  simulation engine, which already checks the full invariant chain after every command.
+- E2E fixtures live under `tests/e2e`, are serialized through the production save format, and enter
+  only through browser localStorage; production code exposes no fixture or debug API.
+- Static deployment configuration will describe a build output only. No deployment is authorized or
+  attempted without an existing configured target and credentials.
+
+Files changed:
+
+- Release scripts/config: `package.json`, `package-lock.json`, `playwright.config.ts`,
+  `tsconfig.e2e.json`, `vitest.config.ts`, `.gitignore`, `netlify.toml`, and `MANIFEST.json`.
+- Simulation: `src/ai/simulation/core-ai-simulation.ts`, `release-simulation-report.ts`, its tests,
+  and `run-release-simulations.ts`.
+- Browser E2E: `tests/e2e/save-fixtures.ts` and `tests/e2e/v1-release.spec.ts`.
+- Release fixes: `src/ui/controllers/game-command-controller.ts` and its regression test, plus
+  Latin-only Roboto entry imports in `src/main.tsx`.
+- User/release docs: `README.md`, `START_HERE.md`, `docs/AI_SIMULATION.md`,
+  `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `docs/DEPLOYMENT.md`,
+  `docs/RELEASE_CHECKLIST.md`, `docs/KNOWN_LIMITATIONS.md`, this progress file, and ADR-0016.
+
+Behaviour implemented:
+
+- Fixed 100-seed mixed-profile release corpus with invariant checks after every command, ordered
+  deterministic summary hashing, bounded progress, and complete invariant-failure traces.
+- Five real Chromium workflows covering all ten required paths, accessible roles/names, mobile
+  overflow, redacted DOM text, save persistence, and console/page-error capture.
+- Correct paid-build board targeting when normal-phase setup projections are present as empty arrays.
+- Reproducible static release configuration, security/cache headers, release metadata, clean
+  Vitest/Playwright suite separation, and an optimized eight-file Latin font payload.
+
+Verification results:
+
+- `npx playwright install chromium`: PASS — pinned Chromium, headless shell, FFmpeg, and Windows
+  dependency helper installed.
+- Stage 17 `npm run typecheck`: PASS — application and strict E2E TypeScript projects.
+- Stage 17 `npm run lint`: PASS with zero warnings.
+- Stage 17 `npm run test`: PASS — 60 test files, 321 tests.
+- Stage 17 `npm run build`: PASS — 990 modules transformed; 0.87 kB CSS, eight local Latin font
+  assets, and 623.69 kB / 185.22 kB gzip entry JavaScript. The size advisory is documented.
+- Stage 17 `npm run check`: PASS — typecheck, lint, 60 files / 321 tests, and production build.
+- Stage 17 `npm run simulate`: PASS — 100/100 legal winners, 65,341 commands, maximum 996 commands,
+  170 turns, and 467 RNG draws; East 33, West 21, South 28, North 18; hash `1adc49e8`.
+- Stage 17 `npm run e2e`: PASS — 5/5 Chromium tests in 18.0 seconds with no captured browser errors.
+- `npm audit --omit=dev`: PASS — zero production vulnerabilities.
+- Dependency/asset/privacy audit: PASS — every runtime package is used or a required MUI peer;
+  Playwright is dev-only; no protected media, network/service code, production test backdoor,
+  hidden-state UI/store import, or forbidden game/AI entropy was found.
+- Stage 17 `git diff --check`: PASS (Git emitted only line-ending conversion notices).
+
+Dependencies:
+
+- Added `@playwright/test` as a development dependency for repeatable Chromium E2E. No runtime
+  dependency or hosting SDK was added.
+
+Tests added or updated:
+
+- Stable-hash and empty-corpus release-report coverage.
+- Paid-build UI-controller regression coverage for empty normal-phase setup arrays.
+- Five browser E2E workflows built from accepted-engine, production-serialized saves.
+
+Known limitations:
+
+- The combined offline engine/MUI entry chunk retains Vite's non-failing size advisory.
+- E2E is Chromium-only and needs a one-time browser install.
+- The 100-game corpus is CPU-intensive and remains separate from ordinary `npm run check`.
+- Deployment is configured and documented but was not performed because no authorized target was
+  present.
+
+Stage commit:
+
+- This commit — `chore: harden browser V1 release candidate`
+
+Next step:
+
+- Repeat the mandated final clean-install and verification matrix from the committed release
+  candidate, then confirm the tree is clean.

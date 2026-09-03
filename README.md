@@ -1,99 +1,70 @@
 # Frontier Isles
 
-> Working title for a browser-based, Catan-inspired strategy board game.
+Frontier Isles is an original, browser-only strategy board game for one Human and three heuristic
+AI players. The V1 release candidate runs entirely on the local device: it has a deterministic
+TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
 
-## Current status
+## V1 features
 
-Tasks 00–11 provide the React application foundation, pure TypeScript contracts, deterministic topology and board content, a responsive accessible raw-SVG topology preview, authoritative game creation and setup, deterministic turns and robber resolution, paid building, awards/scoring/victory, development cards, and complete authoritative domestic and maritime trading. The remaining application layers are future work.
+- Seeded four-player game creation and reproducible board generation
+- Complete setup, dice production, robber/discard/theft, building, awards, scoring, and victory
+- Development cards plus domestic and maritime trading
+- Merchant, Builder, and Sentinel AI personalities that use redacted player views
+- Responsive, keyboard-operable raw SVG board and accessible MUI dialogs
+- Automatic and manual save/resume using one versioned local browser save
+- Deterministic 100-game release simulation and repeatable Chromium E2E suite
 
-V1 target:
+The working ruleset identifier is `BASE_4P_COMBINED_ACTION_V1`.
 
-- One human player and three AI players
-- Browser-only single-player application
-- React + TypeScript + Vite
-- Material UI for application UI
-- Raw SVG for the board
-- Pure TypeScript authoritative game engine
-- Heuristic, non-cheating AI
-- Seeded deterministic randomness
-- Local save/resume
-- No backend, login, database, or online multiplayer in V1
+## Run locally
 
-## Start here
-
-Read in this order:
-
-1. `AGENTS.md`
-2. `docs/PRODUCT_SCOPE.md`
-3. `docs/GAME_RULES.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/BOARD_MODEL.md`
-6. `docs/AI_DESIGN.md`
-7. `docs/TRADE_AI.md`
-8. `docs/CODING_STANDARDS.md`
-9. `tasks/TASK_00_PROJECT_FOUNDATION.md`
-10. `tasks/TASK_01_DOMAIN_CONTRACTS.md`
-11. `tasks/TASK_02_STANDARD_BOARD_TOPOLOGY.md`
-12. `tasks/TASK_03_RESPONSIVE_SVG_BOARD_RENDERER.md`
-13. `tasks/TASK_04_SEEDED_STANDARD_BOARD_CONTENT.md`
-14. `tasks/TASK_05_GAME_CREATION_AND_INITIAL_SETUP.md`
-15. `tasks/TASK_06_DICE_PRODUCTION_AND_TURN_LIFECYCLE.md`
-16. `tasks/TASK_07_DISCARD_ROBBER_AND_THEFT_WORKFLOW.md`
-17. `tasks/TASK_08_PAID_BUILDING_ACTIONS.md`
-18. `tasks/TASK_09_AWARDS_SCORING_AND_VICTORY.md`
-19. `tasks/TASK_10_DEVELOPMENT_CARD_LIFECYCLE.md`
-20. `tasks/TASK_11_DOMESTIC_AND_MARITIME_TRADING.md`
-
-The current implementation includes **Tasks 00–11**, through deterministic seven resolution,
-paid Action-phase construction, awards/scoring/victory, development cards, direct one-counter
-domestic negotiation, atomic acceptance, and derived 2:1/3:1/4:1 maritime exchange. The landing
-page remains a static neutral topology preview; authoritative terrain, numbers, robber, buildings,
-and roads are not rendered. AI, networking, persistence, and additional gameplay UI are not implemented.
-
-## Local development
-
-### Prerequisites
-
-- Node.js 24 or another version supported by the current Vite release
-- npm 11 or a compatible npm version
-
-Install dependencies:
+Prerequisites are Node.js 24 and a compatible npm 11 release.
 
 ```sh
-npm install
-```
-
-Start the development server:
-
-```sh
+npm ci
 npm run dev
 ```
 
-Run individual quality checks:
+Open the URL printed by Vite. Enter a name and seed, or keep the materialized seed shown on the Home
+screen. A successful command is saved automatically; **Save** also persists immediately. **Continue
+saved game** resumes the single latest save for the current browser origin.
+
+## Quality and release commands
 
 ```sh
 npm run typecheck
 npm run lint
 npm run test
 npm run build
-```
-
-Run the complete quality suite:
-
-```sh
 npm run check
+npm run simulate
+npx playwright install chromium
+npm run e2e
 ```
 
-See the [product documentation](docs/PRODUCT_SCOPE.md), [architecture](docs/ARCHITECTURE.md), [board model](docs/BOARD_MODEL.md), and task specifications under [tasks](tasks/) for scope and design details.
+`npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
+accepted command. Playwright browser installation is a one-time machine prerequisite for E2E.
 
-## Working ruleset identifier
+## Production build
 
-```text
-BASE_4P_COMBINED_ACTION_V1
-```
+`npm run build` writes the static release to `dist/`. No server, secret, runtime environment
+variable, or API is required. See [deployment](docs/DEPLOYMENT.md), the
+[release checklist](docs/RELEASE_CHECKLIST.md), [testing](docs/TESTING.md), and
+[known limitations](docs/KNOWN_LIMITATIONS.md).
 
-This identifier means a fixed four-player base-game ruleset with one human and three AI players, variable setup, a combined action phase in which trading and building may be interleaved, and no expansion or house rules.
+## Architecture and privacy boundary
 
-## Intellectual-property boundary
+The pure `src/game/**` engine owns legality and deterministic state transitions. Human and AI
+players submit the same command contracts through `GameGateway`. React, MUI, and Zustand receive a
+viewer-specific `PlayerView` and redacted events, not an unrestricted opponent hand, development
+deck, or RNG cursor. Browser localStorage necessarily holds the authoritative offline save, but it
+is not rendered or placed in UI stores.
 
-This project may reproduce factual game mechanics for learning and prototyping, but it must not copy CATAN logos, official artwork, card illustrations, rulebook prose, branded UI, sound assets, or other protected presentation. Public builds use original names, text, artwork, icons, and visual design.
+Start with [AGENTS.md](AGENTS.md), [product scope](docs/PRODUCT_SCOPE.md),
+[game rules](docs/GAME_RULES.md), and [architecture](docs/ARCHITECTURE.md) before changing code.
+
+## Project boundary
+
+V1 has no backend, login, database, networking, online multiplayer, telemetry, or cloud save. It
+uses original presentation and does not include CATAN logos, official artwork, card images, or
+rulebook prose.

@@ -44,8 +44,8 @@ export function legalVerticesForMode(
   view: PlayerView,
   buildMode: BuildMode,
 ): readonly VertexId[] {
-  if (view.legalActions.legalInitialSettlementVertexIds !== undefined) {
-    return view.legalActions.legalInitialSettlementVertexIds
+  if ((view.legalActions.legalInitialSettlementVertexIds?.length ?? 0) > 0) {
+    return view.legalActions.legalInitialSettlementVertexIds ?? []
   }
   if (buildMode === 'SETTLEMENT') return view.legalActions.legalSettlementVertexIds
   if (buildMode === 'CITY') return view.legalActions.legalCityUpgradeVertexIds
@@ -56,8 +56,8 @@ export function legalEdgesForMode(
   view: PlayerView,
   buildMode: BuildMode,
 ): readonly EdgeId[] {
-  if (view.legalActions.legalInitialRoadEdgeIds !== undefined) {
-    return view.legalActions.legalInitialRoadEdgeIds
+  if ((view.legalActions.legalInitialRoadEdgeIds?.length ?? 0) > 0) {
+    return view.legalActions.legalInitialRoadEdgeIds ?? []
   }
   if (view.publicGame.turn.phase === 'FREE_ROAD_PLACEMENT' || buildMode === 'ROAD') {
     return view.legalActions.legalRoadEdgeIds

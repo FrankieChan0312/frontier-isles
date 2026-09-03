@@ -1,6 +1,8 @@
 import type { EdgeId, VertexId } from '../../game/model/ids.ts'
 import { gameEngine } from '../../game/engine/game-engine.ts'
 import { createBrowserGameConfig } from '../../app/browser-game.ts'
+import { createGoldenPaidBuildingStart } from '../../game/engine/task-08-paid-building.test-helper.ts'
+import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
 import {
   commandForEdgeSelection,
   commandForVertexSelection,
@@ -30,5 +32,14 @@ describe('game command controller', () => {
 
     expect(commandForEdgeSelection(view, 'edge:invalid' as EdgeId)).toBeNull()
     expect(legalEdgesForMode(view, 'ROAD')).not.toContain('edge:invalid')
+  })
+
+  it('uses paid-build edges when the normal-phase setup projection is an empty array', () => {
+    const state = createGoldenPaidBuildingStart()
+    const view = gameEngine.createPlayerView(state, GOLDEN_PLAYER_IDS.sentinel)
+
+    expect(view.legalActions.legalInitialRoadEdgeIds).toEqual([])
+    expect(legalEdgesForMode(view, 'ROAD')).toEqual(view.legalActions.legalRoadEdgeIds)
+    expect(legalEdgesForMode(view, 'ROAD').length).toBeGreaterThan(0)
   })
 })

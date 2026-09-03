@@ -122,6 +122,20 @@ function trace(
   ].join(' | '))
 }
 
+function assertSimulationState(
+  seed: string,
+  state: GameState,
+  actorId: PlayerId,
+  command: GameCommand | null,
+): void {
+  try {
+    assertTradingState(state)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw trace(seed, state, actorId, command, `invariant=${message}`)
+  }
+}
+
 function progressFingerprint(state: GameState): string {
   return JSON.stringify({
     turn: state.turn,
@@ -159,7 +173,7 @@ export async function simulateCoreAiGame(
   let currentTurnIdentity = turnIdentity(state)
   let commandKeysThisTurn: string[] = []
   const seenProgressStates = new Map<string, number>()
-  assertTradingState(state)
+  assertSimulationState(seed, state, state.turn.currentPlayerId, null)
   seenProgressStates.set(progressFingerprint(state), 1)
 
   while (state.winnerId === null) {
@@ -210,7 +224,7 @@ export async function simulateCoreAiGame(
     if (result.state.stateVersion !== beforeVersion + 1) {
       throw trace(seed, state, actorId, command, 'successful command made invalid version progress')
     }
-    assertTradingState(result.state)
+    assertSimulationState(seed, result.state, actorId, command)
     const progressKey = progressFingerprint(result.state)
     const progressOccurrences = (seenProgressStates.get(progressKey) ?? 0) + 1
     if (progressOccurrences > 4) {

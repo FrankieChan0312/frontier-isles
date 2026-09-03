@@ -1,11 +1,11 @@
 {
   "name": "frontier-isles",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0-rc.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.e2e.json --noEmit --pretty false",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "simulate:core": "node --experimental-strip-types src/ai/simulation/run-core-simulations.ts",
     "simulate:mixed": "node --experimental-strip-types src/ai/simulation/run-mixed-simulations.ts",
+    "simulate": "node --experimental-strip-types src/ai/simulation/run-release-simulations.ts",
+    "e2e": "playwright test",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.6",
