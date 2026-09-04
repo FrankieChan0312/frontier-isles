@@ -1,0 +1,128 @@
+/goal Implement Frontier Isles V2 Goal A (Tasks V2-00 through V2-04) and deliver the complete two-browser Lobby milestone.
+
+Work directly in:
+
+C:\Users\user\Desktop\Fullstack Software Engineering\Project\frontier-isles
+
+Required branch:
+
+feat/v2-online-multiplayer
+
+THIS GOAL ENDS AT THE LOBBY MILESTONE. DO NOT IMPLEMENT V2-05 OR LATER.
+
+Before changing source:
+
+1. Read and follow repository-root AGENTS.md.
+2. Read README.md and all relevant accepted V1 architecture, testing, UI, persistence, and deployment documentation.
+3. Read completely:
+   - docs/v2/V2_PRODUCT_SCOPE.md
+   - docs/v2/V2_ARCHITECTURE_BASELINE.md
+   - docs/v2/V2_ROADMAP.md
+   - tasks/TASK_V2_00_MULTIPLAYER_WORKSPACE_FOUNDATION.md
+   - tasks/V2_GOAL_A_LOBBY_MILESTONE.md
+4. Treat tasks/V2_GOAL_A_LOBBY_MILESTONE.md as the authoritative consolidated specification for V2-00 through V2-04.
+5. Confirm the branch is feat/v2-online-multiplayer and not main.
+6. Confirm the working tree is clean.
+7. Run the complete accepted V1 baseline before implementation.
+8. Create docs/v2/V2_GOAL_A_PROGRESS.md and mark V2-00 IN_PROGRESS.
+9. Do not return a completion report after preflight or after V2-00.
+
+Implement sequentially:
+
+V2-00 — Multiplayer workspace foundation
+Commit:
+chore: establish multiplayer workspace foundation
+
+V2-01 — Versioned realtime protocol contracts
+Commit:
+feat: add versioned realtime protocol contracts
+
+V2-02 — In-memory Room and Lobby server
+Commit:
+feat: add in-memory multiplayer lobby server
+
+V2-03 — Synchronized Online Lobby web interface
+Commit:
+feat: add synchronized online lobby interface
+
+V2-04 — Session resume, duplicate-tab policy, Host transfer, reconnect grace, and Room cleanup
+Commit:
+feat: add multiplayer session recovery and room lifecycle
+
+At the end of every stage:
+
+1. Update docs/v2/V2_GOAL_A_PROGRESS.md.
+2. Add focused unit/integration tests.
+3. Update relevant documentation and add an ADR for material decisions.
+4. Run all applicable checks:
+   - npm run typecheck
+   - npm run lint
+   - npm run test
+   - npm run build
+   - npm run check
+   - npm run simulate
+   - npm run check:server
+   - npm run check:all
+   - git diff --check
+   - Lobby E2E from V2-03 onward
+5. Fix all in-scope failures.
+6. Review for V1 regression, private credential leakage, wildcard CORS, use of socket.id as identity, Room isolation, stale snapshots, and forbidden game RNG changes.
+7. Create exactly one passing Git commit for that stage.
+8. Confirm the working tree is clean.
+9. Continue automatically to the next stage without waiting for user confirmation.
+
+Frozen Goal A decisions:
+
+- Node.js 24 LTS.
+- TypeScript.
+- Node http server.
+- Socket.IO 4.x and socket.io-client.
+- npm workspaces.
+- Existing V1 frontend remains at root.
+- Existing LocalGameGateway Single Player remains operational.
+- Four canonical seats: NORTH, EAST, SOUTH, WEST.
+- At least two Humans are required for future start readiness.
+- Remaining seats may be Host-assigned MERCHANT, BUILDER, or SENTINEL AI.
+- Room code is six characters from ABCDEFGHJKLMNPQRSTUVWXYZ23456789.
+- Room/session credentials use Node crypto, never Math.random.
+- Never use socket.id as durable identity.
+- ResumeToken is private, never logged or broadcast.
+- sessionStorage stores the current tab's resume credential.
+- One active socket per SessionId.
+- Newest valid duplicate-tab resume wins; old socket receives session:replaced and is disconnected.
+- RECONNECT_GRACE_MS defaults to 30000.
+- ROOM_IDLE_TTL_MS defaults to 1800000.
+- Host transfers only after explicit leave or grace expiry, to the first Connected Human in canonical seat order.
+- AI can never become Host.
+- Explicit snapshot resync remains authoritative.
+- Goal A never starts or executes an online game.
+- room:start must return GAME_START_NOT_AVAILABLE.
+- Network entropy is separate from the accepted deterministic game RNG.
+- No Express, NestJS, Fastify, Redis, database, login, Firebase, matchmaking, chat, spectators, deployment, game-core extraction, server GameState, SocketGameGateway, or V2-05+ work.
+
+Hard completion conditions:
+
+- Five required stage commits exist in order.
+- V1 checks, E2E, and deterministic simulations still pass with the accepted hash.
+- Web/server/contracts clean install and checks pass.
+- Two browser contexts can create/join one Room and see identical seat, Ready, AI, Host, and connection updates.
+- Refresh resumes the same seat.
+- Duplicate-tab replacement works.
+- Host transfer works.
+- Reconnect grace and idle cleanup are deterministically tested.
+- RoomSnapshot contains no ResumeToken, digest, socket ID, IP, timer internals, GameState, or private game data.
+- No online game execution exists.
+- Final working tree is clean.
+
+Do not mark Goal A complete merely because V2-00 passes.
+
+Do not mark Goal A complete after only creating a server or health endpoint.
+
+Stop early only for a genuine irreconcilable frozen-contract contradiction or a destructive action requiring user authorization. Ordinary compiler errors, test failures, networking bugs, browser failures, and integration defects are not blockers; diagnose and fix them.
+
+Return only the final consolidated Goal A report, unless a genuine blocker prevents safe progress.
+
+The final report must end with exactly:
+
+GOAL_A_AUTOMATED_ACCEPTANCE_PASSED
+PENDING_HUMAN_TWO_BROWSER_UAT
