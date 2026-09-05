@@ -1,8 +1,10 @@
 # Frontier Isles
 
-Frontier Isles is an original, browser-only strategy board game for one Human and three heuristic
-AI players. The V1 release candidate runs entirely on the local device: it has a deterministic
+Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
+browser-only experience for one Human and three heuristic AI players, with a deterministic
 TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
+V2 now includes a separate Node.js/Socket.IO workspace foundation; online Room behavior is added in
+later Goal A stages.
 
 ## V1 features
 
@@ -22,7 +24,7 @@ Prerequisites are Node.js 24 and a compatible npm 11 release.
 
 ```sh
 npm ci
-npm run dev
+npm run dev:web
 ```
 
 Open the URL printed by Vite. Enter a name and seed, or keep the materialized seed shown on the Home
@@ -45,10 +47,33 @@ npm run e2e
 `npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
 accepted command. Playwright browser installation is a one-time machine prerequisite for E2E.
 
+## V2 workspace foundation
+
+Start the unchanged V1 web client and the realtime foundation in separate terminals:
+
+```sh
+npm run dev:web
+npm run dev:server
+```
+
+The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
+Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). Copy the
+non-secret `.env.example` values into your process environment when overrides are needed; no
+`.env` file is committed.
+
+```sh
+npm run check:server
+npm run check:all
+```
+
+The V2 foundation requires Node.js 24 LTS. See the
+[V2 architecture baseline](docs/v2/V2_ARCHITECTURE_BASELINE.md) and
+[foundation ADR](docs/v2/ADR-V2-0001-node-socket-io-workspace-foundation.md).
+
 ## Production build
 
-`npm run build` writes the static release to `dist/`. No server, secret, runtime environment
-variable, or API is required. See [deployment](docs/DEPLOYMENT.md), the
+`npm run build` writes the accepted V1 static release to `dist/`. Its Single Player mode requires
+no server, secret, runtime environment variable, or API. See [deployment](docs/DEPLOYMENT.md), the
 [release checklist](docs/RELEASE_CHECKLIST.md), [testing](docs/TESTING.md), and
 [known limitations](docs/KNOWN_LIMITATIONS.md).
 

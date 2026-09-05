@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default defineConfig([
-  globalIgnores(['dist', '.task00-vite-temp']),
+  globalIgnores(['dist', '**/dist', '.task00-vite-temp']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,6 +18,15 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2023,
       globals: globals.browser,
+    },
+  },
+  {
+    files: ['server/**/*.{ts,tsx}', 'packages/realtime-contracts/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
   {
@@ -48,4 +57,3 @@ export default defineConfig([
     },
   },
 ])
-

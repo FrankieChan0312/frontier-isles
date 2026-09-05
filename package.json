@@ -3,19 +3,35 @@
   "private": true,
   "version": "1.0.0-rc.1",
   "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "server",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite",
+    "dev:server": "npm run build:contracts && npm run dev --workspace @frontier-isles/server",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.e2e.json --noEmit --pretty false",
+    "typecheck:server": "npm run build:contracts && npm run typecheck --workspace @frontier-isles/realtime-contracts && npm run typecheck --workspace @frontier-isles/server",
     "lint": "eslint . --max-warnings 0",
+    "lint:server": "eslint server packages/realtime-contracts --max-warnings 0",
     "test": "vitest run",
+    "test:server": "npm run build:contracts && npm run test --workspace @frontier-isles/realtime-contracts && npm run test --workspace @frontier-isles/server",
     "test:watch": "vitest",
     "build": "tsc -b && vite build",
+    "build:contracts": "npm run build --workspace @frontier-isles/realtime-contracts",
+    "build:server": "npm run build:contracts && npm run build --workspace @frontier-isles/server",
     "preview": "vite preview",
     "simulate:core": "node --experimental-strip-types src/ai/simulation/run-core-simulations.ts",
     "simulate:mixed": "node --experimental-strip-types src/ai/simulation/run-mixed-simulations.ts",
     "simulate": "node --experimental-strip-types src/ai/simulation/run-release-simulations.ts",
     "e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "check:server": "npm run typecheck:server && npm run lint:server && npm run test:server && npm run build:server",
+    "check:all": "npm run check && npm run check:server"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

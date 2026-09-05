@@ -11,6 +11,12 @@
 | `npm run check` | Run typecheck, lint, unit/integration tests, and production build in sequence. |
 | `npm run simulate` | Run the separate 100-game deterministic release corpus. |
 | `npm run e2e` | Run the Chromium browser release paths with Playwright. |
+| `npm run check:server` | Strict-check, lint, test, and build the realtime server and shared contracts. |
+| `npm run check:all` | Run the accepted V1 web check followed by all server/contracts checks. |
+
+Server integration tests bind ephemeral ports and exercise the real Node HTTP and Socket.IO
+boundaries. They do not require a server already running, a fixed port, credentials, or external
+network access.
 
 ## Deterministic release simulation
 

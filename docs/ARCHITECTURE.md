@@ -4,6 +4,10 @@
 
 V1 runs locally in the browser, but its UI must be replaceable from a local engine connection to a future network connection without rewriting board rendering or interaction flows.
 
+V2 multiplayer additions are governed by [the V2 architecture baseline](v2/V2_ARCHITECTURE_BASELINE.md)
+and its stage ADRs. The initial workspace foundation adds only `server/` and
+`packages/realtime-contracts/`; it does not move V1 source or place networking in `src/game/**`.
+
 ## 2. High-level structure
 
 ```text

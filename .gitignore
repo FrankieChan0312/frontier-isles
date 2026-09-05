@@ -8,10 +8,14 @@ pnpm-debug.log*
 
 node_modules
 dist
+**/dist
 dist-ssr
 playwright-report
 test-results
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
