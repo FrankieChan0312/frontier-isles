@@ -101,7 +101,44 @@ Audit:
 
 ### V2-02 — In-memory Room and Lobby server
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Implemented:
+
+- Added the authoritative single-process Room/session service with revision-zero creation, canonical
+  Human joins, normalized duplicate-name/full/unknown-Room rejection, Ready, Host-managed AI seats,
+  leave/Host transfer, safe start refusal, and strictly derived public snapshots.
+- Added cryptographic RoomCode, SessionId, and ResumeToken generators with bounded collision retries
+  and deterministic dependency injection for tests. No application `Math.random()` is used.
+- Added typed Socket.IO handlers that validate every inbound request and outbound result with the
+  shared contracts, derive authority from SessionId, and isolate broadcasts by RoomCode.
+- Documented the successful no-op policy (no revision increment and no broadcast), temporary
+  immediate-disconnect policy, and single-process authority in ADR-V2-0003.
+- Added 12 focused server tests, bringing the server suite to 4 files/28 tests.
+
+Dependencies:
+
+- None added.
+
+Verification:
+
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS with zero warnings.
+- `npm run test`: PASS — 63 files, 348 V1 tests.
+- `npm run build`: PASS — 992 modules transformed; accepted bundle-size advisory only.
+- `npm run check`: PASS — 63 files, 348 tests, production build.
+- `npm run simulate`: PASS — 100/100 games, 65,341 commands, hash `1adc49e8`.
+- `npm run check:server`: PASS — contracts 5 files/38 tests; server 4 files/28 tests; builds pass.
+- `npm run check:all`: PASS — accepted web check plus server/contracts check.
+- `git diff --check`: PASS (line-ending conversion notices only).
+
+Audit:
+
+- No online GameState, game execution, game-command protocol, database, or cross-process adapter.
+- Public snapshots and broadcast events contain no SessionId, ResumeToken, socket ID, stack, timer,
+  or private game data.
+- `src/game/**`, `LocalGameGateway`, accepted V1 behavior, and deterministic release hash remain
+  unchanged.
 
 ### V2-03 — Synchronized Online Lobby web interface
 

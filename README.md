@@ -3,8 +3,8 @@
 Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
 browser-only experience for one Human and three heuristic AI players, with a deterministic
 TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
-V2 now includes a separate Node.js/Socket.IO workspace foundation; online Room behavior is added in
-later Goal A stages.
+V2 now includes a separate Node.js/Socket.IO workspace plus an in-memory authoritative waiting-Room
+server; the synchronized browser Lobby is added in the next Goal A stage.
 
 ## V1 features
 
@@ -57,7 +57,9 @@ npm run dev:server
 ```
 
 The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
-Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). Copy the
+Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). It owns
+in-memory four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
+leave; `room:start` is intentionally unavailable until Milestone B. Copy the
 non-secret `.env.example` values into your process environment when overrides are needed; no
 `.env` file is committed.
 

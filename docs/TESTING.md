@@ -16,7 +16,8 @@
 
 Server integration tests bind ephemeral ports and exercise the real Node HTTP and Socket.IO
 boundaries. They do not require a server already running, a fixed port, credentials, or external
-network access.
+network access. The Lobby suite uses multiple real clients to prove Room creation/join, synchronized
+Ready and Host AI-seat changes, public-safe rejection, leave behavior, and broadcast isolation.
 
 The shared-contract suite validates every Goal A request and acknowledgement, strict extra-field
 rejection, display-name normalization, branded domains, protocol mismatch, canonical seat order,

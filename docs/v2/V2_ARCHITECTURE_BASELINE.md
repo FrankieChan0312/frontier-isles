@@ -109,6 +109,10 @@ A Frontier Isles Room is a domain object. A Socket.IO room is only a server-side
 
 The Socket.IO room name is derived from the accepted RoomCode. Clients do not inspect Socket.IO room membership directly.
 
+The first implementation is the server-authoritative, single-process service frozen in
+[ADR-V2-0003](ADR-V2-0003-authoritative-in-memory-lobby.md). Rooms begin at revision zero; accepted
+state changes increment once, while successful idempotent no-ops neither increment nor broadcast.
+
 Room domain state includes:
 
 - room code
@@ -121,6 +125,9 @@ Room domain state includes:
 - AI seat profile
 - optional active game ID
 - reconnect deadlines
+
+Through V2-02, disconnect performs an immediate leave. Explicit resume credentials, reconnect
+grace, duplicate-transport handling, and idle cleanup are introduced together in V2-04.
 
 ## 6. Identity
 
