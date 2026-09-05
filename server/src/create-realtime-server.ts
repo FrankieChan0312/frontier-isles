@@ -1,9 +1,11 @@
 import type { Server as HttpServer } from 'node:http'
 import { Server, type ServerOptions } from 'socket.io'
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+} from '@frontier-isles/realtime-contracts'
 import type { ServerConfig } from './config.js'
 
-export type ClientToServerEvents = Record<never, never>
-export type ServerToClientEvents = Record<never, never>
 export type InterServerEvents = Record<never, never>
 export type SocketData = Record<never, never>
 

@@ -59,7 +59,45 @@ Audit:
 
 ### V2-01 — Versioned realtime protocol contracts
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Implemented:
+
+- Added strict runtime schemas and readonly TypeScript contracts for RoomCode, SessionId,
+  ResumeToken, SeatId, RoomRevision, normalized display names, AI profiles, connection/lifecycle
+  status, readiness blockers, and the complete safe-error union.
+- Added the canonical four-seat `RoomSnapshot`, semantic Host/readiness validation, private session
+  credential, and discriminated success/failure acknowledgement contracts.
+- Added typed Socket.IO maps and schemas for all eight Goal A client events and all five server
+  events. The server foundation now consumes the shared maps without adding Room handlers.
+- Added ADR-V2-0002 and updated architecture/testing documentation.
+- Added 36 tests, bringing the shared-contract suite to 5 files/38 tests.
+
+Dependency:
+
+- `zod@4.5.4` — the single strict runtime-validation implementation shared by browser and server;
+  no duplicate validators were added to either consumer.
+
+Verification:
+
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS with zero warnings.
+- `npm run test`: PASS — 63 files, 348 V1 tests.
+- `npm run build`: PASS — 992 modules transformed; accepted bundle-size advisory only.
+- `npm run check`: PASS — 63 files, 348 tests, production build.
+- `npm run simulate`: PASS — 100/100 games, 65,341 commands, hash `1adc49e8`.
+- `npm run check:server`: PASS — contracts 5 files/38 tests; server 2 files/16 tests; builds pass.
+- `npm run check:all`: PASS — accepted web check plus server/contracts check.
+- `git diff --check`: PASS (line-ending conversion notices only).
+
+Audit:
+
+- `RoomSnapshot` strictly rejects extra/private fields and contains no ResumeToken, digest, socket
+  ID, IP, timer internals, GameState, RNG, or private game data.
+- Client requests contain no trusted actor identity; the future server service must derive it from
+  the attached session.
+- Contracts import no Node server, React, MUI, Zustand, browser, or game implementation module.
+- No Room service, online game execution, game-command protocol, or V2-02+ behavior was added.
 
 ### V2-02 — In-memory Room and Lobby server
 

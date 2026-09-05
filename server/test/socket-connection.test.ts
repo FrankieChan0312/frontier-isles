@@ -1,6 +1,10 @@
 import type { AddressInfo } from 'node:net'
 import { io as createClient, type Socket as ClientSocket } from 'socket.io-client'
 import { describe, expect, it } from 'vitest'
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+} from '@frontier-isles/realtime-contracts'
 import type { ServerConfig } from '../src/config.js'
 import { createFrontierHttpServer } from '../src/create-http-server.js'
 import {
@@ -15,7 +19,9 @@ const TEST_CONFIG: ServerConfig = {
   nodeEnv: 'test',
 }
 
-function waitForConnection(client: ClientSocket): Promise<void> {
+type TypedClientSocket = ClientSocket<ServerToClientEvents, ClientToServerEvents>
+
+function waitForConnection(client: TypedClientSocket): Promise<void> {
   return new Promise((resolve, reject) => {
     client.once('connect', resolve)
     client.once('connect_error', reject)
@@ -36,11 +42,14 @@ describe('Socket.IO foundation', () => {
     const realtimeServer = createRealtimeServer(httpServer, TEST_CONFIG)
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve))
     const address = httpServer.address() as AddressInfo
-    const client = createClient(`http://127.0.0.1:${address.port}`, {
+    const client: TypedClientSocket = createClient(
+      `http://127.0.0.1:${address.port}`,
+      {
       forceNew: true,
       reconnection: false,
       transports: ['websocket'],
-    })
+      },
+    )
 
     await waitForConnection(client)
     expect(client.connected).toBe(true)

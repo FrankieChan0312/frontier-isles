@@ -85,6 +85,11 @@ The client may cache the latest PlayerView for rendering, but it may not decide 
 
 `packages/realtime-contracts` is the only package imported by both web and server for network protocol data.
 
+Goal A freezes this boundary in
+[ADR-V2-0002](ADR-V2-0002-strict-versioned-lobby-protocol.md). Strict shared Zod schemas validate
+both inbound requests and outbound acknowledgements/snapshots; browser and server code do not
+duplicate wire validation.
+
 It contains:
 
 - protocol version

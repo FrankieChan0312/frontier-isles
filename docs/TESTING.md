@@ -18,6 +18,11 @@ Server integration tests bind ephemeral ports and exercise the real Node HTTP an
 boundaries. They do not require a server already running, a fixed port, credentials, or external
 network access.
 
+The shared-contract suite validates every Goal A request and acknowledgement, strict extra-field
+rejection, display-name normalization, branded domains, protocol mismatch, canonical seat order,
+derived readiness, public-safe errors, JSON round trips, and the absence of private credentials in
+`RoomSnapshot`.
+
 ## Deterministic release simulation
 
 `npm run simulate` runs the fixed seeds `V1-RELEASE-001` through `V1-RELEASE-100` with rotating
