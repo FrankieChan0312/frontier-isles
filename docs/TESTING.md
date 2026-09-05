@@ -11,6 +11,7 @@
 | `npm run check` | Run typecheck, lint, unit/integration tests, and production build in sequence. |
 | `npm run simulate` | Run the separate 100-game deterministic release corpus. |
 | `npm run e2e` | Run the Chromium browser release paths with Playwright. |
+| `npm run e2e:lobby` | Run the two-context online Lobby and Single Player browser smoke paths. |
 | `npm run check:server` | Strict-check, lint, test, and build the realtime server and shared contracts. |
 | `npm run check:all` | Run the accepted V1 web check followed by all server/contracts checks. |
 
@@ -18,6 +19,8 @@ Server integration tests bind ephemeral ports and exercise the real Node HTTP an
 boundaries. They do not require a server already running, a fixed port, credentials, or external
 network access. The Lobby suite uses multiple real clients to prove Room creation/join, synchronized
 Ready and Host AI-seat changes, public-safe rejection, leave behavior, and broadcast isolation.
+The browser gateway also has a real ephemeral-server integration suite; UI component tests cover
+online create/join, public errors, own Ready, and Host-only AI controls.
 
 The shared-contract suite validates every Goal A request and acknowledgement, strict extra-field
 rejection, display-name normalization, branded domains, protocol mismatch, canonical seat order,
@@ -62,6 +65,11 @@ trace on failure, and takes failure-only screenshots. The suite covers seeded cr
 setup interactions, roll/end, a paid build, a controlled seven, maritime trade, AI domestic
 negotiation, save/reload, deterministic victory, starting again, a 480px overflow smoke check,
 accessible roles/names, and browser console/page errors.
+
+For V2 it also starts the realtime server on `127.0.0.1:3001` with a test-only explicit CORS origin.
+The Lobby path uses two independent browser contexts to compare authoritative public seat state,
+synchronize Ready and AI changes, smoke-test Single Player, and check 1440×900, 1024×768, and
+480×800 layouts for horizontal overflow and console/React errors.
 
 The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
 counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without

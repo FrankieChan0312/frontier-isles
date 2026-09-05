@@ -3,8 +3,8 @@
 Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
 browser-only experience for one Human and three heuristic AI players, with a deterministic
 TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
-V2 now includes a separate Node.js/Socket.IO workspace plus an in-memory authoritative waiting-Room
-server; the synchronized browser Lobby is added in the next Goal A stage.
+V2 now includes a separate Node.js/Socket.IO workspace, an in-memory authoritative waiting-Room
+server, and a synchronized responsive browser Lobby alongside unchanged Single Player.
 
 ## V1 features
 
@@ -31,6 +31,10 @@ Open the URL printed by Vite. Enter a name and seed, or keep the materialized se
 screen. A successful command is saved automatically; **Save** also persists immediately. **Continue
 saved game** resumes the single latest save for the current browser origin.
 
+For Online Multiplayer, run both development commands below, enter a display name, then create a
+Room or join its six-character code from a second browser context. Lobby Start Game remains disabled
+until Milestone B.
+
 ## Quality and release commands
 
 ```sh
@@ -42,6 +46,7 @@ npm run check
 npm run simulate
 npx playwright install chromium
 npm run e2e
+npm run e2e:lobby
 ```
 
 `npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
@@ -57,7 +62,8 @@ npm run dev:server
 ```
 
 The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
-Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). It owns
+Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
+the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
 in-memory four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
 leave; `room:start` is intentionally unavailable until Milestone B. Copy the
 non-secret `.env.example` values into your process environment when overrides are needed; no

@@ -11,17 +11,17 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "vite",
-    "dev:web": "vite",
+    "dev": "npm run build:contracts && vite",
+    "dev:web": "npm run build:contracts && vite",
     "dev:server": "npm run build:contracts && npm run dev --workspace @frontier-isles/server",
     "typecheck": "tsc -b --pretty false && tsc -p tsconfig.e2e.json --noEmit --pretty false",
     "typecheck:server": "npm run build:contracts && npm run typecheck --workspace @frontier-isles/realtime-contracts && npm run typecheck --workspace @frontier-isles/server",
     "lint": "eslint . --max-warnings 0",
     "lint:server": "eslint server packages/realtime-contracts --max-warnings 0",
-    "test": "vitest run",
+    "test": "npm run build:contracts && vitest run",
     "test:server": "npm run build:contracts && npm run test --workspace @frontier-isles/realtime-contracts && npm run test --workspace @frontier-isles/server",
     "test:watch": "vitest",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:contracts && tsc -b && vite build",
     "build:contracts": "npm run build --workspace @frontier-isles/realtime-contracts",
     "build:server": "npm run build:contracts && npm run build --workspace @frontier-isles/server",
     "preview": "vite preview",
@@ -29,6 +29,7 @@
     "simulate:mixed": "node --experimental-strip-types src/ai/simulation/run-mixed-simulations.ts",
     "simulate": "node --experimental-strip-types src/ai/simulation/run-release-simulations.ts",
     "e2e": "playwright test",
+    "e2e:lobby": "playwright test tests/e2e/lobby.spec.ts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "check:server": "npm run typecheck:server && npm run lint:server && npm run test:server && npm run build:server",
     "check:all": "npm run check && npm run check:server"
@@ -37,9 +38,11 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@fontsource/roboto": "^5.3.0",
+    "@frontier-isles/realtime-contracts": "0.1.0",
     "@mui/material": "^9.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "socket.io-client": "4.8.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

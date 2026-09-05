@@ -3,9 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GameCommand } from '../game/contracts/commands.ts'
 import type { CommandId, TradeId } from '../game/model/ids.ts'
 import type { GameGateway } from '../application/gateways/game-gateway.ts'
+import type {
+  LobbyGateway,
+  LobbyGatewayState,
+} from '../application/gateways/lobby-gateway.ts'
 import { createGameSessionStore } from '../application/stores/game-session-store.ts'
 import { createUiInteractionStore } from '../application/stores/ui-interaction-store.ts'
 import { HomePage } from '../ui/pages/HomePage.tsx'
+import { LobbyPage } from '../ui/pages/LobbyPage.tsx'
 import { GamePage } from '../ui/pages/GamePage.tsx'
 import { formatRuleViolation } from '../ui/game/ui-format.ts'
 import {
@@ -13,10 +18,11 @@ import {
   createBrowserSeed,
   type SeedFactory,
 } from './browser-game.ts'
-import { createBrowserGateway } from './browser-runtime.ts'
+import { createBrowserGateway, createBrowserLobbyGateway } from './browser-runtime.ts'
 
 export interface AppProps {
   readonly gateway?: GameGateway
+  readonly lobbyGateway?: LobbyGateway
   readonly seedFactory?: SeedFactory
 }
 
@@ -25,10 +31,25 @@ interface ActiveGameSetup {
   readonly seed: string
 }
 
-type AppScreen = 'HOME' | 'GAME'
+type AppScreen = 'HOME' | 'GAME' | 'LOBBY'
 
-export function App({ gateway: providedGateway, seedFactory = createBrowserSeed }: AppProps): React.JSX.Element {
+const INITIAL_LOBBY_STATE: LobbyGatewayState = Object.freeze({
+  connectionState: 'DISCONNECTED',
+  error: null,
+  selfSeatId: null,
+  snapshot: null,
+})
+
+export function App({
+  gateway: providedGateway,
+  lobbyGateway: providedLobbyGateway,
+  seedFactory = createBrowserSeed,
+}: AppProps): React.JSX.Element {
   const gateway = useMemo(() => providedGateway ?? createBrowserGateway(), [providedGateway])
+  const lobbyGateway = useMemo(
+    () => providedLobbyGateway ?? createBrowserLobbyGateway(),
+    [providedLobbyGateway],
+  )
   const sessionStore = useMemo(() => createGameSessionStore(), [])
   const uiStore = useMemo(() => createUiInteractionStore(), [])
   const session = useStore(sessionStore)
@@ -36,6 +57,8 @@ export function App({ gateway: providedGateway, seedFactory = createBrowserSeed 
   const [screen, setScreen] = useState<AppScreen>('HOME')
   const [humanName, setHumanName] = useState('Explorer')
   const [seed, setSeed] = useState(() => seedFactory())
+  const [onlineRoomCode, setOnlineRoomCode] = useState('')
+  const [lobby, setLobby] = useState<LobbyGatewayState>(INITIAL_LOBBY_STATE)
   const [activeSetup, setActiveSetup] = useState<ActiveGameSetup | null>(null)
   const [hasSavedGame, setHasSavedGame] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -44,6 +67,10 @@ export function App({ gateway: providedGateway, seedFactory = createBrowserSeed 
   const tradeCounter = useRef(0)
 
   useEffect(() => gateway.subscribe(sessionStore.getState().applyGatewayUpdate), [gateway, sessionStore])
+  useEffect(() => lobbyGateway.subscribe(setLobby), [lobbyGateway])
+  useEffect(() => () => {
+    if (providedLobbyGateway === undefined) lobbyGateway.dispose()
+  }, [lobbyGateway, providedLobbyGateway])
   useEffect(() => {
     let active = true
     void gateway.hasSavedGame().then((available) => {
@@ -105,7 +132,32 @@ export function App({ gateway: providedGateway, seedFactory = createBrowserSeed 
     return `trade:ui:${stateVersion}:${tradeNumber}` as TradeId
   }, [sessionStore])
 
-  const effectiveError = localError ?? session.error
+  const effectiveError = localError ?? lobby.error?.message ?? session.error
+
+  if (screen === 'LOBBY' && lobby.snapshot !== null && lobby.selfSeatId !== null) {
+    return (
+      <LobbyPage
+        busy={busy}
+        connectionState={lobby.connectionState}
+        error={localError ?? lobby.error?.message ?? null}
+        onCopyRoomCode={() => {
+          void run(() => navigator.clipboard.writeText(lobby.snapshot?.roomCode ?? ''))
+        }}
+        onLeave={() => {
+          void run(async () => {
+            await lobbyGateway.leaveRoom()
+            setScreen('HOME')
+          })
+        }}
+        onReadyChange={(ready) => { void run(() => lobbyGateway.setReady(ready)) }}
+        onSetAiSeat={(seatId, profileId) => {
+          void run(() => lobbyGateway.setAiSeat(seatId, profileId))
+        }}
+        selfSeatId={lobby.selfSeatId}
+        snapshot={lobby.snapshot}
+      />
+    )
+  }
 
   if (screen === 'HOME' || session.view === null) {
     return (
@@ -128,10 +180,24 @@ export function App({ gateway: providedGateway, seedFactory = createBrowserSeed 
             setHasSavedGame(false)
           })
         }}
+        onCreateOnlineRoom={() => {
+          void run(async () => {
+            await lobbyGateway.createRoom(humanName)
+            setScreen('LOBBY')
+          })
+        }}
         onGenerateSeed={() => setSeed(seedFactory())}
         onHumanNameChange={setHumanName}
+        onJoinOnlineRoom={() => {
+          void run(async () => {
+            await lobbyGateway.joinRoom(humanName, onlineRoomCode)
+            setScreen('LOBBY')
+          })
+        }}
+        onOnlineRoomCodeChange={setOnlineRoomCode}
         onSeedChange={setSeed}
         onStart={() => startGame({ humanName, seed })}
+        onlineRoomCode={onlineRoomCode}
         seed={seed}
       />
     )

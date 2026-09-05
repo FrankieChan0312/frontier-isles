@@ -142,7 +142,50 @@ Audit:
 
 ### V2-03 — Synchronized Online Lobby web interface
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Implemented:
+
+- Added the focused `LobbyGateway` application boundary and validating `SocketLobbyGateway`; React
+  components contain no raw Socket.IO events, and the accepted `GameGateway` remains unchanged.
+- Added validated `VITE_REALTIME_URL` configuration with a local-development default and no
+  production URL embedded in UI components.
+- Added Online Multiplayer create/join to Home and a responsive MUI Lobby showing Room code/copy,
+  four canonical seats, Human/AI/Empty occupancy, Host, Ready, connection state, own Ready control,
+  Host AI controls, start blockers, leave, and public-safe errors.
+- Kept Start Game disabled and marked for Milestone B; no local or online GameState is created.
+- Added 13 focused web tests, bringing the root suite to 67 files/361 tests, including a real
+  ephemeral-server gateway integration.
+- Added a two-context Chromium Lobby flow plus a Single Player browser regression with 1440×900,
+  1024×768, and 480×800 no-overflow checks.
+
+Dependencies:
+
+- `socket.io-client@4.8.3` — exact-version browser realtime transport matching the server.
+- `@frontier-isles/realtime-contracts@0.1.0` — local workspace protocol dependency for shared types
+  and runtime schemas.
+
+Verification:
+
+- Focused component/config/gateway tests: PASS — 5 files/15 tests including existing App tests.
+- `npm run e2e:lobby`: PASS — 2/2 Chromium tests, two independent contexts, no console/React errors
+  or horizontal overflow at the three required viewports.
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS with zero warnings.
+- `npm run test`: PASS — 67 files, 361 tests.
+- `npm run build`: PASS — 1,126 modules transformed; accepted bundle-size advisory only.
+- `npm run check`: PASS — 67 files, 361 tests, production build.
+- `npm run simulate`: PASS — 100/100 games, 65,341 commands, hash `1adc49e8`.
+- `npm run check:server`: PASS — contracts 5 files/38 tests; server 4 files/28 tests; builds pass.
+- `npm run check:all`: PASS — web, server, and contracts checks.
+- `git diff --check`: PASS (line-ending conversion notices only).
+
+Audit:
+
+- Private session credentials stay inside `SocketLobbyGateway` and are not stored in React/Zustand
+  state, DOM attributes, logs, or Room snapshots.
+- No raw Socket.IO event is called by a React component.
+- No online board, SocketGameGateway, GameState, game command, or V2-04 recovery behavior was added.
 
 ### V2-04 — Session recovery and Room lifecycle
 

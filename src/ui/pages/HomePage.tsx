@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Container,
+  Divider,
   Paper,
   Stack,
   TextField,
@@ -24,6 +25,10 @@ export interface HomePageProps {
   readonly onStart: () => void
   readonly onContinue: () => void
   readonly onDeleteSave: () => void
+  readonly onlineRoomCode: string
+  readonly onOnlineRoomCodeChange: (roomCode: string) => void
+  readonly onCreateOnlineRoom: () => void
+  readonly onJoinOnlineRoom: () => void
 }
 
 export function HomePage({
@@ -38,6 +43,10 @@ export function HomePage({
   onStart,
   onContinue,
   onDeleteSave,
+  onlineRoomCode,
+  onOnlineRoomCodeChange,
+  onCreateOnlineRoom,
+  onJoinOnlineRoom,
 }: HomePageProps): React.JSX.Element {
   return (
     <Box
@@ -65,11 +74,12 @@ export function HomePage({
             <TextField
               autoComplete="name"
               fullWidth
-              slotProps={{ htmlInput: { maxLength: 32 } }}
+              slotProps={{ htmlInput: { maxLength: 24 } }}
               label="Your name"
               onChange={(event) => onHumanNameChange(event.target.value)}
               value={humanName}
             />
+            <Typography component="h2" variant="h5">Single Player</Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <TextField
                 fullWidth
@@ -101,6 +111,33 @@ export function HomePage({
                 </Button>
               </Stack>
             ) : null}
+            <Divider />
+            <Box>
+              <Typography component="h2" variant="h5">Online Multiplayer</Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body2">
+                Create a private six-character Room or join one shared by another player.
+              </Typography>
+            </Box>
+            <Button disabled={busy} onClick={onCreateOnlineRoom} size="large" variant="contained">
+              {busy ? 'Connecting…' : 'Create online Room'}
+            </Button>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField
+                fullWidth
+                label="Room code"
+                onChange={(event) => onOnlineRoomCodeChange(event.target.value.toUpperCase())}
+                slotProps={{ htmlInput: { maxLength: 6 } }}
+                value={onlineRoomCode}
+              />
+              <Button
+                disabled={busy || onlineRoomCode.trim().length !== 6}
+                onClick={onJoinOnlineRoom}
+                sx={{ minWidth: 150 }}
+                variant="outlined"
+              >
+                Join online Room
+              </Button>
+            </Stack>
             <Accordion disableGutters elevation={0}>
               <AccordionSummary aria-controls="quick-rules" id="quick-rules-heading">
                 <Typography sx={{ fontWeight: 700 }}>How to play</Typography>

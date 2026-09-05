@@ -12,6 +12,11 @@ Frontend:
 - New SocketGameGateway for online rooms
 - `socket.io-client`
 
+The browser Lobby boundary is frozen in
+[ADR-V2-0004](ADR-V2-0004-lobby-gateway-and-browser-interface.md): React uses `LobbyGateway`, while
+`SocketLobbyGateway` alone owns Socket.IO events, private credentials, and wire validation. The
+accepted `GameGateway` / `LocalGameGateway` path remains independent.
+
 Server:
 
 - Node.js 24 LTS
