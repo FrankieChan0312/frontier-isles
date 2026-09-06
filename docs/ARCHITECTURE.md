@@ -4,6 +4,9 @@ V2-06 adds the server-owned `GameSession` above the shared core and AI packages.
 online creation entry point permits two to four Humans while the default V1 factory and local
 save rules retain one Human. See [ADR-V2-0007](v2/ADR-V2-0007-server-authoritative-game-sessions.md)
 for session-derived actors, individually redacted publication, bounded AI and active resume.
+V2-07 connects the shared GamePage through `SocketGameGateway`, composed on the existing Lobby
+session socket. Local and online projection stores stay separate; only the local gateway saves
+offline state or runs browser AI. See [ADR-V2-0008](v2/ADR-V2-0008-online-game-gateway-and-browser-views.md).
 
 ## 1. Architectural objective
 
@@ -325,14 +328,18 @@ both Human and AI envelopes through the same complete engine. AI command IDs and
 deterministic application metadata. The loop resolves current-player and non-current pending AI
 actors until a Human decision or victory boundary, and persists after every accepted transition.
 
-### V2 WebSocketGameGateway
+### V2 network gateway
 
-Future responsibilities:
+V2-07 implements the earlier `WebSocketGameGateway` architectural placeholder as
+`SocketGameGateway`, as specified by the accepted V2 roadmap and ADR-V2-0008. The accepted
+Node.js/Socket.IO architecture in ADR-V2-0001 supersedes the original Spring Boot placeholder.
 
-- Submit commands to Spring Boot
+- Submit commands through the attached Socket.IO session to the authoritative Node server
 - Receive redacted views and events
 - Reconnect and resynchronize state versions
 - Never expose server-private state
+- Disable submission while acknowledgement/resync is pending, ignore superseded publications,
+  verify viewer identity, and obtain fresh snapshots after stale versions or reconnect
 
 React components must not branch on the concrete gateway type.
 

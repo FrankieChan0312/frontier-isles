@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm run dev:server',
+      command: 'npm run e2e:server',
       env: {
         CLIENT_ORIGIN: 'http://127.0.0.1:4173',
         NODE_ENV: 'test',

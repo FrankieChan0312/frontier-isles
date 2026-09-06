@@ -3,8 +3,8 @@
 Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
 browser-only experience for one Human and three heuristic AI players, with a deterministic
 TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
-V2 now includes a separate Node.js/Socket.IO workspace, an in-memory authoritative waiting-Room
-server, and a synchronized responsive browser Lobby alongside unchanged Single Player.
+V2 adds a Node.js/Socket.IO server, authoritative four-seat Rooms and games, and a synchronized
+browser Lobby and online Game screen alongside unchanged Single Player.
 
 ## V1 features
 
@@ -32,9 +32,11 @@ screen. A successful command is saved automatically; **Save** also persists imme
 saved game** resumes the single latest save for the current browser origin.
 
 For Online Multiplayer, run both development commands below, enter a display name, then create a
-Room or join its six-character code from a second browser context. Lobby Start Game remains disabled
-until Milestone B. Refresh within 30 seconds resumes the same tab-scoped Human session; waiting
-Rooms expire after 30 minutes without accepted activity.
+Room or join its six-character code from a second browser context. The Host assigns AI to remaining
+empty seats; with at least two connected Humans and all Humans Ready, the Host can Start Game.
+Every Human enters the same server game with their own private view. Refresh within 30 seconds
+resumes the same tab-scoped Human session and current game. Waiting Rooms expire after 30 minutes
+without accepted activity. Online games have no browser save; Single Player saves remain separate.
 
 ## Quality and release commands
 
@@ -48,6 +50,7 @@ npm run simulate
 npx playwright install chromium
 npm run e2e
 npm run e2e:lobby
+npm run e2e:online
 ```
 
 `npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
@@ -66,8 +69,9 @@ The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accep
 Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
 the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
 in-memory four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
-leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle settings. `room:start`
-is intentionally unavailable until Milestone B. Copy the
+leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle settings. Accepted
+`room:start` creates one server-owned GameSession, fixes its seats, and publishes per-Human views.
+AI executes on the server. Copy the
 non-secret `.env.example` values into your process environment when overrides are needed; no
 `.env` file is committed.
 
@@ -96,6 +100,10 @@ players submit the same command contracts through `GameGateway`. React, MUI, and
 viewer-specific `PlayerView` and redacted events, not an unrestricted opponent hand, development
 deck, or RNG cursor. Browser localStorage necessarily holds the authoritative offline save, but it
 is not rendered or placed in UI stores.
+Online mode uses SocketGameGateway on the Lobby's attached socket. Commands omit actor identity,
+which the server derives from the Human session. Reconnect, stale responses and **Resync game**
+request a fresh authoritative view. Delivery retries, extended disconnect policy and durable game
+recovery remain later milestones; see [Goal B progress](docs/v2/V2_GOAL_B_PROGRESS.md).
 
 Start with [AGENTS.md](AGENTS.md), [product scope](docs/PRODUCT_SCOPE.md),
 [game rules](docs/GAME_RULES.md), and [architecture](docs/ARCHITECTURE.md) before changing code.

@@ -39,7 +39,25 @@ const SNAPSHOT = roomSnapshotSchema.parse({
 })
 
 describe('LobbyPage', () => {
-  it('renders four canonical seats, connection/readiness, and Milestone B start boundary', () => {
+  it.each(['NORTH', 'EAST'] as const)('enables an eligible start only for the Host, viewed from %s', async (selfSeatId) => {
+    const onStart = vi.fn()
+    const snapshot = roomSnapshotSchema.parse({ ...SNAPSHOT, seats: [
+      { ...SNAPSHOT.seats[0], ready: true }, SNAPSHOT.seats[1],
+      { seatId: 'SOUTH', occupancy: 'AI', profileId: 'BUILDER', ready: true, connectionStatus: 'CONNECTED' },
+      { seatId: 'WEST', occupancy: 'AI', profileId: 'MERCHANT', ready: true, connectionStatus: 'CONNECTED' },
+    ], startReadiness: { ready: true, blockers: [] } })
+    render(<ThemeProvider theme={frontierTheme}><LobbyPage busy={false} connectionState="CONNECTED"
+      error={null} onCopyRoomCode={vi.fn()} onLeave={vi.fn()} onStart={onStart} onReadyChange={vi.fn()}
+      onSetAiSeat={vi.fn()} selfSeatId={selfSeatId} snapshot={snapshot} /></ThemeProvider>)
+    const button = screen.getByRole('button', { name: 'Start Game' })
+    if (selfSeatId === 'NORTH') {
+      expect(button).toBeEnabled()
+      await userEvent.setup().click(button)
+      expect(onStart).toHaveBeenCalledOnce()
+    } else expect(button).toBeDisabled()
+  })
+
+  it('renders four canonical seats, connection/readiness, and an ineligible start boundary', () => {
     render(
       <ThemeProvider theme={frontierTheme}>
         <LobbyPage
@@ -48,6 +66,7 @@ describe('LobbyPage', () => {
           error="A public-safe failure."
           onCopyRoomCode={vi.fn()}
           onLeave={vi.fn()}
+          onStart={vi.fn()}
           onReadyChange={vi.fn()}
           onSetAiSeat={vi.fn()}
           selfSeatId="NORTH"
@@ -66,7 +85,7 @@ describe('LobbyPage', () => {
     ])
     expect(within(screen.getByTestId('seat-NORTH')).getByText('Host')).toBeVisible()
     expect(screen.getByText('Fill all four seats with Humans or AI.')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Start Game — Milestone B' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Start Game' })).toBeDisabled()
   })
 
   it('routes only own Ready and Host AI controls through callbacks', async () => {
@@ -81,6 +100,7 @@ describe('LobbyPage', () => {
           error={null}
           onCopyRoomCode={vi.fn()}
           onLeave={vi.fn()}
+          onStart={vi.fn()}
           onReadyChange={readyChange}
           onSetAiSeat={setAiSeat}
           selfSeatId="NORTH"

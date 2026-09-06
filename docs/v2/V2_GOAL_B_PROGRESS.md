@@ -161,12 +161,70 @@ no client retry/delivery guarantees, no extended disconnect/replacement or persi
 The browser integration and complete mixed-seat game qualification remain V2-07 and V2-08.
 No unrelated future feature or V2-09+ work is included.
 
-All V2-06 gates passed. Commit subject: `feat: add server-authoritative multiplayer game sessions`
-(hash recorded at the next task boundary). Continue automatically to V2-07.
+All V2-06 gates passed. Committed as `0b78c26 feat: add server-authoritative multiplayer game sessions`;
+working tree confirmed clean. Continued automatically to V2-07.
 
 ## V2-07 — SocketGameGateway and online UI
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Plan: compose SocketGameGateway with the existing Lobby socket/session; preserve GameGateway
+submission and V1 persistence. Use a cryptographic per-gateway namespace around existing
+envelope command IDs so retries of the same envelope retain identity. Add strict viewer checks,
+version/revision ordering, snapshot resync, safe connection/submission states and clean disposal.
+Enable authoritative Host start, render all Human views through the existing GamePage, and
+verify real multi-browser setup/turns, active refresh/replacement, privacy and all target widths.
+
+Implemented the composed socket gateway, per-instance cryptographic command namespace, actor
+omission, strict viewer validation, version/revision ordering, snapshot recovery and safe busy
+states. Separate local/online projection stores preserve offline save/AI behavior; event history
+clears on identity changes. Host Start enters the shared GamePage for both Humans. Online headers,
+resync, waiting states and controls work with existing board/panels/dialogs. Corrected inherited
+single-Human labels and restricted robber-target controls to the acting viewer. Returning Home
+after victory detaches the browser credential without changing fixed server seats.
+
+Created ADR-V2-0008 and updated architecture, testing and limitations. Added no dependencies.
+The test-only Node server composition injects a fixed seed without a production fixture API.
+Focused checks pass (5 files / 15 tests); new Playwright journeys pass 2/2, including real stale
+rejection/resync, shared setup/normal turns, all viewports, private hands, refresh and replacement.
+Typecheck caught a missing turnNumber in the new store test's event fixture; corrected the fixture.
+Earlier gateway typing and caught-error lint findings were corrected before the aggregate gates.
+All task gates passed; no test is skipped, removed or weakened.
+
+Files created: `socket-game-gateway.ts` and its real-server tests; game projection store and
+PlayerPanels tests; online browser observers/journeys and the test-only realtime server entry;
+ADR-V2-0008. Files updated: application mode composition; GameGateway/LobbyGateway and socket
+Lobby composition; projection store; Lobby/Game pages, player cards and decision dialogs/tests;
+Playwright scripts/config and the obsolete ineligible Start selector; README, both architecture
+documents, testing, limitations and this report. No core, AI, server production or contract source
+changed. Dependencies added: none; the test entry uses the existing workspace tsx runtime.
+
+Tests added: four real-server SocketGameGateway cases, two authoritative Host/non-Host Start
+cases, acting-viewer robber dialog, Human player labels, projection/event identity isolation;
+two multi-browser online journeys. The accepted V1 and Goal A assertions remain in place.
+
+| Command | Result |
+| --- | --- |
+| Focused gateway/store/UI tests | Exit 0; 5 files / 15 tests |
+| `npm run typecheck` | Exit 0 after correcting the test event fixture |
+| `npm run lint` | Exit 0; zero warnings |
+| `npm run test` | Exit 0; frontend 22 / 85, core 35 / 261, AI 15 / 36 = 72 files / 382 tests |
+| `npm run build` | Exit 0; 810.88 kB entry chunk, existing size advisory documented |
+| `npm run check` | Exit 0 |
+| `npm run check:server` | Exit 0; contracts 6 / 62 and server 8 / 62 |
+| `npm run check:all` | Exit 0; 86 files / 506 tests and all builds |
+| `npm run simulate` | Exit 0; 100/100 legal winners, 65,341 commands, hash `1adc49e8` |
+| `npm run e2e:online` | Exit 0; 2/2 passed |
+| `npm run e2e:lobby` | Exit 0; all 6/6 accepted journeys passed |
+| `npm run e2e` | Exit 0; 16/16 passed, including all eight accepted V1 journeys |
+| `git diff --check` | Exit 0; repeated after final report update |
+
+Known limits remain process-local server state, tab-scoped resume within existing grace, fixed
+started seats and no delivery retry policy. Complete mixed-seat winner and rare workflow
+qualification is the next task. No V2-09+ or unrelated future feature is implemented.
+
+Passing task commit: `feat: connect online game gateway to the browser UI`. The next task records
+its resolved hash after the required clean-tree commit boundary.
 
 ## V2-08 — Complete mixed Human and AI online gameplay
 
@@ -176,4 +234,5 @@ Status: NOT_STARTED
 
 No V2-09+ implementation, external writes, push, deployment, or history rewrite authorized.
 Exactly one passing commit per task; continue automatically after each passing task gate.
-V2-05 committed as `456ddfa`; its working tree was clean. V2-06 is complete and being committed.
+V2-05 and V2-06 committed as `456ddfa` and `0b78c26`, with clean task boundaries. V2-07 gates passed;
+its passing commit is the next operation. V2-08 remains to be implemented.

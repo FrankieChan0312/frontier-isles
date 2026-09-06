@@ -15,6 +15,8 @@ import {
   roomSetAiSeatRequestSchema,
   roomSetReadyAcknowledgementSchema,
   roomSetReadyRequestSchema,
+  roomStartRequestSchema,
+  roomStartAcknowledgementSchema,
   roomSnapshotSchema,
   roomCodeSchema,
   safeErrorSchema,
@@ -33,6 +35,7 @@ import {
   type SessionCredential,
 } from '@frontier-isles/realtime-contracts'
 import type { LobbyCredentialStore } from '../../infrastructure/realtime/lobby-credential-store.ts'
+import { SocketGameGateway } from './socket-game-gateway.ts'
 import type {
   LobbyGateway,
   LobbyGatewayListener,
@@ -42,6 +45,7 @@ import type {
 type LobbySocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
 export interface SocketLobbyGatewayOptions {
+  readonly commandNamespaceFactory?: () => string
   readonly credentialStore?: LobbyCredentialStore
   readonly socket?: LobbySocket
 }
@@ -75,6 +79,7 @@ function validatedResultData<T>(schema: RuntimeSchema<Acknowledgement<T>>, value
 }
 
 export class SocketLobbyGateway implements LobbyGateway {
+  public readonly gameGateway: SocketGameGateway
   readonly #socket: LobbySocket
   readonly #credentialStore: LobbyCredentialStore | null
   readonly #listeners = new Set<LobbyGatewayListener>()
@@ -94,6 +99,9 @@ export class SocketLobbyGateway implements LobbyGateway {
       withCredentials: true,
     })
     this.#registerTransportListeners()
+    this.gameGateway = new SocketGameGateway({ socket: this.#socket,
+      subscribeToLobby: (listener) => this.subscribe(listener), isSessionAttached: () => this.#sessionAttached,
+      ...(options.commandNamespaceFactory === undefined ? {} : { commandNamespaceFactory: options.commandNamespaceFactory }) })
   }
 
   public subscribe(listener: LobbyGatewayListener): () => void {
@@ -187,17 +195,29 @@ export class SocketLobbyGateway implements LobbyGateway {
     this.#acceptSnapshot(data.snapshot)
   }
 
+  public async startGame(): Promise<void> {
+    const snapshot = this.#requireSnapshot()
+    const request = roomStartRequestSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION, expectedRevision: snapshot.revision })
+    const untrusted: unknown = await this.#socket.timeout(8_000).emitWithAck('room:start', request)
+    const data = validatedResultData(roomStartAcknowledgementSchema, untrusted)
+    this.#acceptSnapshot(data.snapshot)
+  }
+
   public async leaveRoom(): Promise<void> {
     if (this.#credential === null) {
       this.#socket.disconnect()
       this.#replaceState(INITIAL_STATE)
       return
     }
-    const request = roomLeaveRequestSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION })
-    const acknowledgement = await new Promise<unknown>((resolve) => {
-      this.#socket.emit('room:leave', request, resolve)
-    })
-    validatedResultData(roomLeaveAcknowledgementSchema, acknowledgement)
+    if (this.#state.snapshot?.lifecycleStatus !== 'FINISHED') {
+      const request = roomLeaveRequestSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION })
+      const acknowledgement = await new Promise<unknown>((resolve) => {
+        this.#socket.emit('room:leave', request, resolve)
+      })
+      validatedResultData(roomLeaveAcknowledgementSchema, acknowledgement)
+    }
+    // Returning Home after victory drops this browser attachment. The completed server
+    // game keeps its fixed seats; no waiting-Room removal or replacement policy is applied.
     this.#credential = null
     this.#credentialStore?.clear()
     this.#sessionAttached = false
@@ -206,8 +226,10 @@ export class SocketLobbyGateway implements LobbyGateway {
   }
 
   public dispose(): void {
+    this.gameGateway.dispose()
     this.#listeners.clear()
     this.#socket.disconnect()
+    this.#socket.removeAllListeners()
   }
 
   #registerTransportListeners(): void {
@@ -355,6 +377,7 @@ export class SocketLobbyGateway implements LobbyGateway {
   }
 
   #acceptSnapshot(snapshot: RoomSnapshot): void {
+    if (this.#state.snapshot?.roomCode === snapshot.roomCode && this.#state.snapshot.revision > snapshot.revision) return
     this.#replaceState({ ...this.#state, error: null, snapshot: roomSnapshotSchema.parse(snapshot) })
   }
 

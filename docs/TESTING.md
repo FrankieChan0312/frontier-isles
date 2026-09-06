@@ -88,6 +88,16 @@ negotiation, save/reload, deterministic victory, starting again, a 480px overflo
 accessible roles/names, and browser console/page errors.
 
 For V2 it also starts the realtime server on `127.0.0.1:3001` with a test-only explicit CORS origin.
+The test process is `tests/e2e/realtime-test-server.ts`, composed from the production server with
+an injected fixed seed. `npm run e2e:online` runs the online game journeys separately. Two browsers
+start the same game, complete shared initial setup through real commands, synchronize normal
+turns, check private hands and public boards, refresh/resume and replace a tab. A WebSocket test
+proxy changes one outgoing expected version to exercise real stale rejection and snapshot resync.
+All three target viewport widths, accessibility/DOM privacy, no offline online-save writes and
+console/React errors are checked. No online authoritative state is injected into the browser.
+`socket-game-gateway.test.ts` additionally verifies shared socket ownership, actor omission, stable
+injected command IDs, no optimistic state advance, pending submission locks, wrong-viewer rejection,
+missed/out-of-order publications, stale resync, replacement and listener disposal.
 The Lobby path uses two independent browser contexts to compare authoritative public seat state,
 synchronize Ready and AI changes, smoke-test Single Player, and check 1440×900, 1024×768, and
 480×800 layouts for horizontal overflow and console/React errors.

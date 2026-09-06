@@ -44,6 +44,7 @@ import { PlayerPanels } from '../panels/PlayerPanels.tsx'
 import { ResourceHand } from '../panels/ResourceHand.tsx'
 
 export interface GamePageProps {
+  readonly online?: { readonly roomCode: string; readonly status: string; readonly onResync: () => void; readonly resyncDisabled: boolean }
   readonly view: PlayerView
   readonly events: readonly PlayerEventView[]
   readonly buildMode: BuildMode
@@ -66,6 +67,7 @@ function playerName(view: PlayerView, playerId: string): string {
 }
 
 export function GamePage({
+  online,
   view,
   events,
   buildMode,
@@ -93,7 +95,7 @@ export function GamePage({
   const legalEdgeIds = legalEdgesForMode(view, buildMode)
 
   const sendBoardCommand = (command: GameCommand | null): void => {
-    if (command !== null) onCommand(command)
+    if (!busy && command !== null) onCommand(command)
   }
 
   const submitTrade = (offer: TradeOffer): void => {
@@ -118,16 +120,19 @@ export function GamePage({
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'center' }, justifyContent: 'space-between' }}>
             <Box>
               <Typography component="h1" sx={{ fontWeight: 800 }} variant="h5">Frontier Isles</Typography>
+              {online === undefined ? null : <Typography variant="body2">Online Multiplayer · Room <span data-testid="room-code">{online.roomCode}</span></Typography>}
               <Typography sx={{ opacity: 0.82 }} variant="body2">
                 Turn {view.publicGame.turn.turnNumber} · {currentName} · {formatPhase(view.publicGame.turn.phase)}
               </Typography>
             </Box>
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
               {lastRoll === null ? null : <Chip label={`Last roll: ${lastRoll.dice[0]} + ${lastRoll.dice[1]} = ${lastRoll.total}`} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />}
-              <Chip label={aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
-              <Button color="inherit" disabled={busy} onClick={onSave} variant="outlined">Save</Button>
-              <Button color="inherit" disabled={busy || !canRestart} onClick={onRestart}>Restart seed</Button>
-              <Button color="inherit" disabled={busy} onClick={onNewGame}>New game</Button>
+              <Chip label={online?.status ?? (aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`)} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
+              {online === undefined ? <>
+                <Button color="inherit" disabled={busy} onClick={onSave} variant="outlined">Save</Button>
+                <Button color="inherit" disabled={busy || !canRestart} onClick={onRestart}>Restart seed</Button>
+                <Button color="inherit" disabled={busy} onClick={onNewGame}>New game</Button>
+              </> : <Button color="inherit" disabled={online.resyncDisabled} onClick={online.onResync} variant="outlined">Resync game</Button>}
             </Stack>
           </Stack>
         </Container>
@@ -135,6 +140,8 @@ export function GamePage({
       </Box>
       <Container maxWidth={false}>
         {error === null ? null : <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {online !== undefined && view.publicGame.winnerId === null && (view.legalActions.permittedCommandTypes?.length ?? 0) === 0
+          ? <Alert severity="info" sx={{ mb: 2 }}>Waiting for another player’s decision.</Alert> : null}
         <Box
           sx={{
             display: 'grid',
@@ -148,9 +155,9 @@ export function GamePage({
           <Stack spacing={2} sx={{ minWidth: 0, order: { xs: 1, lg: 2 } }}>
             <Paper component="section" elevation={4} sx={{ overflow: 'hidden', p: { xs: 0.5, sm: 1.5 } }}>
               <PlayableGameBoard
-                legalEdgeIds={legalEdgeIds}
-                legalTileIds={view.legalActions.legalRobberTileIds}
-                legalVertexIds={legalVertexIds}
+                legalEdgeIds={busy ? [] : legalEdgeIds}
+                legalTileIds={busy ? [] : view.legalActions.legalRobberTileIds}
+                legalVertexIds={busy ? [] : legalVertexIds}
                 onEdgeSelect={(edgeId) => sendBoardCommand(commandForEdgeSelection(view, edgeId))}
                 onTileSelect={(tileId) => sendBoardCommand(commandForTileSelection(view, tileId))}
                 onVertexSelect={(vertexId) => sendBoardCommand(commandForVertexSelection(view, vertexId, buildMode))}

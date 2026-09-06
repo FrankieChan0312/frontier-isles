@@ -249,7 +249,18 @@ The default Socket.IO adapter is in-memory. Multiple server instances, Redis ada
 - durable session/resume ID, never durable `socket.id`
 - single-process first deployment
 
-## 13. Deferred decisions
+## 13. Implemented browser boundary
+
+Implemented browser boundary (V2-07, ADR-V2-0008): SocketLobbyGateway composes SocketGameGateway
+on its attached session socket. The application keeps separate local and online PlayerView stores;
+only LocalGameGateway uses offline saves and browser AI. Online commands omit actorId, use a
+per-gateway cryptographic command namespace, and render server projections after acknowledgement,
+publication or explicit snapshot resync. React has no raw Socket.IO calls or online engine access.
+Publication/version ordering and viewer identity are checked before adoption; reconnect and stale
+rejections refresh the current view. Online controls show and respect connection/resync/submission
+state, and Host start uses authoritative readiness.
+
+## 14. Deferred decisions
 
 - final public server host
 - database vendor

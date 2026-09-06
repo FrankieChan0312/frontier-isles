@@ -5,7 +5,7 @@ import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
 import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
 import type { GameId } from '@frontier-isles/game-core/model/ids'
 
-export type GatewayConnectionStatus = 'IDLE' | 'READY' | 'ERROR'
+export type GatewayConnectionStatus = 'IDLE' | 'READY' | 'ERROR' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED'
 export type GatewaySaveStatus = 'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'
 
 export interface GameUpdate {
@@ -15,6 +15,8 @@ export interface GameUpdate {
   readonly aiThinking: boolean
   readonly saveStatus: GatewaySaveStatus
   readonly error: string | null
+  readonly submitting?: boolean
+  readonly resynchronizing?: boolean
 }
 
 export type CommandResponse =
@@ -38,4 +40,9 @@ export interface GameGateway {
   loadLatestGame(): Promise<PlayerView>
   hasSavedGame(): Promise<boolean>
   deleteSavedGame(): Promise<void>
+}
+
+export interface OnlineGameGateway extends GameGateway {
+  requestSnapshot(): Promise<void>
+  dispose(): void
 }

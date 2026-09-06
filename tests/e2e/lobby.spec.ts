@@ -89,7 +89,7 @@ test('two browser contexts synchronize seats, Ready, and Host AI at all target w
     for (const page of [host, joiner]) {
       await expect(page.getByTestId('seat-SOUTH')).toContainText('Builder AI')
       await expect(page.getByTestId('seat-SOUTH')).toContainText('Ready')
-      await expect(page.getByRole('button', { name: 'Start Game — Milestone B' })).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Start Game' })).toBeDisabled()
     }
 
     const readPublicSeats = (page: Page) => page.getByTestId(/^seat-/u).evaluateAll((seats) => (

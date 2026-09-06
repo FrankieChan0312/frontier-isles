@@ -35,6 +35,7 @@ export interface LobbyPageProps {
   readonly snapshot: RoomSnapshot
   readonly onCopyRoomCode: () => void
   readonly onLeave: () => void
+  readonly onStart: () => void
   readonly onReadyChange: (ready: boolean) => void
   readonly onSetAiSeat: (seatId: SeatId, profileId: AiProfileId | null) => void
 }
@@ -68,6 +69,7 @@ export function LobbyPage({
   snapshot,
   onCopyRoomCode,
   onLeave,
+  onStart,
   onReadyChange,
   onSetAiSeat,
 }: LobbyPageProps): React.JSX.Element {
@@ -214,7 +216,7 @@ export function LobbyPage({
               <Box>
                 <Typography component="h2" variant="h6">Start readiness</Typography>
                 {snapshot.startReadiness.ready ? (
-                  <Typography color="success.main">All future start conditions are met.</Typography>
+                  <Typography color="success.main">All start conditions are met.</Typography>
                 ) : (
                   <Stack component="ul" spacing={0.5} sx={{ mb: 0, mt: 1, pl: 2.5 }}>
                     {snapshot.startReadiness.blockers.map((blocker) => (
@@ -226,7 +228,8 @@ export function LobbyPage({
                 )}
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                <Button disabled fullWidth variant="contained">Start Game — Milestone B</Button>
+                <Button disabled={busy || connectionState !== 'CONNECTED' || !isHost || !snapshot.startReadiness.ready}
+                  fullWidth onClick={onStart} variant="contained">Start Game</Button>
                 <Button color="error" disabled={busy} onClick={onLeave} variant="outlined">
                   Leave Room
                 </Button>

@@ -1,4 +1,5 @@
 import { useStore } from 'zustand'
+import { Alert, Button, Container, LinearProgress, Stack, Typography } from '@mui/material'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
 import type { CommandId, TradeId } from '@frontier-isles/game-core/model/ids'
@@ -45,12 +46,17 @@ export function App({
   lobbyGateway: providedLobbyGateway,
   seedFactory = createBrowserSeed,
 }: AppProps): React.JSX.Element {
-  const gateway = useMemo(() => providedGateway ?? createBrowserGateway(), [providedGateway])
+  const localGateway = useMemo(() => providedGateway ?? createBrowserGateway(), [providedGateway])
   const lobbyGateway = useMemo(
     () => providedLobbyGateway ?? createBrowserLobbyGateway(),
     [providedLobbyGateway],
   )
-  const sessionStore = useMemo(() => createGameSessionStore(), [])
+  const localSessionStore = useMemo(() => createGameSessionStore(), [])
+  const onlineSessionStore = useMemo(() => createGameSessionStore(), [])
+  const [mode, setMode] = useState<'LOCAL' | 'ONLINE'>('LOCAL')
+  const sessionStore = mode === 'ONLINE' ? onlineSessionStore : localSessionStore
+  const onlineGateway = lobbyGateway.gameGateway
+  const gateway = mode === 'ONLINE' ? onlineGateway : localGateway
   const uiStore = useMemo(() => createUiInteractionStore(), [])
   const session = useStore(sessionStore)
   const ui = useStore(uiStore)
@@ -66,12 +72,23 @@ export function App({
   const commandCounter = useRef(0)
   const tradeCounter = useRef(0)
 
-  useEffect(() => gateway.subscribe(sessionStore.getState().applyGatewayUpdate), [gateway, sessionStore])
-  useEffect(() => lobbyGateway.subscribe(setLobby), [lobbyGateway])
+  useEffect(() => localGateway.subscribe(localSessionStore.getState().applyGatewayUpdate), [localGateway, localSessionStore])
+  useEffect(() => onlineGateway?.subscribe(onlineSessionStore.getState().applyGatewayUpdate), [onlineGateway, onlineSessionStore])
+  useEffect(() => lobbyGateway.subscribe((state) => {
+    setLobby(state)
+    if (onlineGateway !== undefined && state.snapshot?.gameId !== undefined) {
+      setMode('ONLINE')
+      setScreen('GAME')
+      setActiveSetup(null)
+    }
+  }), [lobbyGateway, onlineGateway])
   useEffect(() => {
     let active = true
     void lobbyGateway.resumeSession().then((resumed) => {
-      if (active && resumed) setScreen('LOBBY')
+      if (active && resumed) {
+        setMode('ONLINE')
+        setScreen((current) => current === 'GAME' ? 'GAME' : 'LOBBY')
+      }
     }).catch((error: unknown) => {
       if (active) setLocalError(error instanceof Error ? error.message : String(error))
     })
@@ -79,13 +96,13 @@ export function App({
   }, [lobbyGateway])
   useEffect(() => {
     let active = true
-    void gateway.hasSavedGame().then((available) => {
+    void localGateway.hasSavedGame().then((available) => {
       if (active) setHasSavedGame(available)
     }).catch(() => {
       if (active) setHasSavedGame(false)
     })
     return () => { active = false }
-  }, [gateway])
+  }, [localGateway])
 
   const run = useCallback(async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true)
@@ -102,17 +119,19 @@ export function App({
   const startGame = useCallback((setup: ActiveGameSetup): void => {
     void run(async () => {
       const normalized = { humanName: setup.humanName.trim() || 'Explorer', seed: setup.seed.trim() }
-      await gateway.createGame(createBrowserGameConfig(normalized.humanName, normalized.seed), normalized.seed)
+      await localGateway.createGame(createBrowserGameConfig(normalized.humanName, normalized.seed), normalized.seed)
+      setMode('LOCAL')
       setActiveSetup(normalized)
       setHasSavedGame(true)
       setScreen('GAME')
       uiStore.getState().reset()
     })
-  }, [gateway, run, uiStore])
+  }, [localGateway, run, uiStore])
 
   const submitCommand = useCallback((command: GameCommand): void => {
     const view = sessionStore.getState().view
     if (view === null) return
+    if (gateway === undefined) { setLocalError('The online game connection is unavailable.'); return }
     const commandNumber = commandCounter.current
     commandCounter.current += 1
     void run(async () => {
@@ -127,9 +146,9 @@ export function App({
         return
       }
       uiStore.getState().setSelectedBuildMode(null)
-      setHasSavedGame(true)
+      if (mode === 'LOCAL') setHasSavedGame(true)
     })
-  }, [gateway, run, sessionStore, uiStore])
+  }, [gateway, mode, run, sessionStore, uiStore])
 
   const createTradeId = useCallback((): TradeId => {
     const stateVersion = sessionStore.getState().view?.stateVersion ?? 0
@@ -152,10 +171,12 @@ export function App({
         onLeave={() => {
           void run(async () => {
             await lobbyGateway.leaveRoom()
+            setMode('LOCAL')
             setScreen('HOME')
           })
         }}
         onReadyChange={(ready) => { void run(() => lobbyGateway.setReady(ready)) }}
+        onStart={() => { void run(() => lobbyGateway.startGame()) }}
         onSetAiSeat={(seatId, profileId) => {
           void run(() => lobbyGateway.setAiSeat(seatId, profileId))
         }}
@@ -163,6 +184,18 @@ export function App({
         snapshot={lobby.snapshot}
       />
     )
+  }
+
+  if (screen === 'GAME' && mode === 'ONLINE' && session.view === null) {
+    return <Container component="main" maxWidth="sm" sx={{ py: 5 }}>
+      <Stack spacing={2}>
+        <Typography component="h1" variant="h4">Online Multiplayer</Typography>
+        <Typography>Loading your current game view…</Typography>
+        {effectiveError === null ? <LinearProgress /> : <Alert severity="error">{effectiveError}</Alert>}
+        <Button disabled={busy || session.resynchronizing || session.connectionStatus !== 'READY'}
+          onClick={() => { void run(async () => { await onlineGateway?.requestSnapshot() }) }}>Resync game</Button>
+      </Stack>
+    </Container>
   }
 
   if (screen === 'HOME' || session.view === null) {
@@ -174,7 +207,8 @@ export function App({
         humanName={humanName}
         onContinue={() => {
           void run(async () => {
-            await gateway.loadLatestGame()
+            await localGateway.loadLatestGame()
+            setMode('LOCAL')
             setActiveSetup(null)
             setScreen('GAME')
             uiStore.getState().reset()
@@ -182,13 +216,14 @@ export function App({
         }}
         onDeleteSave={() => {
           void run(async () => {
-            await gateway.deleteSavedGame()
+            await localGateway.deleteSavedGame()
             setHasSavedGame(false)
           })
         }}
         onCreateOnlineRoom={() => {
           void run(async () => {
             await lobbyGateway.createRoom(humanName)
+            setMode('ONLINE')
             setScreen('LOBBY')
           })
         }}
@@ -197,6 +232,7 @@ export function App({
         onJoinOnlineRoom={() => {
           void run(async () => {
             await lobbyGateway.joinRoom(humanName, onlineRoomCode)
+            setMode('ONLINE')
             setScreen('LOBBY')
           })
         }}
@@ -213,7 +249,7 @@ export function App({
     <GamePage
       aiThinking={session.aiThinking}
       buildMode={ui.selectedBuildMode}
-      busy={busy}
+      busy={busy || (mode === 'ONLINE' && (session.submitting || session.resynchronizing || session.connectionStatus !== 'READY'))}
       canRestart={activeSetup !== null}
       createTradeId={createTradeId}
       error={effectiveError}
@@ -221,17 +257,31 @@ export function App({
       onBuildModeChange={ui.setSelectedBuildMode}
       onCommand={submitCommand}
       onNewGame={() => {
-        setScreen('HOME')
-        setLocalError(null)
-        sessionStore.getState().reset()
-        uiStore.getState().reset()
-        void gateway.hasSavedGame().then(setHasSavedGame)
+        void run(async () => {
+          if (mode === 'ONLINE') await lobbyGateway.leaveRoom()
+          setMode('LOCAL')
+          setScreen('HOME')
+          setLocalError(null)
+          sessionStore.getState().reset()
+          uiStore.getState().reset()
+          setHasSavedGame(await localGateway.hasSavedGame())
+        })
       }}
       onRestart={() => {
         if (activeSetup !== null) startGame(activeSetup)
       }}
-      onSave={() => { void run(() => gateway.saveGame()) }}
+      onSave={() => { void run(() => localGateway.saveGame()) }}
       saveStatus={session.saveStatus}
+      {...(mode === 'ONLINE' && lobby.snapshot !== null ? { online: {
+        roomCode: lobby.snapshot.roomCode,
+        status: session.resynchronizing ? 'Resynchronizing' : session.submitting ? 'Sending command'
+          : session.connectionStatus === 'READY' ? 'Connected'
+            : session.connectionStatus === 'RECONNECTING' ? 'Reconnecting'
+              : session.connectionStatus === 'CONNECTING' ? 'Connecting'
+                : session.connectionStatus === 'ERROR' ? 'Game unavailable' : 'Disconnected',
+        onResync: () => { void run(async () => { await onlineGateway?.requestSnapshot() }) },
+        resyncDisabled: busy || session.submitting || session.resynchronizing || lobby.connectionState !== 'CONNECTED',
+      } } : {})}
       view={session.view}
     />
   )
