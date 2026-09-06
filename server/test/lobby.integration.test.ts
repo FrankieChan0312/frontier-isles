@@ -11,18 +11,23 @@ import {
   roomCreateRequestSchema,
   roomJoinRequestSchema,
   roomLeaveRequestSchema,
+  roomRequestSnapshotRequestSchema,
   roomSetAiSeatRequestSchema,
   roomSetReadyRequestSchema,
   roomStartRequestSchema,
+  sessionResumeRequestSchema,
   type Acknowledgement,
   type ClientToServerEvents,
   type RoomCreateAcknowledgement,
   type RoomJoinAcknowledgement,
   type RoomLeaveAcknowledgement,
+  type RoomRequestSnapshotAcknowledgement,
   type RoomSetAiSeatAcknowledgement,
   type RoomSetReadyAcknowledgement,
   type RoomSnapshot,
+  type RoomSessionData,
   type RoomStartAcknowledgement,
+  type SessionResumeAcknowledgement,
   type ServerToClientEvents,
 } from '@frontier-isles/realtime-contracts'
 import type { ServerConfig } from '../src/config.js'
@@ -30,11 +35,13 @@ import { createFrontierHttpServer } from '../src/create-http-server.js'
 import { createRealtimeServer } from '../src/create-realtime-server.js'
 import { createGracefulShutdown } from '../src/graceful-shutdown.js'
 import { InMemoryRoomService } from '../src/lobby/room-service.js'
+import { FakeLifecycleRuntime } from './fake-lifecycle-runtime.js'
 
 type LobbyClient = ClientSocket<ServerToClientEvents, ClientToServerEvents>
 
 interface RunningLobbyServer {
   readonly httpServer: HttpServer
+  readonly roomService: InMemoryRoomService
   readonly close: () => Promise<void>
   readonly url: string
 }
@@ -43,20 +50,23 @@ const TEST_CONFIG: ServerConfig = {
   port: 3001,
   clientOrigin: 'http://127.0.0.1:5173',
   nodeEnv: 'test',
+  reconnectGraceMs: 30_000,
+  roomIdleTtlMs: 1_800_000,
 }
 
 const clients: LobbyClient[] = []
 const servers: RunningLobbyServer[] = []
 
-async function startLobbyServer(): Promise<RunningLobbyServer> {
+async function startLobbyServer(
+  roomService: InMemoryRoomService = new InMemoryRoomService(),
+): Promise<RunningLobbyServer> {
   const httpServer = createFrontierHttpServer()
-  const realtimeServer = createRealtimeServer(httpServer, TEST_CONFIG, {
-    roomService: new InMemoryRoomService(),
-  })
+  const realtimeServer = createRealtimeServer(httpServer, TEST_CONFIG, { roomService })
   await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve))
   const address = httpServer.address() as AddressInfo
   const running = {
     httpServer,
+    roomService,
     close: createGracefulShutdown({ httpServer, realtimeServer }),
     url: `http://127.0.0.1:${address.port}`,
   }
@@ -163,6 +173,23 @@ function startRoom(client: LobbyClient, expectedRevision: number): Promise<RoomS
   })
 }
 
+function resumeSession(
+  client: LobbyClient,
+  credential: RoomSessionData['credential'],
+): Promise<SessionResumeAcknowledgement> {
+  return new Promise((resolve) => {
+    client.emit('session:resume', sessionResumeRequestSchema.parse(credential), resolve)
+  })
+}
+
+function requestSnapshot(client: LobbyClient): Promise<RoomRequestSnapshotAcknowledgement> {
+  return new Promise((resolve) => {
+    client.emit('room:request-snapshot', roomRequestSnapshotRequestSchema.parse({
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+    }), resolve)
+  })
+}
+
 function nextSnapshot(client: LobbyClient, revision: number): Promise<RoomSnapshot> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Snapshot revision ${revision} was not received.`)), 2_000)
@@ -255,5 +282,116 @@ describe('realtime Lobby integration', () => {
       error: { code: 'PROTOCOL_VERSION_MISMATCH' },
     })
     expect(JSON.stringify(parsed)).not.toMatch(/stack|socket|token/iu)
+  })
+
+  it('marks a disconnect reconnecting, resumes the same Ready seat, and resynchronizes explicitly', async () => {
+    const server = await startLobbyServer()
+    const host = await connectClient(server.url)
+    const joiner = await connectClient(server.url)
+    const created = successData(await createRoom(host, 'Ada'))
+    const joined = successData(await joinRoom(joiner, created.credential.roomCode, 'Grace'))
+    const ready = successData(await setReady(joiner, joined.snapshot.revision, true))
+    const reconnectingSnapshot = nextSnapshot(host, ready.snapshot.revision + 1)
+
+    joiner.disconnect()
+    const reconnecting = await reconnectingSnapshot
+    expect(reconnecting.seats[1]).toMatchObject({
+      seatId: 'EAST',
+      ready: true,
+      connectionStatus: 'RECONNECTING',
+    })
+    expect(reconnecting.startReadiness.blockers).toContain('HUMANS_NOT_CONNECTED')
+
+    const resumedClient = await connectClient(server.url)
+    const resumedSnapshot = nextSnapshot(host, reconnecting.revision + 1)
+    const resumed = successData(await resumeSession(resumedClient, joined.credential))
+    expect(resumed.credential).toEqual(joined.credential)
+    expect(resumed.snapshot.seats[1]).toMatchObject({
+      seatId: 'EAST',
+      ready: true,
+      connectionStatus: 'CONNECTED',
+    })
+    expect(await resumedSnapshot).toEqual(resumed.snapshot)
+
+    const resynchronized = successData(await requestSnapshot(resumedClient))
+    expect(resynchronized.snapshot).toEqual(resumed.snapshot)
+    expect(JSON.stringify(resynchronized.snapshot)).not.toContain(joined.credential.resumeToken)
+  })
+
+  it('lets the newest valid duplicate resume win and prevents the replaced socket from mutating', async () => {
+    const server = await startLobbyServer()
+    const host = await connectClient(server.url)
+    const original = await connectClient(server.url)
+    const created = successData(await createRoom(host, 'Ada'))
+    const joined = successData(await joinRoom(original, created.credential.roomCode, 'Grace'))
+    const replacement = await connectClient(server.url)
+    const replacedNotice = new Promise<void>((resolve) => {
+      original.once('session:replaced', (notice) => {
+        expect(notice).toEqual({
+          code: 'SESSION_REPLACED',
+          message: 'This session continued in a newer tab.',
+        })
+        resolve()
+      })
+    })
+
+    const resumed = successData(await resumeSession(replacement, joined.credential))
+    await replacedNotice
+    expect(original.connected).toBe(false)
+    expect(resumed.snapshot.revision).toBe(joined.snapshot.revision)
+
+    original.emit('room:set-ready', roomSetReadyRequestSchema.parse({
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+      expectedRevision: resumed.snapshot.revision,
+      ready: true,
+    }), () => { throw new Error('A replaced socket received an acknowledgement.') })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(server.roomService.getSnapshot(created.credential.roomCode)?.revision).toBe(
+      resumed.snapshot.revision,
+    )
+
+    const accepted = successData(await setReady(replacement, resumed.snapshot.revision, true))
+    expect(accepted.snapshot.revision).toBe(resumed.snapshot.revision + 1)
+  })
+
+  it('rejects a forged resume token without revealing credential details', async () => {
+    const server = await startLobbyServer()
+    const host = await connectClient(server.url)
+    const attacker = await connectClient(server.url)
+    const created = successData(await createRoom(host, 'Ada'))
+
+    const rejected = await resumeSession(attacker, {
+      ...created.credential,
+      resumeToken: 'Z'.repeat(43) as RoomSessionData['credential']['resumeToken'],
+    })
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'SESSION_INVALID' } })
+    expect(JSON.stringify(rejected)).not.toContain(created.credential.resumeToken)
+    expect(JSON.stringify(rejected)).not.toMatch(/digest|stack|socket/iu)
+  })
+
+  it('notifies and disconnects clients when fake-time idle cleanup closes a Room', async () => {
+    const runtime = new FakeLifecycleRuntime()
+    const roomService = new InMemoryRoomService({
+      reconnectGraceMs: 100,
+      roomIdleTtlMs: 1_000,
+      runtime,
+    })
+    const server = await startLobbyServer(roomService)
+    const host = await connectClient(server.url)
+    const created = successData(await createRoom(host, 'Ada'))
+    const closedNotice = new Promise<unknown>((resolve) => host.once('room:closed', resolve))
+    const disconnected = new Promise<void>((resolve) => host.once('disconnect', () => resolve()))
+
+    runtime.advanceBy(1_000)
+
+    await expect(closedNotice).resolves.toMatchObject({
+      roomCode: created.credential.roomCode,
+      reason: 'IDLE_TIMEOUT',
+    })
+    await disconnected
+    expect(host.connected).toBe(false)
+    expect(roomService.roomCount).toBe(0)
+    expect(roomService.hasSession(created.credential.sessionId)).toBe(false)
+    expect(JSON.stringify(await closedNotice)).not.toContain(created.credential.resumeToken)
   })
 })

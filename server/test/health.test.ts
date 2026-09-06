@@ -28,11 +28,18 @@ describe('server configuration', () => {
       port: 3001,
       clientOrigin: 'http://127.0.0.1:5173',
       nodeEnv: 'development',
+      reconnectGraceMs: 30_000,
+      roomIdleTtlMs: 1_800_000,
     })
   })
 
   it.each(['', '0', '65536', '3.5', 'not-a-port'])('rejects invalid PORT %j', (port) => {
     expect(() => parseServerConfig({ PORT: port })).toThrow('PORT')
+  })
+
+  it.each(['', '0', '-1', '3.5', '2147483648'])('rejects invalid lifecycle delay %j', (value) => {
+    expect(() => parseServerConfig({ RECONNECT_GRACE_MS: value })).toThrow('RECONNECT_GRACE_MS')
+    expect(() => parseServerConfig({ ROOM_IDLE_TTL_MS: value })).toThrow('ROOM_IDLE_TTL_MS')
   })
 
   it.each([

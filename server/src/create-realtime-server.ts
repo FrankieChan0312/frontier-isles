@@ -34,6 +34,10 @@ export function createRealtimeServerOptions(
       credentials: true,
       methods: ['GET', 'POST'],
     },
+    connectionStateRecovery: {
+      maxDisconnectionDuration: config.reconnectGraceMs,
+      skipMiddlewares: false,
+    },
   }
 }
 export function createRealtimeServer(
@@ -49,7 +53,10 @@ export function createRealtimeServer(
   >(httpServer, createRealtimeServerOptions(config))
   registerLobbyHandlers(
     realtimeServer,
-    dependencies.roomService ?? new InMemoryRoomService(),
+    dependencies.roomService ?? new InMemoryRoomService({
+      reconnectGraceMs: config.reconnectGraceMs,
+      roomIdleTtlMs: config.roomIdleTtlMs,
+    }),
   )
   return realtimeServer
 }

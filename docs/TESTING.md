@@ -22,6 +22,11 @@ Ready and Host AI-seat changes, public-safe rejection, leave behavior, and broad
 The browser gateway also has a real ephemeral-server integration suite; UI component tests cover
 online create/join, public errors, own Ready, and Host-only AI controls.
 
+Session lifecycle tests use an injected fake clock/scheduler—never real 30-second or 30-minute
+waits—to cover reconnect state, valid/expired resume, Ready preservation, Host transfer, last-Human
+closure, and idle cleanup. Real Socket.IO clients additionally prove duplicate replacement, old
+socket rejection, explicit snapshot resync, public closure notification, and transport disconnect.
+
 The shared-contract suite validates every Goal A request and acknowledgement, strict extra-field
 rejection, display-name normalization, branded domains, protocol mismatch, canonical seat order,
 derived readiness, public-safe errors, JSON round trips, and the absence of private credentials in
@@ -70,6 +75,10 @@ For V2 it also starts the realtime server on `127.0.0.1:3001` with a test-only e
 The Lobby path uses two independent browser contexts to compare authoritative public seat state,
 synchronize Ready and AI changes, smoke-test Single Player, and check 1440×900, 1024×768, and
 480×800 layouts for horizontal overflow and console/React errors.
+
+Its recovery paths refresh a Ready Human into the same SessionId/SeatId, copy a credential into a
+duplicate tab to prove newest-wins replacement, transfer Host after leave, and retain synchronized
+Ready/AI state through resume.
 
 The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
 counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without

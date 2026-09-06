@@ -20,6 +20,8 @@ import {
   safeErrorSchema,
   serverHelloSchema,
   sessionReplacedNoticeSchema,
+  sessionResumeAcknowledgementSchema,
+  sessionResumeRequestSchema,
   type Acknowledgement,
   type AiProfileId,
   type ClientToServerEvents,
@@ -30,6 +32,7 @@ import {
   type ServerToClientEvents,
   type SessionCredential,
 } from '@frontier-isles/realtime-contracts'
+import type { LobbyCredentialStore } from '../../infrastructure/realtime/lobby-credential-store.ts'
 import type {
   LobbyGateway,
   LobbyGatewayListener,
@@ -39,6 +42,7 @@ import type {
 type LobbySocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
 export interface SocketLobbyGatewayOptions {
+  readonly credentialStore?: LobbyCredentialStore
   readonly socket?: LobbySocket
 }
 
@@ -72,12 +76,17 @@ function validatedResultData<T>(schema: RuntimeSchema<Acknowledgement<T>>, value
 
 export class SocketLobbyGateway implements LobbyGateway {
   readonly #socket: LobbySocket
+  readonly #credentialStore: LobbyCredentialStore | null
   readonly #listeners = new Set<LobbyGatewayListener>()
-  #credential: SessionCredential | null = null
+  #credential: SessionCredential | null
   #helloReceived = false
+  #resumePromise: Promise<boolean> | null = null
+  #sessionAttached = false
   #state: LobbyGatewayState = INITIAL_STATE
 
   public constructor(url: string, options: SocketLobbyGatewayOptions = {}) {
+    this.#credentialStore = options.credentialStore ?? null
+    this.#credential = this.#credentialStore?.load() ?? null
     this.#socket = options.socket ?? createSocket(url, {
       autoConnect: false,
       reconnection: true,
@@ -127,6 +136,14 @@ export class SocketLobbyGateway implements LobbyGateway {
     })
     const data = validatedResultData(roomJoinAcknowledgementSchema, acknowledgement)
     this.#acceptSession(data)
+  }
+
+  public resumeSession(): Promise<boolean> {
+    if (this.#credential === null) return Promise.resolve(false)
+    this.#resumePromise ??= this.#performResume().finally(() => {
+      this.#resumePromise = null
+    })
+    return this.#resumePromise
   }
 
   public async setReady(ready: boolean): Promise<void> {
@@ -182,6 +199,8 @@ export class SocketLobbyGateway implements LobbyGateway {
     })
     validatedResultData(roomLeaveAcknowledgementSchema, acknowledgement)
     this.#credential = null
+    this.#credentialStore?.clear()
+    this.#sessionAttached = false
     this.#socket.disconnect()
     this.#replaceState(INITIAL_STATE)
   }
@@ -193,9 +212,16 @@ export class SocketLobbyGateway implements LobbyGateway {
 
   #registerTransportListeners(): void {
     this.#socket.on('connect', () => {
-      this.#replaceState({ ...this.#state, connectionState: 'CONNECTED', error: null })
+      this.#replaceState({
+        ...this.#state,
+        connectionState: this.#credential !== null && !this.#sessionAttached
+          ? 'RECONNECTING'
+          : 'CONNECTED',
+        error: null,
+      })
     })
     this.#socket.on('disconnect', (reason) => {
+      this.#sessionAttached = false
       const reconnecting = reason !== 'io client disconnect' && this.#credential !== null
       this.#replaceState({
         ...this.#state,
@@ -223,6 +249,9 @@ export class SocketLobbyGateway implements LobbyGateway {
         return
       }
       this.#helloReceived = true
+      if (this.#credential !== null && !this.#sessionAttached) {
+        void this.resumeSession()
+      }
     })
     this.#socket.on('room:snapshot', (untrusted) => {
       const parsed = roomSnapshotSchema.safeParse(untrusted)
@@ -249,6 +278,8 @@ export class SocketLobbyGateway implements LobbyGateway {
       }
       if (this.#credential?.roomCode !== parsed.data.roomCode) return
       this.#credential = null
+      this.#credentialStore?.clear()
+      this.#sessionAttached = false
       this.#replaceState({
         connectionState: this.#state.connectionState,
         error: safeErrorSchema.parse({ code: 'ROOM_CLOSED', message: parsed.data.message }),
@@ -263,10 +294,12 @@ export class SocketLobbyGateway implements LobbyGateway {
         return
       }
       this.#credential = null
+      this.#credentialStore?.clear()
+      this.#sessionAttached = false
       this.#replaceState({
         connectionState: 'DISCONNECTED',
         error: safeErrorSchema.parse({ code: parsed.data.code, message: parsed.data.message }),
-        selfSeatId: null,
+        selfSeatId: this.#state.selfSeatId,
         snapshot: this.#state.snapshot,
       })
     })
@@ -311,6 +344,8 @@ export class SocketLobbyGateway implements LobbyGateway {
 
   #acceptSession(data: RoomSessionData): void {
     this.#credential = data.credential
+    this.#credentialStore?.save(data.credential)
+    this.#sessionAttached = true
     this.#replaceState({
       connectionState: 'CONNECTED',
       error: null,
@@ -321,6 +356,35 @@ export class SocketLobbyGateway implements LobbyGateway {
 
   #acceptSnapshot(snapshot: RoomSnapshot): void {
     this.#replaceState({ ...this.#state, error: null, snapshot: roomSnapshotSchema.parse(snapshot) })
+  }
+
+  async #performResume(): Promise<boolean> {
+    await this.#ensureConnected()
+    const credential = this.#credential
+    if (credential === null) return false
+    const request = sessionResumeRequestSchema.parse(credential)
+    const untrusted = await new Promise<unknown>((resolve) => {
+      this.#socket.emit('session:resume', request, resolve)
+    })
+    const parsed = sessionResumeAcknowledgementSchema.safeParse(untrusted)
+    if (!parsed.success) {
+      this.#rejectInvalidServerData()
+      return false
+    }
+    if (!parsed.data.ok) {
+      this.#credential = null
+      this.#credentialStore?.clear()
+      this.#sessionAttached = false
+      this.#replaceState({
+        connectionState: this.#state.connectionState,
+        error: parsed.data.error,
+        selfSeatId: null,
+        snapshot: null,
+      })
+      return false
+    }
+    this.#acceptSession(parsed.data.data)
+    return true
   }
 
   #requireSnapshot(): RoomSnapshot {

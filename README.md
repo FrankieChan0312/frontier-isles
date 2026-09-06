@@ -33,7 +33,8 @@ saved game** resumes the single latest save for the current browser origin.
 
 For Online Multiplayer, run both development commands below, enter a display name, then create a
 Room or join its six-character code from a second browser context. Lobby Start Game remains disabled
-until Milestone B.
+until Milestone B. Refresh within 30 seconds resumes the same tab-scoped Human session; waiting
+Rooms expire after 30 minutes without accepted activity.
 
 ## Quality and release commands
 
@@ -65,7 +66,8 @@ The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accep
 Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
 the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
 in-memory four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
-leave; `room:start` is intentionally unavailable until Milestone B. Copy the
+leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle settings. `room:start`
+is intentionally unavailable until Milestone B. Copy the
 non-secret `.env.example` values into your process environment when overrides are needed; no
 `.env` file is committed.
 

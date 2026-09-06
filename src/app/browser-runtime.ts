@@ -1,6 +1,7 @@
 import { LocalGameGateway } from '../application/gateways/local-game-gateway.ts'
 import { SocketLobbyGateway } from '../application/gateways/socket-lobby-gateway.ts'
 import { LocalStorageGameSaveRepository } from '../infrastructure/persistence/game-save-repository.ts'
+import { SessionStorageLobbyCredentialStore } from '../infrastructure/realtime/lobby-credential-store.ts'
 import { readRealtimeClientConfig } from '../infrastructure/realtime/realtime-config.ts'
 
 export function createBrowserGateway(): LocalGameGateway {
@@ -10,5 +11,7 @@ export function createBrowserGateway(): LocalGameGateway {
 }
 
 export function createBrowserLobbyGateway(): SocketLobbyGateway {
-  return new SocketLobbyGateway(readRealtimeClientConfig().url)
+  return new SocketLobbyGateway(readRealtimeClientConfig().url, {
+    credentialStore: new SessionStorageLobbyCredentialStore(globalThis.sessionStorage),
+  })
 }

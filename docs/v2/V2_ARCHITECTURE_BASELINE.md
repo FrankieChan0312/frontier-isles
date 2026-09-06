@@ -131,8 +131,10 @@ Room domain state includes:
 - optional active game ID
 - reconnect deadlines
 
-Through V2-02, disconnect performs an immediate leave. Explicit resume credentials, reconnect
-grace, duplicate-transport handling, and idle cleanup are introduced together in V2-04.
+V2-04 replaces the temporary disconnect behavior with the policy frozen in
+[ADR-V2-0005](ADR-V2-0005-session-recovery-and-room-lifecycle.md): 30-second reconnect grace,
+30-minute waiting-Room idle expiry, SHA-256 resume-token digests, tab-scoped sessionStorage, and
+newest-valid-resume-wins transport ownership.
 
 ## 6. Identity
 
@@ -186,7 +188,13 @@ Do not depend solely on missed Socket.IO packets for correctness.
 
 Enable Socket.IO connection-state recovery for short transport interruptions, but also implement explicit resume credentials and snapshot resynchronization.
 
+The configured recovery duration never exceeds `RECONNECT_GRACE_MS`. A recovered transport is not
+authoritative until its explicit credential resume succeeds.
+
 One session may have only one active socket. A newer valid connection replaces or rejects the older one according to the frozen task policy.
+
+The frozen policy is replacement: the newer valid resume wins, while the old socket is notified,
+stripped of authority, and disconnected.
 
 ## 10. Security baseline
 

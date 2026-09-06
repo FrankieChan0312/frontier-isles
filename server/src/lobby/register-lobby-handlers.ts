@@ -19,18 +19,25 @@ import {
   roomStartAcknowledgementSchema,
   roomStartRequestSchema,
   serverHelloSchema,
+  sessionReplacedNoticeSchema,
   sessionResumeAcknowledgementSchema,
   sessionResumeRequestSchema,
   type ClientToServerEvents,
+  type RoomCode,
   type SafeErrorCode,
   type ServerToClientEvents,
+  type SessionId,
 } from '@frontier-isles/realtime-contracts'
 import type {
   InterServerEvents,
   RealtimeServer,
   SocketData,
 } from '../create-realtime-server.js'
-import type { InMemoryRoomService, RoomLeaveResult } from './room-service.js'
+import type {
+  InMemoryRoomService,
+  RoomLeaveResult,
+  RoomLifecycleEvent,
+} from './room-service.js'
 
 type LobbySocket = Socket<
   ClientToServerEvents,
@@ -60,7 +67,6 @@ function validationFailure(
       'Refresh the page to use the supported realtime protocol.',
     )
   }
-
   const firstField = details.issues[0]?.path[0]
   const fieldCode: SafeErrorCode = firstField === 'displayName'
     ? 'INVALID_DISPLAY_NAME'
@@ -91,20 +97,42 @@ function roomChannel(roomCode: string): string {
   return `frontier-isles:room:${roomCode}`
 }
 
+function closedMessage(reason: 'EMPTY' | 'IDLE_TIMEOUT'): string {
+  return reason === 'IDLE_TIMEOUT'
+    ? 'The room closed after its waiting-room idle limit.'
+    : 'The room closed because no eligible Human players remain.'
+}
+
+function publishClosed(
+  server: RealtimeServer,
+  roomCode: RoomCode,
+  reason: 'EMPTY' | 'IDLE_TIMEOUT',
+  disconnectSockets: boolean,
+): void {
+  const channel = roomChannel(roomCode)
+  server.to(channel).emit('room:closed', roomClosedNoticeSchema.parse({
+    roomCode,
+    reason,
+    message: closedMessage(reason),
+  }))
+  if (disconnectSockets) server.in(channel).disconnectSockets(true)
+}
+
 function publishLeaveResult(server: RealtimeServer, result: RoomLeaveResult): void {
-  const channel = roomChannel(result.roomCode)
   if (result.closed) {
-    server.to(channel).emit('room:closed', roomClosedNoticeSchema.parse({
-      roomCode: result.roomCode,
-      reason: 'EMPTY',
-      message: 'The room closed because no Human players remain.',
-    }))
+    publishClosed(server, result.roomCode, 'EMPTY', false)
     return
   }
-  if (result.snapshot === null) {
-    throw new Error('Open Room leave result must include a snapshot.')
+  if (result.snapshot === null) throw new Error('Open Room leave result must include a snapshot.')
+  server.to(roomChannel(result.roomCode)).emit('room:snapshot', result.snapshot)
+}
+
+function publishLifecycleEvent(server: RealtimeServer, event: RoomLifecycleEvent): void {
+  if (event.type === 'SNAPSHOT_UPDATED') {
+    server.to(roomChannel(event.snapshot.roomCode)).emit('room:snapshot', event.snapshot)
+    return
   }
-  server.to(channel).emit('room:snapshot', result.snapshot)
+  publishClosed(server, event.roomCode, event.reason, true)
 }
 
 function internalFailure(): ReturnType<typeof createSafeErrorAcknowledgement> {
@@ -115,7 +143,26 @@ export function registerLobbyHandlers(
   server: RealtimeServer,
   roomService: InMemoryRoomService,
 ): void {
+  const activeSockets = new Map<SessionId, LobbySocket>()
+  roomService.subscribeToLifecycle((event) => publishLifecycleEvent(server, event))
+
+  function attachSession(socket: LobbySocket, sessionId: SessionId, roomCode: RoomCode): void {
+    const previous = activeSockets.get(sessionId)
+    if (previous !== undefined && previous !== socket) {
+      previous.emit('session:replaced', sessionReplacedNoticeSchema.parse({
+        code: 'SESSION_REPLACED',
+        message: 'This session continued in a newer tab.',
+      }))
+      delete previous.data.sessionId
+      void previous.leave(roomChannel(roomCode))
+      previous.disconnect(true)
+    }
+    socket.data.sessionId = sessionId
+    activeSockets.set(sessionId, socket)
+  }
+
   server.on('connection', (socket) => {
+    delete socket.data.sessionId
     socket.emit('server:hello', serverHelloSchema.parse({
       protocolVersion: REALTIME_PROTOCOL_VERSION,
       service: REALTIME_SERVICE_NAME,
@@ -132,20 +179,15 @@ export function registerLobbyHandlers(
         acknowledge(roomCreateAcknowledgementSchema.parse(validationFailure(payload, parsed.error)))
         return
       }
-
       const result = roomService.createRoom(parsed.data.displayName)
       if (!result.ok) {
         acknowledge(roomCreateAcknowledgementSchema.parse(result))
         return
       }
-
       void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
-        socket.data.sessionId = result.data.credential.sessionId
+        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
         acknowledge(roomCreateAcknowledgementSchema.parse(result))
-        server.to(roomChannel(result.data.credential.roomCode)).emit(
-          'room:snapshot',
-          result.data.snapshot,
-        )
+        server.to(roomChannel(result.data.credential.roomCode)).emit('room:snapshot', result.data.snapshot)
       }).catch(() => {
         const leaveResult = roomService.leaveRoom(result.data.credential.sessionId)
         if (leaveResult.ok) publishLeaveResult(server, leaveResult.data)
@@ -164,20 +206,15 @@ export function registerLobbyHandlers(
         acknowledge(roomJoinAcknowledgementSchema.parse(validationFailure(payload, parsed.error)))
         return
       }
-
       const result = roomService.joinRoom(parsed.data.roomCode, parsed.data.displayName)
       if (!result.ok) {
         acknowledge(roomJoinAcknowledgementSchema.parse(result))
         return
       }
-
       void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
-        socket.data.sessionId = result.data.credential.sessionId
+        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
         acknowledge(roomJoinAcknowledgementSchema.parse(result))
-        server.to(roomChannel(result.data.credential.roomCode)).emit(
-          'room:snapshot',
-          result.data.snapshot,
-        )
+        server.to(roomChannel(result.data.credential.roomCode)).emit('room:snapshot', result.data.snapshot)
       }).catch(() => {
         const leaveResult = roomService.leaveRoom(result.data.credential.sessionId)
         if (leaveResult.ok) publishLeaveResult(server, leaveResult.data)
@@ -206,11 +243,10 @@ export function registerLobbyHandlers(
         acknowledge(roomSetReadyAcknowledgementSchema.parse(result))
         return
       }
-      const acknowledgement = roomSetReadyAcknowledgementSchema.parse({
+      acknowledge(roomSetReadyAcknowledgementSchema.parse({
         ok: true,
         data: { snapshot: result.data.snapshot },
-      })
-      acknowledge(acknowledgement)
+      }))
       if (result.data.changed) {
         server.to(roomChannel(result.data.snapshot.roomCode)).emit('room:snapshot', result.data.snapshot)
       }
@@ -242,11 +278,10 @@ export function registerLobbyHandlers(
         acknowledge(roomSetAiSeatAcknowledgementSchema.parse(result))
         return
       }
-      const acknowledgement = roomSetAiSeatAcknowledgementSchema.parse({
+      acknowledge(roomSetAiSeatAcknowledgementSchema.parse({
         ok: true,
         data: { snapshot: result.data.snapshot },
-      })
-      acknowledge(acknowledgement)
+      }))
       if (result.data.changed) {
         server.to(roomChannel(result.data.snapshot.roomCode)).emit('room:snapshot', result.data.snapshot)
       }
@@ -287,15 +322,46 @@ export function registerLobbyHandlers(
     })
 
     socket.on('session:resume', (payload: unknown, acknowledge) => {
+      const unattachedFailure = unattachedSocketRequired(socket)
+      if (unattachedFailure !== null) {
+        acknowledge(sessionResumeAcknowledgementSchema.parse(unattachedFailure))
+        return
+      }
       const parsed = sessionResumeRequestSchema.safeParse(payload)
       if (!parsed.success) {
         acknowledge(sessionResumeAcknowledgementSchema.parse(validationFailure(payload, parsed.error)))
         return
       }
-      acknowledge(sessionResumeAcknowledgementSchema.parse(createSafeErrorAcknowledgement(
-        'SESSION_INVALID',
-        'Session resume is added in the recovery stage.',
-      )))
+      const result = roomService.resumeSession(parsed.data)
+      if (!result.ok) {
+        acknowledge(sessionResumeAcknowledgementSchema.parse(result))
+        return
+      }
+      void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
+        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+        acknowledge(sessionResumeAcknowledgementSchema.parse({
+          ok: true,
+          data: {
+            credential: result.data.credential,
+            snapshot: result.data.snapshot,
+          },
+        }))
+        if (result.data.changed) {
+          server.to(roomChannel(result.data.snapshot.roomCode)).emit(
+            'room:snapshot',
+            result.data.snapshot,
+          )
+        }
+      }).catch(() => {
+        const disconnected = roomService.markDisconnected(result.data.credential.sessionId)
+        if (disconnected.ok && disconnected.data.changed) {
+          server.to(roomChannel(disconnected.data.snapshot.roomCode)).emit(
+            'room:snapshot',
+            disconnected.data.snapshot,
+          )
+        }
+        acknowledge(sessionResumeAcknowledgementSchema.parse(internalFailure()))
+      })
     })
 
     socket.on('room:leave', (payload: unknown, acknowledge) => {
@@ -323,17 +389,21 @@ export function registerLobbyHandlers(
         ok: true,
         data: { roomCode: result.data.roomCode },
       }))
-      publishLeaveResult(server, result.data)
+      if (activeSockets.get(sessionId) === socket) activeSockets.delete(sessionId)
       delete socket.data.sessionId
+      publishLeaveResult(server, result.data)
       void socket.leave(roomChannel(result.data.roomCode))
     })
 
     socket.on('disconnect', () => {
       const sessionId = socket.data.sessionId
-      if (sessionId === undefined) return
+      if (sessionId === undefined || activeSockets.get(sessionId) !== socket) return
+      activeSockets.delete(sessionId)
       delete socket.data.sessionId
-      const result = roomService.leaveRoom(sessionId)
-      if (result.ok) publishLeaveResult(server, result.data)
+      const result = roomService.markDisconnected(sessionId)
+      if (result.ok && result.data.changed) {
+        server.to(roomChannel(result.data.snapshot.roomCode)).emit('room:snapshot', result.data.snapshot)
+      }
     })
   })
 }

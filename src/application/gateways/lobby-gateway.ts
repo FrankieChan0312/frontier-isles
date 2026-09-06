@@ -24,6 +24,7 @@ export interface LobbyGateway {
   subscribe(listener: LobbyGatewayListener): () => void
   createRoom(displayName: string): Promise<void>
   joinRoom(displayName: string, roomCode: string): Promise<void>
+  resumeSession(): Promise<boolean>
   setReady(ready: boolean): Promise<void>
   setAiSeat(seatId: SeatId, profileId: AiProfileId | null): Promise<void>
   requestSnapshot(): Promise<void>

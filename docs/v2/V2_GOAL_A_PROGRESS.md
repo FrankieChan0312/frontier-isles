@@ -189,4 +189,51 @@ Audit:
 
 ### V2-04 — Session recovery and Room lifecycle
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Implemented:
+
+- Added validated 30-second reconnect-grace and 30-minute waiting-Room idle defaults plus Socket.IO
+  connection-state recovery capped by the explicit grace.
+- Replaced raw server token storage with SHA-256 base64url digests and timing-safe verification;
+  SessionId remains durable authority and `socket.id` is never player identity.
+- Added injected clock/scheduler lifecycle handling for `RECONNECTING`, valid resume, grace expiry,
+  Host transfer, last-Human closure, idle cleanup, session invalidation, public closure notification,
+  and clean Room-channel disconnect.
+- Added newest-valid-resume-wins duplicate policy: the prior socket is notified, stripped of
+  authority, and disconnected before it can submit another mutation.
+- Added strict tab-scoped sessionStorage persistence and automatic browser refresh/reconnect resume
+  at the existing Lobby gateway boundary.
+- Added ADR-V2-0005 and updated architecture, testing, runtime, limitation, and deployment-boundary
+  documentation.
+
+Dependencies:
+
+- None added.
+
+Verification:
+
+- Focused lifecycle/server suite: PASS — 5 files/43 tests.
+- Focused browser gateway/storage/UI/App suite: PASS — 4 files/10 tests.
+- `npm run e2e:lobby`: PASS — 6/6 Chromium paths including refresh, duplicate replacement, Host
+  transfer, synchronized recovery, Single Player regression, and required viewport checks.
+- `npm ci`: PASS — 326 packages installed, 329 audited, 0 vulnerabilities.
+- `npm run typecheck`: PASS.
+- `npm run lint`: PASS with zero warnings.
+- `npm run test`: PASS — 68 files, 365 tests.
+- `npm run build`: PASS — 1,127 modules transformed; accepted bundle-size advisory only.
+- `npm run check`: PASS — 68 files, 365 tests, production build.
+- `npm run simulate`: PASS — 100/100 games, 65,341 commands, maximum 996 commands, 170 turns,
+  467 random draws; winners E33/W21/S28/N18; deterministic summary hash `1adc49e8`.
+- `npm run check:server`: PASS — contracts 5 files/38 tests; server 5 files/43 tests; builds pass.
+- `npm run check:all`: PASS — web, server, and contracts checks.
+- Full `npm run e2e`: PASS — 14/14 Chromium tests (6 Goal A Lobby and 8 accepted V1 journeys).
+- `git diff --check`: PASS (line-ending conversion notices only).
+
+Audit:
+
+- ResumeToken appears only in private request/acknowledgement and tab sessionStorage; the server
+  retains only a digest, and snapshots/DOM/logs/public errors contain neither token nor digest.
+- Replaced sockets lose server session attachment before disconnect and cannot mutate Room state.
+- No online GameState, board, game command, SocketGameGateway, V2-05 extraction, persistence
+  database, Redis, login, matchmaking, chat, spectator, or deployment implementation was added.

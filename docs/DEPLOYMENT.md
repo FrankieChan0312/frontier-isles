@@ -2,8 +2,10 @@
 
 ## Release artifact
 
-Frontier Isles is a static Vite application. It requires no backend, database, account, secret,
-runtime environment variable, or server-side rendering.
+The accepted Single Player path remains a static Vite application and requires no backend,
+database, account, secret, runtime environment variable, or server-side rendering. Online Lobby
+requires the separate long-running Node/Socket.IO process and a build-time `VITE_REALTIME_URL`;
+Goal A does not publish or add a production deployment.
 
 ```sh
 npm ci
@@ -20,7 +22,7 @@ Equivalent static hosts should use:
 - Build command: `npm run build`
 - Publish directory: `dist`
 - Node.js: 24
-- Environment variables: none
+- Environment variables: none for Single Player; `VITE_REALTIME_URL` when enabling Online Lobby
 
 ## Verification after publishing
 

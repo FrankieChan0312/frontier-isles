@@ -68,9 +68,15 @@ export function App({
 
   useEffect(() => gateway.subscribe(sessionStore.getState().applyGatewayUpdate), [gateway, sessionStore])
   useEffect(() => lobbyGateway.subscribe(setLobby), [lobbyGateway])
-  useEffect(() => () => {
-    if (providedLobbyGateway === undefined) lobbyGateway.dispose()
-  }, [lobbyGateway, providedLobbyGateway])
+  useEffect(() => {
+    let active = true
+    void lobbyGateway.resumeSession().then((resumed) => {
+      if (active && resumed) setScreen('LOBBY')
+    }).catch((error: unknown) => {
+      if (active) setLocalError(error instanceof Error ? error.message : String(error))
+    })
+    return () => { active = false }
+  }, [lobbyGateway])
   useEffect(() => {
     let active = true
     void gateway.hasSavedGame().then((available) => {

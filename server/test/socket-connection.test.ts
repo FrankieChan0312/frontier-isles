@@ -17,6 +17,8 @@ const TEST_CONFIG: ServerConfig = {
   port: 3001,
   clientOrigin: 'http://127.0.0.1:5173',
   nodeEnv: 'test',
+  reconnectGraceMs: 30_000,
+  roomIdleTtlMs: 1_800_000,
 }
 
 type TypedClientSocket = ClientSocket<ServerToClientEvents, ClientToServerEvents>
@@ -30,10 +32,15 @@ function waitForConnection(client: TypedClientSocket): Promise<void> {
 
 describe('Socket.IO foundation', () => {
   it('uses an explicit credentialed CORS allowlist', () => {
-    expect(createRealtimeServerOptions(TEST_CONFIG).cors).toEqual({
+    const options = createRealtimeServerOptions(TEST_CONFIG)
+    expect(options.cors).toEqual({
       origin: ['http://127.0.0.1:5173'],
       credentials: true,
       methods: ['GET', 'POST'],
+    })
+    expect(options.connectionStateRecovery).toEqual({
+      maxDisconnectionDuration: 30_000,
+      skipMiddlewares: false,
     })
   })
 
