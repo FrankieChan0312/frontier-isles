@@ -6,7 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default defineConfig([
-  globalIgnores(['dist', '**/dist', '.task00-vite-temp']),
+  globalIgnores(['dist', '**/dist', 'logs', '.task00-vite-temp']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -21,7 +21,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['server/**/*.{ts,tsx}', 'packages/realtime-contracts/**/*.{ts,tsx}'],
+    files: ['server/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
     languageOptions: {
       globals: globals.node,
     },
@@ -30,7 +30,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/game/**/*.{ts,tsx}'],
+    files: ['packages/game-core/src/**/*.{ts,tsx}', 'packages/game-ai/src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -41,7 +41,7 @@ export default defineConfig([
             { name: 'zustand', message: 'The game layer must remain state-library-free.' },
           ],
           patterns: [
-            { group: ['@mui/*'], message: 'The game layer must not import UI packages.' },
+            { group: ['@mui/*', 'socket.io', 'socket.io-client', 'node:http', 'node:https'], message: 'The game layer must not import UI packages.' },
             {
               group: [
                 '**/ui/*',
@@ -54,6 +54,14 @@ export default defineConfig([
           ],
         },
       ],
+    },
+  },
+  {
+    files: ['packages/game-core/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: ['@frontier-isles/game-ai/*', '@frontier-isles/realtime-contracts', 'react*', '@mui/*', 'zustand', 'socket.io*', 'node:*', '**/application/*', '**/ui/*', '**/infrastructure/*'],
+      }],
     },
   },
 ])

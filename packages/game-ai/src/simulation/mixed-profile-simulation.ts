@@ -1,4 +1,4 @@
-import type { AiProfileId } from '../../game/model/ids.ts'
+import type { AiProfileId } from '@frontier-isles/game-core/model/ids'
 import { asAiProfileId, BUILT_IN_AI_PROFILE_IDS } from '../personalities/ai-profiles.ts'
 import { PersonalityAiAgent } from '../personality-ai-agent.ts'
 import {

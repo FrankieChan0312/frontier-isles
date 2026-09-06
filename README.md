@@ -89,7 +89,9 @@ no server, secret, runtime environment variable, or API. See [deployment](docs/D
 
 ## Architecture and privacy boundary
 
-The pure `src/game/**` engine owns legality and deterministic state transitions. Human and AI
+The pure `packages/game-core/src/**` engine owns legality and deterministic state transitions.
+`packages/game-ai` depends only on core and supplies the shared deterministic AI and simulations.
+Run `npm run check:game` to verify both package boundaries. Human and AI
 players submit the same command contracts through `GameGateway`. React, MUI, and Zustand receive a
 viewer-specific `PlayerView` and redacted events, not an unrestricted opponent hand, development
 deck, or RNG cursor. Browser localStorage necessarily holds the authoritative offline save, but it

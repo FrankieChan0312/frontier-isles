@@ -1,19 +1,19 @@
-import type { CommandEnvelope, GameCommand } from '../../game/contracts/commands.ts'
-import type { EngineResult } from '../../game/contracts/engine-result.ts'
-import type { PlayerEventView } from '../../game/contracts/player-events.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { GameConfig } from '../../game/model/game-config.ts'
-import type { GameState } from '../../game/model/game-state.ts'
-import type { AiProfileId, CommandId, GameId, PlayerId } from '../../game/model/ids.ts'
-import { gameEngine, type GameEngine } from '../../game/engine/game-engine.ts'
-import { createPlayerEventViews } from '../../game/selectors/player-event-view.ts'
+import type { CommandEnvelope, GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { EngineResult } from '@frontier-isles/game-core/contracts/engine-result'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { AiProfileId, CommandId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine, type GameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { createPlayerEventViews } from '@frontier-isles/game-core/selectors/player-event-view'
 import {
   DEFAULT_AI_SAFETY_LIMITS,
   type AiAgent,
   type AiSafetyLimits,
-} from '../../ai/ai-agent.ts'
-import { createAiCommandKey } from '../../ai/core-ai-agent.ts'
-import { PersonalityAiAgent } from '../../ai/personality-ai-agent.ts'
+} from '@frontier-isles/game-ai/ai-agent'
+import { createAiCommandKey } from '@frontier-isles/game-ai/core-ai-agent'
+import { PersonalityAiAgent } from '@frontier-isles/game-ai/personality-ai-agent'
 import type { GameSaveRepository } from '../../infrastructure/persistence/game-save-repository.ts'
 import {
   GAME_SAVE_SCHEMA_VERSION,

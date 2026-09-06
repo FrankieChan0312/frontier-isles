@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
-import { gameEngine } from '../../game/engine/game-engine.ts'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
 import { createBrowserGameConfig } from '../../app/browser-game.ts'
 import { frontierTheme } from '../../theme/frontier-theme.ts'
 import { PlayableGameBoard } from './PlayableGameBoard.tsx'

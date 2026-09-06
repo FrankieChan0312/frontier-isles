@@ -1,5 +1,5 @@
-import { createStandardBoardTopology } from '../../game/board/standard-board-topology.ts'
-import type { NinePortKinds } from '../../game/board/port-slots.ts'
+import { createStandardBoardTopology } from '@frontier-isles/game-core/board/standard-board-topology'
+import type { NinePortKinds } from '@frontier-isles/game-core/board/port-slots'
 
 export const STANDARD_BOARD_PREVIEW_PORT_KINDS = [
   { type: 'GENERIC' },

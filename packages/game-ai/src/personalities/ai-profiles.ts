@@ -1,4 +1,4 @@
-import type { AiProfileId } from '../../game/model/ids.ts'
+import type { AiProfileId } from '@frontier-isles/game-core/model/ids'
 
 export type BuiltInAiProfileId = 'MERCHANT' | 'BUILDER' | 'SENTINEL'
 

@@ -14,14 +14,14 @@ import {
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { PlayerId, TradeId } from '../../game/model/ids.ts'
-import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '../../game/model/resource.ts'
-import type { TradeOffer } from '../../game/model/trade.ts'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerId, TradeId } from '@frontier-isles/game-core/model/ids'
+import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '@frontier-isles/game-core/model/resource'
+import type { TradeOffer } from '@frontier-isles/game-core/model/trade'
 import {
   hasPositiveResourceOverlap,
   hasValidTradeBundles,
-} from '../../game/rules/domestic-trade-rules.ts'
+} from '@frontier-isles/game-core/rules/domestic-trade-rules'
 import {
   emptyResourceBag,
   formatResourceBag,

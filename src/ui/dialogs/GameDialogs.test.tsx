@@ -2,14 +2,14 @@ import { ThemeProvider } from '@mui/material'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import type { CommandId, TradeId } from '../../game/model/ids.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { createBalancedDiscardState } from '../../game/engine/task-07-controlled-seven.test-helper.ts'
+import type { CommandId, TradeId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { createBalancedDiscardState } from '@frontier-isles/game-core/engine/task-07-controlled-seven.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
-} from '../../game/engine/task-11-trading.test-helper.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import { frontierTheme } from '../../theme/frontier-theme.ts'
 import {
   DiscardDecisionDialog,

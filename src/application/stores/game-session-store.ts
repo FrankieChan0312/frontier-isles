@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
-import type { PlayerEventView } from '../../game/contracts/player-events.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
 import type { GameUpdate, GatewayConnectionStatus, GatewaySaveStatus } from '../gateways/game-gateway.ts'
 
 export interface GameSessionStoreState {

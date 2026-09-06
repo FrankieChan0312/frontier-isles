@@ -1,8 +1,8 @@
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { BoardState, TerrainType } from '../../game/model/board-state.ts'
-import type { EdgeId, PlayerId, VertexId } from '../../game/model/ids.ts'
-import { RESOURCE_TYPES } from '../../game/model/resource.ts'
-import type { ResourceBag, ResourceType } from '../../game/model/resource.ts'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { BoardState, TerrainType } from '@frontier-isles/game-core/model/board-state'
+import type { EdgeId, PlayerId, VertexId } from '@frontier-isles/game-core/model/ids'
+import { RESOURCE_TYPES } from '@frontier-isles/game-core/model/resource'
+import type { ResourceBag, ResourceType } from '@frontier-isles/game-core/model/resource'
 
 const PIP_WEIGHT: Readonly<Record<number, number>> = Object.freeze({
   2: 1,

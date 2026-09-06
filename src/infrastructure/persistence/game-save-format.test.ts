@@ -1,6 +1,6 @@
-import type { AiProfileId, PlayerId } from '../../game/model/ids.ts'
-import { createCompletedGoldenSetup, GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
-import { moveStandardCardToPlayer } from '../../game/engine/task-10-development-card.test-helper.ts'
+import type { AiProfileId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { createCompletedGoldenSetup, GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { moveStandardCardToPlayer } from '@frontier-isles/game-core/engine/task-10-development-card.test-helper'
 import {
   GAME_SAVE_SCHEMA_VERSION,
   parseGameSave,

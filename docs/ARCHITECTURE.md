@@ -52,6 +52,20 @@ game -> React
 
 The domain layer must be runnable in a Node test process without a DOM.
 
+V2-05 moves the accepted domain and AI modules into shared workspaces, as recorded in
+[ADR-V2-0006](v2/ADR-V2-0006-shared-game-package-extraction.md). Historical `src/game/**`
+references in the V1 task records now refer to `packages/game-core/src/**`; historical
+`src/ai/**` references refer to `packages/game-ai/src/**`. The dependency direction is:
+
+```text
+frontend / LocalGameGateway -> game-ai -> game-core
+frontend / LocalGameGateway ------------> game-core
+```
+
+Consumers use package subpath exports. The packages contain the original implementation and
+tests; no authoritative compatibility copies remain. Browser storage and local orchestration
+remain in the frontend. Server game execution begins in V2-06.
+
 ## 4. Authoritative state
 
 `GameState` is the authoritative state. React never owns a second writable copy of resources, ownership, score, phase, legal actions, or deck state.

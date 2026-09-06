@@ -1,10 +1,10 @@
-import type { GameState } from '../../game/model/game-state.ts'
-import type { CommandId, PlayerId, TradeId } from '../../game/model/ids.ts'
-import type { ResourceBag } from '../../game/model/resource.ts'
-import type { TradeOffer } from '../../game/model/trade.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
-import { createGoldenPaidBuildingStart } from '../../game/engine/task-08-paid-building.test-helper.ts'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { CommandId, PlayerId, TradeId } from '@frontier-isles/game-core/model/ids'
+import type { ResourceBag } from '@frontier-isles/game-core/model/resource'
+import type { TradeOffer } from '@frontier-isles/game-core/model/trade'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { createGoldenPaidBuildingStart } from '@frontier-isles/game-core/engine/task-08-paid-building.test-helper'
 import {
   AI_PROFILES,
   type AiPersonalityProfile,

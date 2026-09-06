@@ -60,6 +60,12 @@ frontier-isles/
 
 Do not move the accepted V1 source tree during the foundation task.
 
+V2-05 performs the planned extraction under
+[ADR-V2-0006](ADR-V2-0006-shared-game-package-extraction.md). `game-core` owns the sole accepted
+domain, rules, RNG, engine and projection implementation; `game-ai` imports core and owns the
+portable deterministic AI and simulations. Frontend imports use these workspaces. Independent
+package source builds, Node tests, typechecks and lint checks precede consumer verification.
+
 ## 3. Authoritative boundary
 
 V1:

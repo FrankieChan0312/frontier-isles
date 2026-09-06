@@ -164,7 +164,11 @@ describe('seeded random', () => {
   })
 
   it('keeps Math.random out of every production TypeScript source file', () => {
-    const sources = import.meta.glob('../../**/*.{ts,tsx}', {
+    const sources = import.meta.glob([
+      '../**/*.{ts,tsx}',
+      '../../../game-ai/src/**/*.{ts,tsx}',
+      '../../../../src/**/*.{ts,tsx}',
+    ], {
       eager: true,
       query: '?raw',
       import: 'default',

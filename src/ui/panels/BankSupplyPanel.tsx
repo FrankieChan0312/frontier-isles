@@ -1,6 +1,6 @@
 import { Chip, Divider, Paper, Stack, Typography } from '@mui/material'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import { RESOURCE_TYPES } from '../../game/model/resource.ts'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import { RESOURCE_TYPES } from '@frontier-isles/game-core/model/resource'
 import { RESOURCE_LABELS } from '../game/ui-format.ts'
 
 export interface BankSupplyPanelProps {

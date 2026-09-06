@@ -1,13 +1,13 @@
-import type { GameConfig } from '../game/model/game-config.ts'
-import type { AiProfileId, CommandId, GameId, PlayerId } from '../game/model/ids.ts'
-import { RULESET_ID } from '../game/model/ruleset.ts'
-import { gameEngine } from '../game/engine/game-engine.ts'
-import { createBalancedDiscardState } from '../game/engine/task-07-controlled-seven.test-helper.ts'
-import { GOLDEN_PLAYER_IDS } from '../game/engine/task-05-golden-fixture.test-helper.ts'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { AiProfileId, CommandId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { RULESET_ID } from '@frontier-isles/game-core/model/ruleset'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { createBalancedDiscardState } from '@frontier-isles/game-core/engine/task-07-controlled-seven.test-helper'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
-} from '../game/engine/task-11-trading.test-helper.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
 import { DEFAULT_AI_SAFETY_LIMITS, type AiDecisionContext } from './ai-agent.ts'
 import { createAiCommandKey, DeterministicCoreAiAgent } from './core-ai-agent.ts'
 import {

@@ -1,6 +1,6 @@
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material'
-import type { PlayerView, PublicPlayerState } from '../../game/contracts/views.ts'
-import type { PlayerColor } from '../../game/model/player.ts'
+import type { PlayerView, PublicPlayerState } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerColor } from '@frontier-isles/game-core/model/player'
 
 const PLAYER_COLORS: Readonly<Record<PlayerColor, string>> = {
   RED: '#c4473d',

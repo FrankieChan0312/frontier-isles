@@ -1,11 +1,11 @@
-import type { CommandId, TradeId } from '../game/model/ids.ts'
-import { gameEngine } from '../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../game/engine/task-05-golden-fixture.test-helper.ts'
+import type { CommandId, TradeId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
   EMPTY_TRADE_BAG,
-} from '../game/engine/task-11-trading.test-helper.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
 import { DEFAULT_AI_SAFETY_LIMITS, type AiDecisionContext } from './ai-agent.ts'
 import { createAiCommandKey } from './core-ai-agent.ts'
 import { asAiProfileId } from './personalities/ai-profiles.ts'

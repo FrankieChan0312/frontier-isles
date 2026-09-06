@@ -1,6 +1,6 @@
-import type { GameConfig } from '../game/model/game-config.ts'
-import type { AiProfileId, GameId, PlayerId } from '../game/model/ids.ts'
-import { RULESET_ID } from '../game/model/ruleset.ts'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { AiProfileId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { RULESET_ID } from '@frontier-isles/game-core/model/ruleset'
 
 export const BROWSER_PLAYER_IDS = {
   human: 'player:browser:human' as PlayerId,

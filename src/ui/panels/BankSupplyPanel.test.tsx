@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
-import { createGoldenDomesticTradeStart } from '../../game/engine/task-11-trading.test-helper.ts'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { createGoldenDomesticTradeStart } from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
 import { BankSupplyPanel } from './BankSupplyPanel.tsx'
 
 describe('BankSupplyPanel', () => {

@@ -34,6 +34,14 @@ derived readiness, public-safe errors, JSON round trips, and the absence of priv
 
 ## Deterministic release simulation
 
+After V2-05, `npm run test` retains every accepted frontend/domain/AI test, with frontend,
+game-core and game-ai totals reported separately. Package tests run without a DOM. Use
+`npm run check:game` for both package boundaries, or `npm run check:core` / `npm run check:ai`
+after building their dependencies. `npm run check:all` includes the package checks as well as
+frontend, contracts and server verification. Workspace consumers are built in dependency order.
+The release simulation runs the compiled portable runner in `packages/game-ai/dist` after
+building from source; its seeds, algorithms and summary format are unchanged.
+
 `npm run simulate` runs the fixed seeds `V1-RELEASE-001` through `V1-RELEASE-100` with rotating
 Merchant, Builder, and Sentinel profiles. The harness routes every decision through `GameEngine`,
 creates a fresh redacted view for the acting AI, and applies the complete resource, card, piece,

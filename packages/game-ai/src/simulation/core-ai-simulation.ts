@@ -1,10 +1,10 @@
-import type { GameCommand } from '../../game/contracts/commands.ts'
-import type { GameConfig } from '../../game/model/game-config.ts'
-import type { GameState } from '../../game/model/game-state.ts'
-import type { AiProfileId, CommandId, GameId, PlayerId } from '../../game/model/ids.ts'
-import { RULESET_ID } from '../../game/model/ruleset.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { assertTradingState } from '../../game/engine/trading-invariants.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { AiProfileId, CommandId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { RULESET_ID } from '@frontier-isles/game-core/model/ruleset'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { assertTradingState } from '@frontier-isles/game-core/engine/trading-invariants'
 import {
   DEFAULT_AI_SAFETY_LIMITS,
   type AiAgent,

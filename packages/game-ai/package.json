@@ -1,0 +1,21 @@
+{
+  "name": "@frontier-isles/game-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./dist/src/*.d.ts",
+      "import": "./dist/src/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@frontier-isles/game-core": "0.1.0"
+  }
+}

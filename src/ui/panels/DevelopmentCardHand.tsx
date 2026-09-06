@@ -11,8 +11,8 @@ import {
 import type {
   DevelopmentCardPlayabilityReason,
   PlayerView,
-} from '../../game/contracts/views.ts'
-import type { DevelopmentCardId } from '../../game/model/ids.ts'
+} from '@frontier-isles/game-core/contracts/views'
+import type { DevelopmentCardId } from '@frontier-isles/game-core/model/ids'
 import {
   DEVELOPMENT_CARD_DESCRIPTIONS,
   DEVELOPMENT_CARD_LABELS,

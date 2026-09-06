@@ -35,6 +35,11 @@ Do not infer missing rules from memory. If a required behaviour is absent or con
 
 ## Scope discipline
 
+V2-05 location update: under accepted `docs/v2/ADR-V2-0006-shared-game-package-extraction.md`,
+`src/game/**` moved to `packages/game-core/src/**` and `src/ai/**` moved to
+`packages/game-ai/src/**`. Apply every domain/AI restriction above to those package locations.
+Core must not depend on AI; AI depends only on core. Historical task paths remain documentary.
+
 - Implement only the active task.
 - Do not anticipate later tasks by adding speculative abstractions.
 - Do not rename frozen identifiers without an accepted ADR.

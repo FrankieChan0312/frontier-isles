@@ -1,6 +1,6 @@
-import type { PortKind } from '../../game/model/board-state.ts'
-import type { ResourceType } from '../../game/model/resource.ts'
-import { assertNever } from '../../game/model/assert-never.ts'
+import type { PortKind } from '@frontier-isles/game-core/model/board-state'
+import type { ResourceType } from '@frontier-isles/game-core/model/resource'
+import { assertNever } from '@frontier-isles/game-core/model/assert-never'
 
 function formatResourcePortLabel(resource: ResourceType): string {
   switch (resource) {

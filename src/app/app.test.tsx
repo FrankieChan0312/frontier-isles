@@ -1,14 +1,14 @@
 import { ThemeProvider } from '@mui/material'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { CommandEnvelope } from '../game/contracts/commands.ts'
-import type { PlayerEventView } from '../game/contracts/player-events.ts'
-import type { PlayerView } from '../game/contracts/views.ts'
-import type { GameConfig } from '../game/model/game-config.ts'
-import type { GameState } from '../game/model/game-state.ts'
-import type { PlayerId } from '../game/model/ids.ts'
-import { gameEngine } from '../game/engine/game-engine.ts'
-import { createPlayerEventViews } from '../game/selectors/player-event-view.ts'
+import type { CommandEnvelope } from '@frontier-isles/game-core/contracts/commands'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { PlayerId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { createPlayerEventViews } from '@frontier-isles/game-core/selectors/player-event-view'
 import type {
   CommandResponse,
   GameGateway,

@@ -1,11 +1,11 @@
-import type { PlayerEventView } from '../../game/contracts/player-events.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { PlayerId } from '../../game/model/ids.ts'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerId } from '@frontier-isles/game-core/model/ids'
 import type {
   DevelopmentCardType,
   OwnedDevelopmentCard,
-} from '../../game/model/development-card.ts'
-import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '../../game/model/resource.ts'
+} from '@frontier-isles/game-core/model/development-card'
+import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '@frontier-isles/game-core/model/resource'
 
 export const RESOURCE_LABELS: Readonly<Record<ResourceType, string>> = {
   LUMBER: 'Lumber',

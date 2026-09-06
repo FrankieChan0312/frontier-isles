@@ -1,23 +1,23 @@
-import type { GameCommand } from '../../game/contracts/commands.ts'
-import type { GameConfig } from '../../game/model/game-config.ts'
-import type { GameState } from '../../game/model/game-state.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
 import type {
   AiProfileId,
   CommandId,
   GameId,
   PlayerId,
   TradeId,
-} from '../../game/model/ids.ts'
-import { RULESET_ID } from '../../game/model/ruleset.ts'
-import type { TradeOffer } from '../../game/model/trade.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
+} from '@frontier-isles/game-core/model/ids'
+import { RULESET_ID } from '@frontier-isles/game-core/model/ruleset'
+import type { TradeOffer } from '@frontier-isles/game-core/model/trade'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
   EMPTY_TRADE_BAG,
-} from '../../game/engine/task-11-trading.test-helper.ts'
-import type { AiAgent, AiDecisionContext } from '../../ai/ai-agent.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
+import type { AiAgent, AiDecisionContext } from '@frontier-isles/game-ai/ai-agent'
 import {
   GAME_SAVE_SCHEMA_VERSION,
   parseGameSave,

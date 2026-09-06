@@ -1,9 +1,9 @@
-import type { GameCommand } from '../game/contracts/commands.ts'
-import type { PlayerView } from '../game/contracts/views.ts'
-import type { DevelopmentCardId, PlayerId, TileId } from '../game/model/ids.ts'
-import { createEmptyResourceBag, RESOURCE_TYPES } from '../game/model/resource.ts'
-import type { ResourceBag, ResourceType } from '../game/model/resource.ts'
-import type { TradeOffer } from '../game/model/trade.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { DevelopmentCardId, PlayerId, TileId } from '@frontier-isles/game-core/model/ids'
+import { createEmptyResourceBag, RESOURCE_TYPES } from '@frontier-isles/game-core/model/resource'
+import type { ResourceBag, ResourceType } from '@frontier-isles/game-core/model/resource'
+import type { TradeOffer } from '@frontier-isles/game-core/model/trade'
 import type { AiAgent, AiDecisionContext } from './ai-agent.ts'
 import {
   deriveVisibleIncome,

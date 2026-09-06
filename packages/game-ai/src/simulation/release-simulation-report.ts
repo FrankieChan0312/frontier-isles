@@ -1,4 +1,4 @@
-import type { PlayerId } from '../../game/model/ids.ts'
+import type { PlayerId } from '@frontier-isles/game-core/model/ids'
 import type { CoreAiSimulationSummary } from './core-ai-simulation.ts'
 
 export interface ReleaseSimulationReport {

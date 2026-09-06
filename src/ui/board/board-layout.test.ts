@@ -1,10 +1,10 @@
-import { compareCodeUnits } from '../../game/board/topology-ids.ts'
+import { compareCodeUnits } from '@frontier-isles/game-core/board/topology-ids'
 import type {
   BoardTopology,
   PortDefinition,
   VertexDefinition,
-} from '../../game/model/board-state.ts'
-import type { EdgeId, PortId, VertexId } from '../../game/model/ids.ts'
+} from '@frontier-isles/game-core/model/board-state'
+import type { EdgeId, PortId, VertexId } from '@frontier-isles/game-core/model/ids'
 import {
   DEFAULT_BOARD_PADDING,
   DEFAULT_HEX_SIZE,

@@ -1,7 +1,7 @@
 import { useStore } from 'zustand'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GameCommand } from '../game/contracts/commands.ts'
-import type { CommandId, TradeId } from '../game/model/ids.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { CommandId, TradeId } from '@frontier-isles/game-core/model/ids'
 import type { GameGateway } from '../application/gateways/game-gateway.ts'
 import type {
   LobbyGateway,

@@ -1,6 +1,6 @@
 import { Button, ButtonGroup, Divider, Paper, Stack, Typography } from '@mui/material'
-import type { GameCommand } from '../../game/contracts/commands.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
 import type { BuildMode } from '../../application/stores/ui-interaction-store.ts'
 
 export interface ActionPanelProps {
