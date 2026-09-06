@@ -33,7 +33,20 @@ function rotatePlayers(
 }
 
 export function createGame(config: GameConfig, seed: string): GameState {
-  assertValidGameConfig(config)
+  return createConfiguredGame(config, seed, 'SINGLE_PLAYER')
+}
+
+/** Online creation changes controller eligibility only; rules and RNG order are shared. */
+export function createOnlineGame(config: GameConfig, seed: string): GameState {
+  return createConfiguredGame(config, seed, 'ONLINE')
+}
+
+function createConfiguredGame(
+  config: GameConfig,
+  seed: string,
+  mode: 'SINGLE_PLAYER' | 'ONLINE',
+): GameState {
+  assertValidGameConfig(config, mode)
   const initialRandom = createInitialRandomState(seed)
   const boardResult = createStandardInitialBoard(initialRandom)
   const firstPlayerResult = nextRandomInt(boardResult.random, 0, 4)

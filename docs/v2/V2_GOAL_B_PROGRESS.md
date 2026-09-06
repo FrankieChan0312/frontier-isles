@@ -45,7 +45,7 @@ permission was changed, and source package builds succeed.
 
 Focused verification: core 35 files / 257 tests PASS; AI 15 files / 36 tests PASS;
 frontend 19 files / 76 tests PASS (369 total, retaining all 365 accepted tests).
-Package builds, root typecheck and zero-warning lint PASS. Full task gate and commit pending.
+Package builds, root typecheck and zero-warning lint PASS. The final task gate is recorded below.
 
 Resolved verification findings:
 
@@ -61,13 +61,13 @@ Resolved verification findings:
   all seeds, assertions and timeout bounds remain unchanged. Serial verification passed all
   15 files / 36 tests in 276.48 seconds. An isolated single-fork comparison also passed (one
   four-game smoke test, 23.24 seconds); retained the verified single-thread-worker configuration.
-  The failed aggregate and remaining gates are being rerun.
+  The failed aggregate and remaining gates passed on rerun as recorded below.
 - Aggregate reruns `check`, `check:server`, and `check:all`: exit 0. Contracts remain 5 files /
   38 tests and server remains 5 files / 43 tests. The extracted release corpus passed 100/100
   winners, 65,341 commands, maximum 996 commands / 170 turns / 467 random draws, hash `1adc49e8`.
 - First extracted Lobby browser run: 5/6 passed; refresh returned an expired-session message
   during a roughly one-minute test. Screenshot showed the safe Home error. The unchanged
-  focused refresh rerun passed in 4.4 seconds; full browser reruns are pending. No grace,
+  focused refresh rerun passed in 4.4 seconds; the full browser reruns also passed. No grace,
   timeout, accepted assertion, or Lobby behavior was changed to hide this failure.
 
 Final V2-05 gate:
@@ -91,16 +91,78 @@ Browser checks retain all required viewport, overflow, console/React, privacy, r
 duplicate-tab assertions. No test was removed, skipped or weakened. No core rule or AI algorithm
 changed, and no V2-06+ behavior was implemented in this task. Remaining limitations are the
 accepted in-memory Lobby and unavailable online game until the next task. Task commit subject:
-`refactor: extract shared game core and AI packages` (hash recorded at the next task boundary).
+`456ddfa refactor: extract shared game core and AI packages`; working tree confirmed clean.
 
 ## V2-06 — Server-authoritative multiplayer game sessions
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Implemented the shared online creation policy, recursive command/view/event wire schemas,
+server GameSession and cryptographic seed boundary, synchronous Host start, fixed active seats,
+session-derived command authority, bounded per-session outcome cache, per-Human publication,
+deterministic bounded AI, and current-view active resume through the existing socket registry.
+Added ADR-V2-0007 and architecture/testing/limitations updates. Dependencies added are local
+game-core for contracts, and local core/AI for server; no external versions changed.
+
+Focused results: contracts 6 files / 62 tests, server 8 files / 62 tests;
+root typecheck and lint exit 0. Four online-creation tests were
+added to core. Accepted tests remain; only the now-obsolete unavailable-start assertions and
+event inventory expectations changed to their required Goal B behaviors.
+
+Resolved findings: inspection of the frozen topology IDs caught the edge separator `|` missing
+from the new network ID validator; added it to preserve frozen topology IDs. Integration test
+typechecking required parsing Socket.IO emitWithAck results at the test boundary. A natural
+setup test assumed a Human roll immediately after an AI-first seed; the engine correctly
+paused on an AI-to-Human trade. Its dedicated roll journey now uses a documented fixed
+NORTH-first seed; separate tests retain AI-first advancement and private-response pause coverage.
+Focused reruns pass. Transport source review also found that volatile updates could be dropped
+while another packet flushes. Per-socket normal emission with a bounded receipt now preserves
+queueing while excluding private packets from Socket.IO's pre-attachment recovery replay.
+Receipt callbacks do not drive execution or add a retry policy. Delivery-before-resync, replay
+buffer exclusion, reconnected-old-tab rejection and safe internal-error assertions pass.
+`check:all` passes: frontend 19 / 76, core 35 / 261, AI 15 / 36, contracts 6 / 62, server 8 / 62.
+The 100-game simulation passed with 65,341 commands, maximum 996 commands / 170 turns /
+467 RNG draws, and unchanged hash `1adc49e8`. Accepted browser journeys passed: Lobby 6/6,
+full suite 14/14, including all eight V1 journeys and viewport/console/overflow/privacy assertions.
+No V2-07 browser feature exists yet.
 
 The accepted Lobby requires explicit Host AI assignment for every remaining empty seat.
-Start will reject empty seats using the existing authoritative readiness projection.
-The V1 one-Human creation policy needs an explicit documented online creation boundary;
-V1 creation and save validation must retain their accepted restrictions.
+Start rejects empty seats using the existing authoritative readiness projection.
+The explicit online creation boundary preserves V1 creation and save restrictions.
+
+Files created/changed: core creation/invariant modules and creation tests; realtime game value,
+command, view, event and envelope schemas plus additive inventories/Room lifecycle and tests;
+server GameSession/entropy, Room service and shared socket handlers; Node game fixture/network
+helpers and three new game test suites; package manifests/lockfile; architecture, testing,
+limitations, ADR-V2-0007 and this progress report. No frontend source or AI algorithm changed.
+
+Tests added: four core online-creation/RNG regressions, 24 contract cases, and 19 server cases
+covering start/authority/privacy/AI/recovery and real Socket.IO execution. Existing counts retained.
+
+| Command | Result |
+| --- | --- |
+| `npm install --package-lock-only --ignore-scripts` | Exit 0; 333 audited, zero vulnerabilities; only three local workspace dependency entries added |
+| `npm run check:core` | Exit 0; build/typecheck/lint/test, 35 files / 261 tests |
+| Focused contracts `build`, `test` and server `typecheck`, `test`, root `lint:server` | Exit 0 on final source; 6 / 62 contracts, 8 / 62 server |
+| `npm run typecheck` | Exit 0 |
+| `npm run lint` | Exit 0; zero warnings |
+| `npm run test` | Exit 0; frontend 19 / 76, core 35 / 261, AI 15 / 36 = 69 files / 373 tests |
+| `npm run build` | Exit 0; static bundle built, existing chunk-size advisory only |
+| `npm run check` | Exit 0 |
+| `npm run check:server` | Exit 0 |
+| `npm run check:all` | Exit 0; all 83 files / 497 tests and builds passed on latest source |
+| `npm run simulate` | Exit 0; 100/100 legal winners, 65,341 commands, hash `1adc49e8` |
+| `npm run e2e:lobby` | Exit 0; 6/6 accepted Lobby journeys passed |
+| `npm run e2e` | Exit 0; 14/14 passed, including all eight V1 journeys |
+| `git diff --check` | Exit 0; repeated after final report update |
+
+Intentional limitations: process-local state, fixed started seats, resume only within grace,
+no client retry/delivery guarantees, no extended disconnect/replacement or persistence policy.
+The browser integration and complete mixed-seat game qualification remain V2-07 and V2-08.
+No unrelated future feature or V2-09+ work is included.
+
+All V2-06 gates passed. Commit subject: `feat: add server-authoritative multiplayer game sessions`
+(hash recorded at the next task boundary). Continue automatically to V2-07.
 
 ## V2-07 — SocketGameGateway and online UI
 
@@ -114,4 +176,4 @@ Status: NOT_STARTED
 
 No V2-09+ implementation, external writes, push, deployment, or history rewrite authorized.
 Exactly one passing commit per task; continue automatically after each passing task gate.
-Current work is incomplete and has no Goal B implementation commit yet.
+V2-05 committed as `456ddfa`; its working tree was clean. V2-06 is complete and being committed.

@@ -24,7 +24,10 @@ function assertNonEmptyString(value: unknown, label: string): asserts value is s
   assertInvariant(typeof value === 'string' && value.trim().length > 0, `${label} must be a non-empty string.`)
 }
 
-export function assertValidGameConfig(config: GameConfig): void {
+export function assertValidGameConfig(
+  config: GameConfig,
+  mode: 'SINGLE_PLAYER' | 'ONLINE' = 'SINGLE_PLAYER',
+): void {
   assertNonEmptyString(config.gameId, 'gameId')
   assertInvariant(config.rulesetId === RULESET_ID, `rulesetId must be ${RULESET_ID}.`)
   assertInvariant(Array.isArray(config.players) && config.players.length === 4, 'players must contain exactly four entries.')
@@ -63,8 +66,12 @@ export function assertValidGameConfig(config: GameConfig): void {
   for (const color of PLAYER_COLORS) {
     assertInvariant(colorCounts.get(color) === 1, `color ${color} must appear exactly once.`)
   }
-  assertInvariant(humanCount === 1, `exactly one HUMAN controller is required; found ${humanCount}.`)
-  assertInvariant(aiCount === 3, `exactly three AI controllers are required; found ${aiCount}.`)
+  if (mode === 'ONLINE') {
+    assertInvariant(humanCount >= 2 && humanCount <= 4, 'online games require two to four HUMAN controllers.')
+  } else {
+    assertInvariant(humanCount === 1, `exactly one HUMAN controller is required; found ${humanCount}.`)
+    assertInvariant(aiCount === 3, `exactly three AI controllers are required; found ${aiCount}.`)
+  }
 }
 
 function assertPlainJson(value: unknown, path: string, seen: Set<object>): void {

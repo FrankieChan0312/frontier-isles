@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { REALTIME_PROTOCOL_VERSION } from './protocol-version.js'
+import { gameIdSchema } from './game-values.js'
 import {
   aiProfileIdSchema,
   CANONICAL_SEAT_IDS,
@@ -109,10 +110,15 @@ export const roomSnapshotSchema = z.strictObject({
   roomCode: roomCodeSchema,
   revision: roomRevisionSchema,
   lifecycleStatus: roomLifecycleStatusSchema,
+  gameId: gameIdSchema.optional(),
   hostSeatId: seatIdSchema,
   seats: roomSeatsSchema,
   startReadiness: startReadinessSchema,
 }).superRefine((snapshot, context) => {
+  if ((snapshot.lifecycleStatus === 'ACTIVE' || snapshot.lifecycleStatus === 'FINISHED')
+    !== (snapshot.gameId !== undefined)) {
+    context.addIssue({ code: 'custom', message: 'Started Rooms must identify their game.' })
+  }
   const expected = deriveStartReadiness(snapshot.seats, snapshot.lifecycleStatus)
   if (
     snapshot.startReadiness.ready !== expected.ready

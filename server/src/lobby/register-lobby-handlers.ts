@@ -27,6 +27,11 @@ import {
   type SafeErrorCode,
   type ServerToClientEvents,
   type SessionId,
+  type GameCommandAcknowledgement,
+  gameCommandRequestSchema,
+  gameCommandAcknowledgementSchema,
+  gameRequestSnapshotRequestSchema,
+  gameRequestSnapshotAcknowledgementSchema,
 } from '@frontier-isles/realtime-contracts'
 import type {
   InterServerEvents,
@@ -38,6 +43,7 @@ import type {
   RoomLeaveResult,
   RoomLifecycleEvent,
 } from './room-service.js'
+import type { GameSession } from '../game/game-session.js'
 
 type LobbySocket = Socket<
   ClientToServerEvents,
@@ -139,12 +145,35 @@ function internalFailure(): ReturnType<typeof createSafeErrorAcknowledgement> {
   return createSafeErrorAcknowledgement('INTERNAL_ERROR', 'The server could not complete the request.')
 }
 
+function publishPrivateGameUpdate(socket: LobbySocket, update: Parameters<ServerToClientEvents['game:update']>[0]): void {
+  // Receipt-bearing packets are excluded from Socket.IO's connection-recovery backlog.
+  // Normal emission still queues behind an in-flight packet. The receipt only releases the
+  // bounded callback; it does not drive execution, retry a command, or reconstruct state.
+  socket.timeout(5_000).emit('game:update', update, () => {})
+}
+
+function publishAndAdvanceGame(game: GameSession | null, requester: LobbySocket): void {
+  if (game === null) return
+  try {
+    game.publish()
+    void game.advanceAi().catch(() => { requester.emit('server:error', internalFailure().error) })
+  } catch {
+    requester.emit('server:error', internalFailure().error)
+  }
+}
+
 export function registerLobbyHandlers(
   server: RealtimeServer,
   roomService: InMemoryRoomService,
 ): void {
   const activeSockets = new Map<SessionId, LobbySocket>()
   roomService.subscribeToLifecycle((event) => publishLifecycleEvent(server, event))
+  roomService.subscribeToGames(({ sessionId, update }) => {
+    const recipient = activeSockets.get(sessionId)
+    if (recipient?.connected && recipient.data.sessionId === sessionId) {
+      publishPrivateGameUpdate(recipient, update)
+    }
+  })
 
   function attachSession(socket: LobbySocket, sessionId: SessionId, roomCode: RoomCode): void {
     const previous = activeSockets.get(sessionId)
@@ -167,6 +196,61 @@ export function registerLobbyHandlers(
       protocolVersion: REALTIME_PROTOCOL_VERSION,
       service: REALTIME_SERVICE_NAME,
     }))
+
+    function gameMembershipRequired(): ReturnType<typeof createSafeErrorAcknowledgement> | null {
+      const sessionId = socket.data.sessionId
+      if (!socket.connected || sessionId === undefined || activeSockets.get(sessionId) !== socket) {
+        return createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat before playing.')
+      }
+      return null
+    }
+
+    socket.on('game:command', (payload: unknown, acknowledge) => {
+      if (typeof acknowledge !== 'function') return
+      const parsed = gameCommandRequestSchema.safeParse(payload)
+      if (!parsed.success) {
+        acknowledge(gameCommandAcknowledgementSchema.parse(validationFailure(payload, parsed.error)))
+        return
+      }
+      const failure = gameMembershipRequired()
+      const sessionId = socket.data.sessionId
+      if (failure !== null || sessionId === undefined) {
+        acknowledge(gameCommandAcknowledgementSchema.parse(failure ?? internalFailure()))
+        return
+      }
+      let result: GameCommandAcknowledgement
+      try {
+        result = roomService.submitGameCommand(sessionId, parsed.data)
+      } catch {
+        acknowledge(gameCommandAcknowledgementSchema.parse(internalFailure()))
+        return
+      }
+      acknowledge(gameCommandAcknowledgementSchema.parse(result))
+      if (result.ok) {
+        const game = roomService.getGameSession(parsed.data.roomCode)
+        publishAndAdvanceGame(game, socket)
+      }
+    })
+
+    socket.on('game:request-snapshot', (payload: unknown, acknowledge) => {
+      if (typeof acknowledge !== 'function') return
+      const parsed = gameRequestSnapshotRequestSchema.safeParse(payload)
+      if (!parsed.success) {
+        acknowledge(gameRequestSnapshotAcknowledgementSchema.parse(validationFailure(payload, parsed.error)))
+        return
+      }
+      const failure = gameMembershipRequired()
+      const sessionId = socket.data.sessionId
+      if (failure !== null || sessionId === undefined) {
+        acknowledge(gameRequestSnapshotAcknowledgementSchema.parse(failure ?? internalFailure()))
+        return
+      }
+      try {
+        acknowledge(gameRequestSnapshotAcknowledgementSchema.parse(roomService.requestGameSnapshot(sessionId, parsed.data)))
+      } catch {
+        acknowledge(gameRequestSnapshotAcknowledgementSchema.parse(internalFailure()))
+      }
+    })
 
     socket.on('room:create', (payload: unknown, acknowledge) => {
       const unattachedFailure = unattachedSocketRequired(socket)
@@ -319,6 +403,11 @@ export function registerLobbyHandlers(
         ? internalFailure()
         : roomService.requestStart(sessionId, parsed.data.expectedRevision)
       acknowledge(roomStartAcknowledgementSchema.parse(result))
+      if (result.ok) {
+        server.to(roomChannel(result.data.snapshot.roomCode)).emit('room:snapshot', result.data.snapshot)
+        const game = roomService.getGameSession(result.data.snapshot.roomCode)
+        publishAndAdvanceGame(game, socket)
+      }
     })
 
     socket.on('session:resume', (payload: unknown, acknowledge) => {
@@ -346,6 +435,10 @@ export function registerLobbyHandlers(
             snapshot: result.data.snapshot,
           },
         }))
+        const game = roomService.getGameSession(result.data.credential.roomCode)
+        if (game !== null) {
+          publishPrivateGameUpdate(socket, game.snapshot(result.data.credential.sessionId))
+        }
         if (result.data.changed) {
           server.to(roomChannel(result.data.snapshot.roomCode)).emit(
             'room:snapshot',

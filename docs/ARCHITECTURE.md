@@ -1,5 +1,10 @@
 # Software Architecture
 
+V2-06 adds the server-owned `GameSession` above the shared core and AI packages. Its explicit
+online creation entry point permits two to four Humans while the default V1 factory and local
+save rules retain one Human. See [ADR-V2-0007](v2/ADR-V2-0007-server-authoritative-game-sessions.md)
+for session-derived actors, individually redacted publication, bounded AI and active resume.
+
 ## 1. Architectural objective
 
 V1 runs locally in the browser, but its UI must be replaceable from a local engine connection to a future network connection without rewriting board rendering or interaction flows.

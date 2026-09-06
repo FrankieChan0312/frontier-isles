@@ -1,0 +1,43 @@
+import { z } from 'zod'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import {
+  playerIdSchema, tileIdSchema, edgeIdSchema, vertexIdSchema, cardIdSchema, tradeIdSchema,
+  integerSchema, resourceSchema, resourceBagSchema, robberCauseSchema, cardTypeSchema,
+  tradeOfferSchema, ratioSchema, rollSchema,
+} from './game-values.js'
+
+export const playerEventSchema: z.ZodType<PlayerEventView> = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('DICE_ROLLED'), playerId: playerIdSchema, roll: rollSchema }),
+  z.strictObject({ type: z.literal('RESOURCE_PRODUCED'), playerId: playerIdSchema,
+    tileId: tileIdSchema, resource: resourceSchema, quantity: integerSchema }),
+  z.strictObject({ type: z.literal('RESOURCE_PRODUCTION_BLOCKED'), resource: resourceSchema,
+    affectedPlayerIds: z.array(playerIdSchema).max(4), reason: z.literal('BANK_SHORTAGE') }),
+  z.strictObject({ type: z.literal('RESOURCES_DISCARDED'), playerId: playerIdSchema,
+    quantity: integerSchema, resources: resourceBagSchema.nullable() }),
+  z.strictObject({ type: z.literal('ROBBER_MOVED'), playerId: playerIdSchema,
+    fromTileId: tileIdSchema, toTileId: tileIdSchema, cause: robberCauseSchema }),
+  z.strictObject({ type: z.literal('RESOURCE_STOLEN'), fromPlayerId: playerIdSchema,
+    toPlayerId: playerIdSchema, resource: resourceSchema.nullable() }),
+  z.strictObject({ type: z.literal('ROAD_BUILT'), ownerId: playerIdSchema, edgeId: edgeIdSchema,
+    source: z.enum(['INITIAL_PLACEMENT', 'PAID_BUILD', 'ROAD_BUILDING_CARD']) }),
+  z.strictObject({ type: z.literal('SETTLEMENT_BUILT'), ownerId: playerIdSchema, vertexId: vertexIdSchema,
+    source: z.enum(['INITIAL_PLACEMENT', 'PAID_BUILD']) }),
+  z.strictObject({ type: z.literal('CITY_BUILT'), ownerId: playerIdSchema, vertexId: vertexIdSchema }),
+  z.strictObject({ type: z.literal('DEVELOPMENT_CARD_BOUGHT'), ownerId: playerIdSchema,
+    cardId: cardIdSchema.nullable(), cardType: cardTypeSchema.nullable(), acquiredTurnNumber: integerSchema }),
+  z.strictObject({ type: z.literal('DEVELOPMENT_CARD_PLAYED'), ownerId: playerIdSchema,
+    cardId: cardIdSchema, cardType: cardTypeSchema }),
+  z.strictObject({ type: z.literal('TRADE_PROPOSED'), tradeId: tradeIdSchema,
+    initiatorId: playerIdSchema, counterpartyId: playerIdSchema, offer: tradeOfferSchema.nullable() }),
+  z.strictObject({ type: z.literal('TRADE_REJECTED'), tradeId: tradeIdSchema, rejectedById: playerIdSchema }),
+  z.strictObject({ type: z.literal('TRADE_COUNTERED'), previousTradeId: tradeIdSchema,
+    tradeId: tradeIdSchema, initiatorId: playerIdSchema, counterpartyId: playerIdSchema, offer: tradeOfferSchema.nullable() }),
+  z.strictObject({ type: z.literal('TRADE_COMPLETED'), offer: tradeOfferSchema }),
+  z.strictObject({ type: z.literal('MARITIME_TRADE_COMPLETED'), playerId: playerIdSchema,
+    giveResource: resourceSchema, receiveResource: resourceSchema, ratio: ratioSchema }),
+  z.strictObject({ type: z.literal('LONGEST_ROAD_CHANGED'), previousHolderId: playerIdSchema.nullable(), newHolderId: playerIdSchema.nullable() }),
+  z.strictObject({ type: z.literal('LARGEST_ARMY_CHANGED'), previousHolderId: playerIdSchema.nullable(), newHolderId: playerIdSchema.nullable() }),
+  z.strictObject({ type: z.literal('TURN_STARTED'), playerId: playerIdSchema, turnNumber: integerSchema }),
+  z.strictObject({ type: z.literal('TURN_ENDED'), playerId: playerIdSchema, turnNumber: integerSchema }),
+  z.strictObject({ type: z.literal('GAME_WON'), winnerId: playerIdSchema, actualVictoryPoints: integerSchema }),
+])

@@ -204,6 +204,13 @@ stripped of authority, and disconnected.
 
 ## 10. Security baseline
 
+V2-06 is implemented by [ADR-V2-0007](ADR-V2-0007-server-authoritative-game-sessions.md).
+Each started Room owns a `GameSession`; the shared core remains the only rule authority.
+Room broadcasts contain public Lobby data only. Game updates are individually projected and
+addressed to the currently attached Human session. Start/resume keep their accepted envelopes;
+the added game events carry strict commands, compact outcomes and current redacted views.
+The browser GameGateway integration follows in V2-07.
+
 - explicit CORS allowlist
 - payload runtime validation
 - payload size limits

@@ -120,3 +120,8 @@ export {
   type ServerToClientEvents,
   type SessionReplacedNotice,
 } from './events.js'
+export * from './game.js'
+export { gameCommandSchema, GAME_COMMAND_TYPES, ruleViolationCodeSchema } from './game-command.js'
+export { playerViewSchema } from './game-view.js'
+export { playerEventSchema } from './game-events.js'
+export { gameIdSchema, playerIdSchema, commandIdSchema } from './game-values.js'

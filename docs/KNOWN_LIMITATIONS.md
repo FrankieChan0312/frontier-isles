@@ -1,11 +1,14 @@
 # Known Limitations
 
 - Single Player remains a single-device, four-player game with exactly one Human and three local AI
-  players. Goal A adds an online waiting Lobby only; online game execution is not available until
-  Milestone B. There is still no login, cloud save, spectator mode, or cross-device credential sync.
+  players. V2-06 adds authoritative server game execution; browser game integration follows in
+  V2-07. There is still no login, cloud save, spectator mode, or cross-device credential sync.
 - Online Rooms and sessions are process-local: a server restart loses them. Resume credentials are
   tab-scoped sessionStorage data, reconnect grace defaults to 30 seconds, waiting-Room idle expiry
   defaults to 30 minutes, and only one long-running server process is supported.
+- Started game seats remain fixed. Active-game resume is supported within the reconnect grace;
+  expiration invalidates the credential without removing the player or substituting AI. Extended
+  pause/replacement, game persistence and server restart recovery remain later V2 work.
 - One latest save is stored in localStorage for the current browser origin. It is not encrypted or
   tamper-proof and disappears if the user clears site data.
 - The browser save contains authoritative offline state by necessity. Hidden data is excluded from
@@ -15,7 +18,7 @@
   optimal play; one-for-one offers and one minimal counter keep domestic negotiation finite.
 - The mobile/tablet board fits its full topology and stacks controls vertically; V1 has no board
   pan/zoom gesture.
-- The optimized entry chunk is approximately 785 kB before transport compression because the full
+- The optimized entry chunk is approximately 802 kB before transport compression because the full
   offline engine, MUI application, realtime validators, and Socket.IO client load together. Vite
   reports this as an advisory, not a failure.
 - Release E2E targets the pinned Playwright Chromium build. Other evergreen browsers receive normal

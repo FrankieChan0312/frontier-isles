@@ -61,6 +61,14 @@ The smaller development corpora remain available as `npm run simulate:core -- 32
 
 ## Browser E2E
 
+V2-06 server checks include strict schemas for all 20 commands and every nested snapshot/event
+field, online creation with two/three/four Humans, start eligibility, session-derived actors,
+cached outcomes, redaction, bounded AI and active resume. Run `npm run check:server` for the
+contract/server suite. `server/test/game.integration.test.ts` starts real Socket.IO clients,
+plays setup through Human commands and server AI, synchronizes a normal roll, and checks
+spoof/stale/duplicate rejection plus newest-tab authority and viewer-specific private events.
+Its fixtures and dependency injection are confined to Node tests; no production fixture route exists.
+
 Install the pinned Playwright Chromium build once on a machine:
 
 ```sh

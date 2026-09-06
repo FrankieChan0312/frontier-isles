@@ -236,7 +236,7 @@ describe('realtime Lobby integration', () => {
     expect(JSON.stringify(rejected)).not.toContain('stack')
 
     const start = await startRoom(host, ai.snapshot.revision)
-    expect(start).toMatchObject({ ok: false, error: { code: 'GAME_START_NOT_AVAILABLE' } })
+    expect(start).toMatchObject({ ok: false, error: { code: 'START_CONDITIONS_NOT_MET' } })
 
     const hostLeaveSnapshot = nextSnapshot(host, 4)
     const leave = successData(await leaveRoom(joiner))

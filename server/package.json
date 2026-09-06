@@ -11,6 +11,8 @@
     "test": "vitest run test"
   },
   "dependencies": {
+    "@frontier-isles/game-core": "0.1.0",
+    "@frontier-isles/game-ai": "0.1.0",
     "@frontier-isles/realtime-contracts": "0.1.0",
     "socket.io": "4.8.3"
   },

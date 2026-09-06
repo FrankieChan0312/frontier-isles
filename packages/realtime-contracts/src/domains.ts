@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' as const
 export const CANONICAL_SEAT_IDS = Object.freeze(['NORTH', 'EAST', 'SOUTH', 'WEST'] as const)
 export const AI_PROFILE_IDS = Object.freeze(['MERCHANT', 'BUILDER', 'SENTINEL'] as const)
-export const ROOM_LIFECYCLE_STATUSES = Object.freeze(['WAITING', 'CLOSED'] as const)
+export const ROOM_LIFECYCLE_STATUSES = Object.freeze(['WAITING', 'CLOSED', 'ACTIVE', 'FINISHED'] as const)
 export const CONNECTION_STATUSES = Object.freeze([
   'CONNECTED',
   'RECONNECTING',
@@ -33,6 +33,9 @@ export const SAFE_ERROR_CODES = Object.freeze([
   'SESSION_REPLACED',
   'START_CONDITIONS_NOT_MET',
   'GAME_START_NOT_AVAILABLE',
+  'ROOM_NOT_WAITING',
+  'GAME_NOT_FOUND',
+  'GAME_UNAVAILABLE',
   'INTERNAL_ERROR',
 ] as const)
 

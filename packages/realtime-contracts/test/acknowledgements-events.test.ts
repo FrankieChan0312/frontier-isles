@@ -98,6 +98,7 @@ describe('acknowledgement and server-event contracts', () => {
 
   it('validates the complete frozen server event inventory', () => {
     expect(SERVER_EVENT_NAMES).toEqual([
+      'game:update',
       'server:hello',
       'room:snapshot',
       'session:replaced',
@@ -123,7 +124,7 @@ describe('acknowledgement and server-event contracts', () => {
   it('compiles complete typed Socket.IO event maps', () => {
     const clientEvents: ReadonlyArray<keyof ClientToServerEvents> = CLIENT_EVENT_NAMES
     const serverEvents: ReadonlyArray<keyof ServerToClientEvents> = SERVER_EVENT_NAMES
-    expect(clientEvents).toHaveLength(8)
-    expect(serverEvents).toHaveLength(5)
+    expect(clientEvents).toHaveLength(10)
+    expect(serverEvents).toHaveLength(6)
   })
 })

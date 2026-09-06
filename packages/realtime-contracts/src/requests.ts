@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { REALTIME_PROTOCOL_VERSION } from './protocol-version.js'
+import { gameCommandRequestSchema, gameRequestSnapshotRequestSchema } from './game.js'
 import {
   aiProfileIdSchema,
   displayNameInputSchema,
@@ -75,6 +76,8 @@ export const CLIENT_REQUEST_SCHEMAS = Object.freeze({
   'room:request-snapshot': roomRequestSnapshotRequestSchema,
   'session:resume': sessionResumeRequestSchema,
   'room:start': roomStartRequestSchema,
+  'game:command': gameCommandRequestSchema,
+  'game:request-snapshot': gameRequestSnapshotRequestSchema,
 })
 
 export const CLIENT_EVENT_NAMES = Object.freeze(Object.keys(CLIENT_REQUEST_SCHEMAS) as Array<

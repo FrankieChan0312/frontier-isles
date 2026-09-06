@@ -1,5 +1,13 @@
 import { z } from 'zod'
 import { REALTIME_SERVICE_NAME } from './health.js'
+import {
+  gameUpdateSchema,
+  type GameUpdate,
+  type GameCommandRequest,
+  type GameCommandAcknowledgement,
+  type GameRequestSnapshotRequest,
+  type GameRequestSnapshotAcknowledgement,
+} from './game.js'
 import { REALTIME_PROTOCOL_VERSION } from './protocol-version.js'
 import {
   publicMessageSchema,
@@ -49,6 +57,8 @@ export type SessionReplacedNotice = Readonly<z.infer<typeof sessionReplacedNotic
 export type RoomClosedNotice = Readonly<z.infer<typeof roomClosedNoticeSchema>>
 
 export interface ClientToServerEvents {
+  readonly 'game:command': (request: GameCommandRequest, acknowledge: (result: GameCommandAcknowledgement) => void) => void
+  readonly 'game:request-snapshot': (request: GameRequestSnapshotRequest, acknowledge: (result: GameRequestSnapshotAcknowledgement) => void) => void
   readonly 'room:create': (
     request: RoomCreateRequest,
     acknowledge: (result: RoomCreateAcknowledgement) => void,
@@ -84,6 +94,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  readonly 'game:update': (update: GameUpdate, received: () => void) => void
   readonly 'server:hello': (hello: ServerHello) => void
   readonly 'room:snapshot': (snapshot: RoomSnapshot) => void
   readonly 'session:replaced': (notice: SessionReplacedNotice) => void
@@ -92,6 +103,7 @@ export interface ServerToClientEvents {
 }
 
 export const SERVER_EVENT_SCHEMAS = Object.freeze({
+  'game:update': gameUpdateSchema,
   'server:hello': serverHelloSchema,
   'room:snapshot': roomSnapshotSchema,
   'session:replaced': sessionReplacedNoticeSchema,

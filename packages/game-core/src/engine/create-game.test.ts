@@ -5,7 +5,7 @@ import { RULESET_ID } from '../model/ruleset.ts'
 import { STANDARD_BANK_RESOURCE_COUNT } from '../model/standard-bank.ts'
 import { STANDARD_DEVELOPMENT_DECK_SOURCE } from '../model/standard-development-deck.ts'
 import { createInitialRandomState, nextRandomInt } from '../random/seeded-random.ts'
-import { createGame } from './create-game.ts'
+import { createGame, createOnlineGame } from './create-game.ts'
 
 const GOLDEN_SEED = 'FRONTIER-ISLES-TASK-05'
 
@@ -30,6 +30,26 @@ function runtimeConfig(mutator: (players: PlayerConfig[]) => void): GameConfig {
 }
 
 describe('createGame', () => {
+  it.each([2, 3, 4])('creates %i Human online seats with unchanged board, deck and RNG sequence', (humans) => {
+    const config = runtimeConfig((players) => {
+      players.forEach((player, index) => {
+        if (index < humans) players[index] = { ...player, controller: { type: 'HUMAN' } }
+      })
+    })
+    const local = createGame(goldenConfig(), GOLDEN_SEED)
+    const online = createOnlineGame(config, GOLDEN_SEED)
+    expect(() => createGame(config, GOLDEN_SEED)).toThrow(/HUMAN/)
+    expect(online.board).toEqual(local.board)
+    expect(online.random).toEqual(local.random)
+    expect(online.bank).toEqual(local.bank)
+    expect(online.playerOrder).toEqual(local.playerOrder)
+    expect(online).toEqual(createOnlineGame(config, GOLDEN_SEED))
+  })
+
+  it('keeps malformed and one-Human configs outside the online creation policy', () => {
+    expect(() => createOnlineGame(goldenConfig(), GOLDEN_SEED)).toThrow(/two to four/)
+    expect(() => createOnlineGame(runtimeConfig((players) => { players.pop() }), GOLDEN_SEED)).toThrow(/exactly four/)
+  })
   it('accepts the frozen four-player runtime config and preserves input text', () => {
     const config = goldenConfig()
     const state = createGame(config, GOLDEN_SEED)

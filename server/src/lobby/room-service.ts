@@ -21,7 +21,13 @@ import {
   type SeatId,
   type SessionCredential,
   type SessionId,
+  type GameCommandRequest,
+  type GameCommandAcknowledgement,
+  type GameRequestSnapshotRequest,
+  type GameRequestSnapshotAcknowledgement,
 } from '@frontier-isles/realtime-contracts'
+import { createGameIdentity, type GameIdentity } from '../game/game-entropy.js'
+import { GameSession, type GamePublication, type GameSeat, type GameSessionDependencies } from '../game/game-session.js'
 import {
   createSystemRoomLifecycleRuntime,
   type RoomLifecycleRuntime,
@@ -56,6 +62,7 @@ interface AiRoomSeat {
 type RoomSeat = EmptyRoomSeat | HumanRoomSeat | AiRoomSeat
 
 interface RoomState {
+  game: GameSession | null
   readonly roomCode: RoomCode
   revision: RoomRevision
   hostSessionId: SessionId
@@ -104,6 +111,8 @@ export type RoomLifecycleEvent =
 export type RoomLifecycleListener = (event: RoomLifecycleEvent) => void
 
 export interface InMemoryRoomServiceOptions {
+  readonly nextGameIdentity?: () => GameIdentity
+  readonly gameDependencies?: GameSessionDependencies
   readonly generators?: NetworkIdentifierGenerators
   readonly maximumIdentifierAttempts?: number
   readonly reconnectGraceMs?: number
@@ -146,6 +155,9 @@ function validatePositiveInteger(value: number, label: string): number {
 }
 
 export class InMemoryRoomService {
+  readonly #nextGameIdentity: () => GameIdentity
+  readonly #gameDependencies: GameSessionDependencies
+  readonly #gameListeners = new Set<(publication: GamePublication) => void>()
   readonly #generators: NetworkIdentifierGenerators
   readonly #maximumIdentifierAttempts: number
   readonly #reconnectGraceMs: number
@@ -156,6 +168,8 @@ export class InMemoryRoomService {
   readonly #listeners = new Set<RoomLifecycleListener>()
 
   public constructor(options: InMemoryRoomServiceOptions = {}) {
+    this.#nextGameIdentity = options.nextGameIdentity ?? createGameIdentity
+    this.#gameDependencies = options.gameDependencies ?? {}
     this.#generators = options.generators ?? createCryptoNetworkIdentifierGenerators()
     this.#maximumIdentifierAttempts = validatePositiveInteger(
       options.maximumIdentifierAttempts ?? DEFAULT_MAXIMUM_IDENTIFIER_ATTEMPTS,
@@ -193,6 +207,7 @@ export class InMemoryRoomService {
     }
 
     const room: RoomState = {
+      game: null,
       roomCode,
       revision: roomRevisionSchema.parse(0),
       hostSessionId: generated.stored.sessionId,
@@ -223,6 +238,7 @@ export class InMemoryRoomService {
   public joinRoom(roomCode: RoomCode, displayName: string): RoomServiceResult<RoomSessionData> {
     const room = this.#rooms.get(roomCode)
     if (room === undefined) return serviceFailure('ROOM_NOT_FOUND', 'Room not found.')
+    if (room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'This room has already started.')
     const parsedName = displayNameSchema.safeParse(displayName)
     if (!parsedName.success) {
       return serviceFailure('INVALID_DISPLAY_NAME', 'Enter a valid display name.')
@@ -349,6 +365,7 @@ export class InMemoryRoomService {
   ): RoomServiceResult<RoomMutationData> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
+    if (membership.room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'Ready state is fixed after game start.')
     const revisionFailure = this.#checkRevision(membership.room, expectedRevision)
     if (revisionFailure !== null) return revisionFailure
     const seat = membership.room.seats.find(
@@ -379,6 +396,7 @@ export class InMemoryRoomService {
   ): RoomServiceResult<RoomMutationData> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
+    if (membership.room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'Seats are fixed after game start.')
     if (membership.room.hostSessionId !== sessionId) {
       return serviceFailure('NOT_HOST', 'Only the Host can manage AI seats.')
     }
@@ -408,6 +426,7 @@ export class InMemoryRoomService {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
     const { room, session } = membership
+    if (room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'Game seats cannot be removed after start.')
     this.#removeSessionAndSeat(room, session)
     room.revision = incrementRevision(room.revision)
     const remainingHumans = this.#humanSeats(room)
@@ -444,9 +463,79 @@ export class InMemoryRoomService {
   ): RoomServiceResult<RoomSnapshotData> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
+    const { room } = membership
+    if (room.hostSessionId !== sessionId) return serviceFailure('NOT_HOST', 'Only the Host can start the game.')
+    if (room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'This room has already started.')
     const revisionFailure = this.#checkRevision(membership.room, expectedRevision)
     if (revisionFailure !== null) return revisionFailure
-    return serviceFailure('GAME_START_NOT_AVAILABLE', 'Online game start arrives in Milestone B.')
+    if (!this.#snapshot(room).startReadiness.ready) {
+      return serviceFailure('START_CONDITIONS_NOT_MET', 'Fill all seats and have every connected Human ready up.')
+    }
+    const seats: GameSeat[] = []
+    for (const seat of room.seats) {
+      if (seat.occupancy === 'EMPTY') return serviceFailure('START_CONDITIONS_NOT_MET', 'Fill every seat before starting.')
+      if (seat.occupancy === 'HUMAN') {
+        const session = this.#sessions.get(seat.sessionId)
+        if (session?.roomCode !== room.roomCode || session.seatId !== seat.seatId) {
+          return serviceFailure('START_CONDITIONS_NOT_MET', 'Room membership must be restored before starting.')
+        }
+      }
+      seats.push(seat)
+    }
+    try {
+      const identity = this.#nextGameIdentity()
+      const game = new GameSession(room.roomCode, identity.gameId, seats, identity.seed, this.#gameDependencies)
+      let finishedPublished = false
+      game.subscribe((publication) => {
+        if (publication.update.lifecycleStatus === 'FINISHED' && !finishedPublished) {
+          finishedPublished = true
+          room.revision = incrementRevision(room.revision)
+          this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
+        }
+        for (const listener of this.#gameListeners) listener(publication)
+      })
+      room.game = game
+      room.revision = incrementRevision(room.revision)
+      room.idleTask?.cancel()
+      room.idleTask = null
+      return { ok: true, data: { snapshot: this.#snapshot(room) } }
+    } catch {
+      return serviceFailure('INTERNAL_ERROR', 'The server could not start the game.')
+    }
+  }
+
+  public subscribeToGames(listener: (publication: GamePublication) => void): () => void {
+    this.#gameListeners.add(listener)
+    return () => this.#gameListeners.delete(listener)
+  }
+
+  public getGameSession(roomCode: RoomCode): GameSession | null {
+    return this.#rooms.get(roomCode)?.game ?? null
+  }
+
+  public submitGameCommand(sessionId: SessionId, request: GameCommandRequest): GameCommandAcknowledgement {
+    const authority = this.#gameAuthority(sessionId, request)
+    return authority.ok ? authority.data.submitHuman(sessionId, request) : authority
+  }
+
+  public requestGameSnapshot(sessionId: SessionId, request: GameRequestSnapshotRequest): GameRequestSnapshotAcknowledgement {
+    const authority = this.#gameAuthority(sessionId, request)
+    return authority.ok ? { ok: true, data: authority.data.snapshot(sessionId) } : authority
+  }
+
+  #gameAuthority(sessionId: SessionId, identity: GameRequestSnapshotRequest): RoomServiceResult<GameSession> {
+    const membership = this.#membership(sessionId)
+    if (!membership.ok) return membership
+    const { room, session } = membership
+    const seat = room.seats.find((candidate) => candidate.seatId === session.seatId)
+    if (seat?.occupancy !== 'HUMAN' || seat.sessionId !== sessionId || seat.connectionStatus !== 'CONNECTED') {
+      return serviceFailure('NOT_ROOM_MEMBER', 'Resume your Human seat before playing.')
+    }
+    if (room.roomCode !== identity.roomCode || room.game?.gameId !== identity.gameId
+      || room.game.playerForSession(sessionId) !== room.game.playerForSeat(seat.seatId)) {
+      return serviceFailure('GAME_NOT_FOUND', 'This game is unavailable for your session.')
+    }
+    return { ok: true, data: room.game }
   }
 
   public getSnapshot(roomCode: RoomCode): RoomSnapshot | null {
@@ -466,6 +555,7 @@ export class InMemoryRoomService {
     for (const room of this.#rooms.values()) room.idleTask?.cancel()
     for (const session of this.#sessions.values()) session.reconnectTask?.cancel()
     this.#listeners.clear()
+    this.#gameListeners.clear()
   }
 
   #nextUniqueRoomCode(): RoomCode | null {
@@ -531,6 +621,7 @@ export class InMemoryRoomService {
 
   #touchRoom(room: RoomState): void {
     room.idleTask?.cancel()
+    if (room.game !== null) { room.idleTask = null; return }
     const deadline = this.#runtime.now() + this.#roomIdleTtlMs
     room.idleDeadlineMs = deadline
     room.idleTask = this.#runtime.schedule(
@@ -541,7 +632,7 @@ export class InMemoryRoomService {
 
   #expireIdleRoom(roomCode: RoomCode, expectedDeadline: number): void {
     const room = this.#rooms.get(roomCode)
-    if (room === undefined || room.idleDeadlineMs !== expectedDeadline) return
+    if (room === undefined || room.game !== null || room.idleDeadlineMs !== expectedDeadline) return
     const remaining = expectedDeadline - this.#runtime.now()
     if (remaining > 0) {
       room.idleTask = this.#runtime.schedule(
@@ -568,6 +659,18 @@ export class InMemoryRoomService {
     const room = this.#rooms.get(session.roomCode)
     if (room === undefined) {
       this.#sessions.delete(sessionId)
+      return
+    }
+
+    if (room.game !== null) {
+      // Goal B promises resume only within grace. Preserve all authoritative game seats;
+      // extended pause, replacement and restart recovery are explicitly deferred.
+      session.reconnectTask?.cancel()
+      this.#sessions.delete(sessionId)
+      room.seats = room.seats.map((seat) => seat.occupancy === 'HUMAN' && seat.sessionId === sessionId
+        ? { ...seat, connectionStatus: 'DISCONNECTED' } : seat)
+      room.revision = incrementRevision(room.revision)
+      this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
       return
     }
 
@@ -620,6 +723,8 @@ export class InMemoryRoomService {
   }
 
   #snapshot(room: RoomState): RoomSnapshot {
+    const lifecycleStatus = room.game === null ? 'WAITING'
+      : room.game.lifecycleStatus === 'FINISHED' ? 'FINISHED' : 'ACTIVE'
     const hostSeat = room.seats.find(
       (seat) => seat.occupancy === 'HUMAN' && seat.sessionId === room.hostSessionId,
     )
@@ -649,10 +754,11 @@ export class InMemoryRoomService {
       protocolVersion: REALTIME_PROTOCOL_VERSION,
       roomCode: room.roomCode,
       revision: room.revision,
-      lifecycleStatus: 'WAITING',
+      lifecycleStatus,
+      ...(room.game === null ? {} : { gameId: room.game.gameId }),
       hostSeatId: hostSeat.seatId,
       seats,
-      startReadiness: deriveStartReadiness(seats),
+      startReadiness: deriveStartReadiness(seats, lifecycleStatus),
     })
   }
 }

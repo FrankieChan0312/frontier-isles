@@ -214,7 +214,7 @@ describe('InMemoryRoomService', () => {
     expect(service.requestStart(
       creator.credential.sessionId,
       allReady.snapshot.revision,
-    )).toMatchObject({ ok: false, error: { code: 'GAME_START_NOT_AVAILABLE' } })
+    )).toMatchObject({ ok: true, data: { snapshot: { lifecycleStatus: 'ACTIVE' } } })
   })
 
   it('transfers Host on leave and closes the Room after the last Human leaves', () => {

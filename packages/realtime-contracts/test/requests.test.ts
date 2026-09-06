@@ -35,10 +35,13 @@ const validRequests = {
     seatId: 'EAST',
   },
   'room:start': { protocolVersion: version, expectedRevision: 2 },
+  'game:command': { protocolVersion: version, roomCode: 'ABC234', gameId: 'game:test',
+    commandId: 'command:test', expectedStateVersion: 0, command: { type: 'ROLL_DICE' } },
+  'game:request-snapshot': { protocolVersion: version, roomCode: 'ABC234', gameId: 'game:test' },
 } as const
 
 describe('client request contracts', () => {
-  it('provides the exact frozen Goal A client event inventory', () => {
+  it('preserves Goal A events and adds the minimal Goal B client inventory', () => {
     expect(CLIENT_EVENT_NAMES).toEqual([
       'room:create',
       'room:join',
@@ -48,6 +51,8 @@ describe('client request contracts', () => {
       'room:request-snapshot',
       'session:resume',
       'room:start',
+      'game:command',
+      'game:request-snapshot',
     ])
     expect(Object.isFrozen(CLIENT_REQUEST_SCHEMAS)).toBe(true)
     expect(Object.isFrozen(CLIENT_EVENT_NAMES)).toBe(true)
