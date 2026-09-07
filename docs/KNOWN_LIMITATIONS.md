@@ -3,14 +3,18 @@
 - Single Player remains a single-device, four-player game with exactly one Human and three local AI
   players. Online Multiplayer uses the server's four-seat game with at least two Humans and
   explicitly assigned AI seats. There is no login, cloud save, spectator mode, or cross-device credential sync.
-- Online Rooms and sessions are process-local: a server restart loses them. Resume credentials are
-  tab-scoped sessionStorage data, reconnect grace defaults to 30 seconds, waiting-Room idle expiry
-  defaults to 30 minutes, and only one long-running server process is supported.
+- Online authority runs in one Node process, with recoverable SQLite records on local persistent
+  disk. Multiple processes/replicas and network filesystems are unsupported. The Node SQLite API
+  is a release candidate and requires the tested Node 24.19+ runtime family. Permanent loss of
+  the machine or volume can lose availability; keep private backups. Resume credentials are
+  tab-scoped sessionStorage data. Disconnect grace is 30 seconds; restart grants 120 seconds to
+  previously connected Humans. Previously disconnected or expired credentials gain no extension.
+  Waiting-Room idle expiry remains 30 minutes.
 - Started game PlayerIds and board positions remain fixed. Any active Human disconnect pauses
   Human commands and AI. Within grace the same Human can resume; after expiry only the connected
   Host can permanently replace that Human with a selected AI profile, or close the game. The
   expired credential cannot reclaim the seat. There is no Human substitution or undo of replacement.
-  Game persistence and server restart recovery remain later V2 work.
+  Restart restores the original controller overlay and does not undo replacement.
 - One latest Single Player save is stored in localStorage for the current browser origin. It is not encrypted or
   tamper-proof and disappears if the user clears site data.
 - The browser save contains authoritative offline state by necessity. Hidden data is excluded from
@@ -21,6 +25,8 @@
   commands use a bounded ordered retry queue and authoritative snapshot resync. The queue is
   memory-only and does not survive a reload. Exact-result replay retains the latest 128 results
   per Human session by insertion order; evicted successful requests are rejected as stale.
+  Recent results and fingerprints are persisted atomically with game state, so retained retries
+  remain safe after a server restart. Older evicted results are not a permanent command ledger.
   Exhausted retries report an uncertain outcome, even when a newer view has arrived.
 - Finishing a game allows each browser to return Home by detaching its own credential. Finished
   games and games awaiting replacement expire after `GAME_ABANDONED_TTL_MS` (30 minutes by

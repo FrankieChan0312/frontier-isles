@@ -18,6 +18,7 @@ Keep the verification host awake for the run; do not increase test timeouts to h
 | `npm run e2e:lobby` | Run the two-context online Lobby and Single Player browser smoke paths. |
 | `npm run check:server` | Strict-check, lint, test, and build the realtime server and shared contracts. |
 | `npm run check:all` | Run the accepted V1 web check followed by all server/contracts checks. |
+| `npm run test:recovery` | Run SQLite integrity/rollback, state recovery and actual production-process restart suites. |
 
 Server integration tests bind ephemeral ports and exercise the real Node HTTP and Socket.IO
 boundaries. They do not require a server already running, a fixed port, credentials, or external
@@ -150,6 +151,19 @@ prove countdown zero cannot authorize replacement and live timers are disposed.
 grace for reconnect, Host expiry/AI takeover, duplicate tabs during pause, and explicit closure.
 It checks public metadata, credential invalidation, privacy, disabled gameplay and all three
 required viewport widths. Successful replacement screenshots are stored under `test-results/`.
+
+V2-11 persistence tests use private temporary SQLite stores under ignored workspace `logs/`
+directories, with validated recursive cleanup. They cover exact waiting/active records, Room
+revision, Host/session/seat/controller mappings, resources/cards/RNG, owner-only pending decisions
+and continued legal actions, retained/evicted command results, replacement, closure and expiry.
+They inject a failed COMMIT, check that no success or publication escapes, kill a writer inside
+a transaction, verify the prior generation, isolate corrupt/future/colliding records, and reject
+unreadable, unrelated or structurally inconsistent databases without resetting data.
+The production-process integration suite launches the real server entry point and actual sockets,
+kills it, reopens the same store, resumes the original credentials and replays a pre-crash command
+without another effect. It asserts sanitized process output. Shutdown coverage stops an awaited
+AI choice, settles queued commands and flushes exact recoverable state. No production fixture
+endpoint or browser state installation interface was added.
 
 The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
 counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without

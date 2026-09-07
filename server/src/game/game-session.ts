@@ -22,6 +22,7 @@ import {
 } from '@frontier-isles/realtime-contracts'
 import { commandRequestFingerprint } from './command-request-fingerprint.js'
 import { GameExecutionQueue, GameQueueFullError } from './game-execution-queue.js'
+import type { PersistedGame } from '../persistence/multiplayer-record.js'
 
 export type GameSeat =
   | { readonly seatId: SeatId; readonly occupancy: 'HUMAN'; readonly sessionId: SessionId; readonly displayName: string }
@@ -36,6 +37,8 @@ export interface GameSessionDependencies {
   /** Internal composition boundary, including invariant-valid fixtures in Node tests. */
   readonly createState?: (config: GameConfig, seed: string) => GameState
   readonly afterTransition?: (state: GameState, command: GameCommand) => void
+  /** Commit the enclosing Room aggregate before acknowledging or publishing new state. */
+  readonly commit?: () => void
 }
 
 export interface GamePublication {
@@ -83,6 +86,7 @@ export class GameSession {
   readonly #humanPlayers = new Map<SessionId, PlayerId>()
   readonly #seatPlayers = new Map<SeatId, PlayerId>()
   readonly #cache = new Map<SessionId, Map<CommandId, CachedCommandResult>>()
+  readonly #playerViews = new Map<PlayerId, PlayerView>()
   readonly #queue: GameExecutionQueue
   readonly #listeners = new Set<(publication: GamePublication) => void>()
   readonly #aiAgent: AiAgent
@@ -90,6 +94,8 @@ export class GameSession {
   readonly #advanceLimit: number
   readonly #cacheLimit: number
   readonly #afterTransition: GameSessionDependencies['afterTransition']
+  readonly #commit: () => void
+  readonly #originalSeats: readonly GameSeat[]
   #state: GameState
   #publicationRevision = 0
   #pendingEvents: readonly GameEvent[] = []
@@ -103,6 +109,8 @@ export class GameSession {
   #abandonedDeadlineMs: number | null = null
   #presenceEpoch = 0
   #closed = false
+  #stopping = false
+  #stopChoice: (() => void) | null = null
 
   public constructor(
     roomCode: RoomCode,
@@ -121,6 +129,10 @@ export class GameSession {
     if (this.#cacheLimit > 1024) throw new Error('Command cache capacity must not exceed 1024.')
     this.#queue = new GameExecutionQueue(dependencies.maxQueuedOperations ?? 64)
     this.#afterTransition = dependencies.afterTransition
+    this.#commit = dependencies.commit ?? (() => {})
+    this.#originalSeats = seats.map((seat): GameSeat => seat.occupancy === 'HUMAN'
+      ? { occupancy: 'HUMAN', seatId: seat.seatId, sessionId: seat.sessionId, displayName: seat.displayName }
+      : { occupancy: 'AI', seatId: seat.seatId, profileId: seat.profileId })
     const colors = ['RED', 'BLUE', 'ORANGE', 'WHITE'] as const
     const players = CANONICAL_SEAT_IDS.map((seatId, index): PlayerConfig => {
       const seat = seats[index]
@@ -151,6 +163,41 @@ export class GameSession {
     this.#turnIdentity = turnIdentity(this.#state)
   }
 
+  /** Only validated server repository records may enter this composition boundary. */
+  public static restore(roomCode: RoomCode, saved: PersistedGame, dependencies: GameSessionDependencies = {}): GameSession {
+    const game = new GameSession(roomCode, saved.state.gameId, saved.originalSeats, saved.state.random.seed,
+      { ...dependencies, commandCacheSize: saved.cacheLimit, createState: () => structuredClone(saved.state) })
+    game.#publicationRevision = saved.publicationRevision
+    game.#failed = saved.failed
+    game.#aiCommandCount = saved.aiCommandCount
+    game.#turnIdentity = saved.turnIdentity
+    game.#disconnectedSeats = structuredClone(saved.presence.disconnectedSeats)
+    game.#abandonedDeadlineMs = saved.presence.abandonedDeadlineMs
+    for (const replacement of saved.presence.replacements) {
+      game.#replacementProfiles.set(replacement.seatId, replacement.profileId)
+      const original = saved.originalSeats.find((seat) => seat.seatId === replacement.seatId)
+      if (original?.occupancy !== 'HUMAN') throw new Error('Replacement requires an original Human seat.')
+      game.#humanPlayers.delete(original.sessionId)
+    }
+    for (const cache of saved.commandCache) game.#cache.set(cache.sessionId,
+      new Map(cache.entries.map((entry) => [entry.result.commandId, structuredClone(entry)])))
+    game.#ownCommandKeys = new Map(saved.ownCommandKeys.map((entry) => [entry.playerId, [...entry.keys]]))
+    return game
+  }
+
+  public exportPersistence(): PersistedGame {
+    return structuredClone({ originalSeats: this.#originalSeats, state: this.#state,
+      publicationRevision: this.#publicationRevision, presence: this.presenceSnapshot,
+      cacheLimit: this.#cacheLimit,
+      commandCache: [...this.#cache].map(([sessionId, entries]) => ({ sessionId, entries: [...entries.values()] })),
+      aiCommandCount: this.#aiCommandCount, turnIdentity: this.#turnIdentity,
+      ownCommandKeys: [...this.#ownCommandKeys].map(([playerId, keys]) => ({ playerId, keys })), failed: this.#failed })
+  }
+
+  /** Shutdown preserves the durable lifecycle; it does not close a recoverable game. */
+  public stop(): void { this.#stopping = true; this.#presenceEpoch += 1; this.#stopChoice?.() }
+  public drain(): Promise<void> { return this.#queue.idle() }
+
   public get lifecycleStatus(): GameUpdate['lifecycleStatus'] {
     return this.#closed ? 'CLOSED' : this.#state.winnerId !== null ? 'FINISHED' : this.#failed ? 'ERROR'
       : this.#disconnectedSeats.some((seat) => seat.replacementRequired) ? 'PAUSED_REPLACEMENT_REQUIRED'
@@ -167,14 +214,14 @@ export class GameSession {
   }
 
   /** Immediate transport safety latch; this never changes core state or RNG. */
-  public setPresence(disconnectedSeats: readonly DisconnectedSeatPresence[], abandonedDeadlineMs: number | null): void {
+  public setPresence(disconnectedSeats: readonly DisconnectedSeatPresence[], abandonedDeadlineMs: number | null, publish = true): void {
     if (this.#closed) return
     if (JSON.stringify(disconnectedSeats) === JSON.stringify(this.#disconnectedSeats)
       && abandonedDeadlineMs === this.#abandonedDeadlineMs) return
     this.#disconnectedSeats = structuredClone(disconnectedSeats)
     this.#abandonedDeadlineMs = abandonedDeadlineMs
     this.#presenceEpoch += 1
-    this.publish()
+    if (publish) this.publish()
   }
 
   public async replaceHuman(
@@ -205,10 +252,12 @@ export class GameSession {
   }
 
   public close(): void {
+    this.stop()
     this.#closed = true
     this.#presenceEpoch += 1
     this.#listeners.clear()
     this.#cache.clear()
+    this.#playerViews.clear()
   }
 
   #controller(playerId: PlayerId): PlayerController {
@@ -221,7 +270,14 @@ export class GameSession {
   }
 
   #playerView(playerId: PlayerId): PlayerView {
-    const view = gameEngine.createPlayerView(this.#state, playerId)
+    // At most four projections for the current immutable state; never retain old versions.
+    // A detached copy prevents an AI or caller from poisoning a later viewer's projection.
+    let cached = this.#playerViews.get(playerId)
+    if (cached === undefined) {
+      cached = gameEngine.createPlayerView(this.#state, playerId)
+      this.#playerViews.set(playerId, cached)
+    }
+    const view = structuredClone(cached)
     return { ...view, self: { ...view.self, controller: this.#controller(view.self.id) },
       opponents: view.opponents.map((player) => ({ ...player, controller: this.#controller(player.id) })) }
   }
@@ -263,7 +319,8 @@ export class GameSession {
     const detached = structuredClone(request)
     return this.#enqueueHuman(async () => {
       if (!isAuthorized()) return createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat before playing.')
-      const execution = this.#executeHuman(sessionId, detached)
+      // No asynchronous work occurs before publish commits state, result and revision together.
+      const execution = this.#executeHuman(sessionId, detached, false)
       if (execution.changed) {
         this.publish()
         await this.#runAi()
@@ -279,8 +336,9 @@ export class GameSession {
     }
   }
 
-  #executeHuman(sessionId: SessionId, request: GameCommandRequest): HumanExecution {
+  #executeHuman(sessionId: SessionId, request: GameCommandRequest, commitAccepted = true): HumanExecution {
     const unchanged = (acknowledgement: GameCommandAcknowledgement): HumanExecution => ({ acknowledgement, changed: false })
+    if (this.#stopping) return unchanged(createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The multiplayer server is stopping. Resume shortly.'))
     const actorId = this.#humanPlayers.get(sessionId)
     if (actorId === undefined) return unchanged(createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat first.'))
     if (request.roomCode !== this.roomCode || request.gameId !== this.gameId) {
@@ -312,12 +370,15 @@ export class GameSession {
       if (oldest !== undefined) cache.delete(oldest)
     }
     this.#cache.set(sessionId, cache)
+    if (!result.ok || commitAccepted) this.#commit()
     return { acknowledgement: { ok: true, data: structuredClone(data) }, changed: result.ok }
   }
 
   /** Publish a committed transition or lifecycle change; every emission is viewer-specific. */
   public publish(): void {
+    if (this.#stopping) return
     this.#publicationRevision += 1
+    this.#commit()
     const events = this.#pendingEvents
     this.#pendingEvents = []
     for (const sessionId of this.#humanPlayers.keys()) {
@@ -327,7 +388,7 @@ export class GameSession {
   }
 
   public advanceAi(): Promise<void> {
-    if (this.lifecycleStatus !== 'ACTIVE') return Promise.resolve()
+    if (this.#stopping || this.lifecycleStatus !== 'ACTIVE') return Promise.resolve()
     if (this.#aiTask !== null) return this.#aiTask
     this.#aiTask = this.#queue.run(() => this.#runAi()).finally(() => { this.#aiTask = null })
     return this.#aiTask
@@ -348,12 +409,13 @@ export class GameSession {
       this.#ownCommandKeys.set(actorId, keys)
     }
     this.#state = state
+    this.#playerViews.clear()
     this.#pendingEvents = [...this.#pendingEvents, ...events]
   }
 
   async #runAi(): Promise<void> {
     try {
-      for (let count = 0; this.lifecycleStatus === 'ACTIVE'; count += 1) {
+      for (let count = 0; !this.#stopping && this.lifecycleStatus === 'ACTIVE'; count += 1) {
         const actorId = nextGameDecisionActor(this.#state)
         const controller = this.#controller(actorId)
         if (controller.type !== 'AI') return
@@ -364,11 +426,17 @@ export class GameSession {
         const presenceEpoch = this.#presenceEpoch
         const keys = this.#ownCommandKeys.get(actorId) ?? []
         if (keys.length >= this.#aiLimits.maxCommandsPerTurn) throw new Error('AI turn command bound reached.')
-        const command = await this.#aiAgent.chooseNextCommand(this.#playerView(actorId), {
+        const choice = this.#aiAgent.chooseNextCommand(this.#playerView(actorId), {
           profileId: controller.profileId, commandNumberThisTurn: keys.length,
           commandNumberThisGame: this.#aiCommandCount, previousCommandKeysThisTurn: [...keys], limits: this.#aiLimits,
         })
-        if (this.lifecycleStatus !== 'ACTIVE') return
+        const stopped = new Promise<{ readonly kind: 'STOPPED' }>((resolve) => {
+          this.#stopChoice = () => resolve({ kind: 'STOPPED' })
+        })
+        const selected = await Promise.race([choice.then((command) => ({ kind: 'COMMAND' as const, command })), stopped])
+          .finally(() => { this.#stopChoice = null })
+        if (selected.kind === 'STOPPED' || this.#stopping || this.lifecycleStatus !== 'ACTIVE') return
+        const command = selected.command
         if (presenceEpoch !== this.#presenceEpoch) continue
         if (version !== this.#state.stateVersion) throw new Error('Game mutation escaped the execution queue.')
         const key = createAiCommandKey(command)
@@ -385,7 +453,7 @@ export class GameSession {
         this.publish()
       }
     } catch {
-      if (this.lifecycleStatus !== 'ACTIVE') return
+      if (this.#stopping || this.lifecycleStatus !== 'ACTIVE') return
       this.#failed = true
       this.publish()
     }

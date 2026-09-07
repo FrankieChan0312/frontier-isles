@@ -105,8 +105,8 @@ remain later task work. No unrelated or future product feature was implemented i
 
 Status: COMPLETE
 
-Full task gate passed. Required commit message:
-`feat: add active-game reconnect and AI replacement policy`.
+Full task gate passed. Commit: `9342a067aa009f5914a20613c3b2e45621e251f5`
+(`feat: add active-game reconnect and AI replacement policy`). Working tree verified clean after commit.
 
 Implemented immediate pause on any Human disconnect, retaining the 30-second grace. New Human
 commands are refused while paused; exact retained results remain readable. AI checks presence
@@ -167,7 +167,111 @@ Full gate results (all exit 0):
 
 ## V2-11 — Durable Room/Game recovery
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Full task gate passed. Commit subject: `feat: add recoverable multiplayer room persistence`.
+
+Implemented one SQLite aggregate repository using the installed Node 24.19.0 / SQLite 3.53.3
+runtime. MultiplayerRepository has in-memory and exactly one durable adapter. Transactions use
+WAL/FULL durability and exclusive local ownership; no lock spans an awaited AI choice. Each record
+contains Room revision/Host/seats, valid session identities and token digests, and optional exact
+GameState/RNG, original mapping, replacement overlay, AI bookkeeping and bounded cached results.
+
+Persistence version 1 has strict private schemas, game/aggregate invariants, canonical JSON,
+SHA-256 checksums and a 2 MiB record bound. Invalid writes leave the accepted generation intact.
+Corrupt/future/checksum-invalid or colliding-session records are quarantined; unrelated valid
+Rooms recover. Unreadable, unrelated, unsupported or structurally inconsistent SQLite databases
+fail safely and are not initialized over. Operator diagnostics contain codes/counts, not tokens,
+identities, game state, filesystem paths or raw exceptions.
+
+Human state and its command result commit together before success or publication. Room/session
+changes commit before response exposure; read-only lookups avoid persistence serialization. AI transitions commit before
+publication. Finished retention is included in the winning commit, closing the crash window
+between a victory acknowledgement and later cleanup metadata. Any failed write stops authority
+and publishes no uncommitted state. The original durable result can be recovered and retried.
+
+Startup restores exact Room revision, core state/RNG, private resources/cards/decisions, original
+session/seat/controller mappings and command cache order/capacity. Previously connected Humans
+receive a 120-second restart window; previously disconnected deadlines remain unchanged and
+expired credentials are never revived. Active games pause, new public presence advances its
+publication revision, and AI waits for all required Humans. Graceful shutdown stops admission,
+interrupts the current AI choice, drains queued operations, flushes, and closes transports/storage
+without deleting recoverable games. Explicit/expired closure deletes records transactionally.
+
+Files created: private canonical JSON/state/aggregate schemas, repository contract/in-memory and
+SQLite adapters; repository/recovery/production-process integration tests and test-only crash
+writer/process/temporary-store helpers; ADR-V2-0012 and persistence/recovery runbook.
+Files changed: GameSession persistence/restore/stop boundary, bounded current-view reuse and
+execution queue drain; Room
+service repository/recovery/commit/failure boundaries; server configuration, composition, main
+and graceful shutdown; health config tests; public value-schema exports for reuse; root/server
+package and lockfile, environment/ignore files, server test scheduling, README, architecture,
+testing, limitations/report.
+
+Dependency change: declare the existing `zod@4.5.4` as a direct server dependency for private
+runtime schemas; no additional dependency version or native SQLite package was introduced.
+Node support is now `>=24.19.0 <25` for the inspected built-in SQLite API. Lockfile-only install
+reports zero vulnerabilities. No game-core, game-ai, V1 save or LocalGameGateway source changed.
+
+Focused verification: server typecheck and zero-warning lint pass; initial compatible Room/game/
+presence selection 4 files / 40 tests passes; expanded persistence/delivery/presence/health
+selection 6 files / 51 tests passes; final recovery/database/config selection 4 files / 50 tests
+passes. Final `npm run test:recovery`: 3 files / 26 tests pass. It covers real forced process restart,
+exact state/RNG and recent-result replay, private pending decisions followed by legal commands,
+AI replacement and expired authority, failed-COMMIT no-ack/no-publication, killed-writer rollback,
+corruption/quarantine, structural database refusal, closure/expiry and interrupted AI shutdown.
+
+Full gate is running. Initial new-test type errors (missing helper brace, union narrowing and
+unparsed acknowledgement types) were fixed. The first full gate found a constructor parameter
+property rejected by the root's erasable-syntax setting; it now uses an explicit field, and the
+gate restarted. Its server run then found an exact public error-message regression and a
+four-Human setup timeout. Restored the accepted safe error text and removed private-record
+serialization from read-only Room lookups; both suites pass their focused rerun (20/20).
+No accepted tests, production limits or timeouts were relaxed. Security and
+deployment qualification remain V2-12; no unrelated future product feature was implemented.
+
+The next full run still exceeded the four-Human setup's five-second bound under suite concurrency.
+Combined the redundant Human transition and publication commits into one atomic state/result/
+publication-revision transaction, with no intervening asynchronous work. Added an actual SQLite
+test proving exactly one save and that all observers see the already committed version/cache.
+The standalone command boundary still commits directly; rejected cache entries still commit.
+The expanded 18-file server suite still showed setup deadline failures only under unrestricted
+worker competition. A four-worker trial still competed for CPU; the runner now caps workers at
+two, including the new process/SQLite suites. The unchanged full setup test passes alone in
+1,582 ms (all 17 workflow tests pass), compared with its 5,000 ms deadline under worker load.
+Every test, in-test concurrent submission, assertion and deadline remains unchanged. This defines
+a repeatable test resource budget instead of oversubscribing the host with real-server workers.
+Repeated snapshot requests also recomputed the same expensive legal-action projection. GameSession
+now retains at most four redacted projections for its current immutable state, clears them on
+every accepted transition/closure, and returns detached copies with the current ownership overlay.
+A regression test proves no caller mutation can poison later views and a transition invalidates
+every viewer. The cache remains server-local; each output is that player's redacted view.
+
+The corrected aggregate gate now passes (all exit 0): `test:recovery` 3 files / 26 tests;
+`check:all` 98 files / 615 tests — frontend 23 / 101, core 35 / 261, AI 15 / 36,
+contracts 7 / 66, server 18 / 151. The server suite completed in 287.28 seconds with
+all accepted workflows and new recovery tests passing. Typechecks, zero-warning lint and builds
+pass. Standalone package checks, simulations and browser qualification also pass:
+
+- `npm run check:game`: exit 0, core 35 files / 261 tests and AI 15 files / 36 tests;
+  both package typechecks, zero-warning lint and builds pass.
+- `npm run simulate`: exit 0, 100/100 legal winners, 65,341 commands, maximum
+  996 commands / 170 turns / 467 RNG draws, hash `1adc49e8`. Complete JSON report
+  exactly equals the accepted baseline, not only its aggregate hash.
+- `npm run simulate:online`: exit 0, 6/6 legal winners across repeated 2H+2AI,
+  3H+1AI and 4H. Complete JSON equals baseline: version 749, 134 turns, 383 draws,
+  public hash `ead66aa5cb05a2b907c1ea9f7e40078389d9cf34c32e1bf132e40b03123652a3`.
+- `npm run e2e:lobby`: exit 0, 6/6 accepted journeys (1.3 minutes).
+- `npm run e2e:online`: exit 0, 19/19 journeys (4.9 minutes), including all Goal B
+  flows plus delivery, pause, recovery, Host transfer and replacement.
+- `npm run e2e`: exit 0, 33/33 journeys (6.0 minutes), including all eight Single
+  Player regressions. No skipped or weakened tests.
+- Complete simulation comparisons and `git diff --check`: exit 0.
+
+Only the pre-existing Vite chunk-size advisory and Node color-environment notice remain.
+Production security, load qualification and container/deployment preparation remain V2-12.
+No unrelated future product feature was implemented, and nothing was pushed or deployed.
+Logs: `logs/goal-c-11-gate-5-*.log`; command exit statuses are preserved in its results log.
 
 ## V2-12 — Security, deployment and alpha qualification
 

@@ -16,6 +16,7 @@ export class GameExecutionQueue {
   }
 
   public get size(): number { return this.#size }
+  public idle(): Promise<void> { return this.#tail }
 
   public run<T>(operation: () => T | Promise<T>): Promise<T> {
     if (this.#size >= this.#capacity) return Promise.reject(new GameQueueFullError())

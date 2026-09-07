@@ -31,6 +31,8 @@ describe('server configuration', () => {
       reconnectGraceMs: 30_000,
       roomIdleTtlMs: 1_800_000,
       gameAbandonedTtlMs: 1_800_000,
+      persistenceFile: 'data/frontier-isles.sqlite',
+      restartRecoveryGraceMs: 120_000,
     })
   })
 
@@ -42,6 +44,7 @@ describe('server configuration', () => {
     expect(() => parseServerConfig({ RECONNECT_GRACE_MS: value })).toThrow('RECONNECT_GRACE_MS')
     expect(() => parseServerConfig({ ROOM_IDLE_TTL_MS: value })).toThrow('ROOM_IDLE_TTL_MS')
     expect(() => parseServerConfig({ GAME_ABANDONED_TTL_MS: value })).toThrow('GAME_ABANDONED_TTL_MS')
+    expect(() => parseServerConfig({ RESTART_RECOVERY_GRACE_MS: value })).toThrow('RESTART_RECOVERY_GRACE_MS')
   })
 
   it.each([
@@ -56,6 +59,10 @@ describe('server configuration', () => {
 
   it('rejects an unsupported NODE_ENV', () => {
     expect(() => parseServerConfig({ NODE_ENV: 'staging' })).toThrow('NODE_ENV')
+  })
+
+  it.each(['', ':memory:', ' file.sqlite', 'database.json', '\\\\server\\share\\game.sqlite', 'bad\0.sqlite'])('rejects a non-local or malformed persistence filename', (value) => {
+    expect(() => parseServerConfig({ PERSISTENCE_FILE: value })).toThrow('PERSISTENCE_FILE')
   })
 })
 

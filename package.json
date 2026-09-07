@@ -4,7 +4,7 @@
   "version": "1.0.0-rc.1",
   "type": "module",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24.19.0 <25"
   },
   "workspaces": [
     "server",
@@ -20,6 +20,7 @@
     "lint:server": "eslint server packages/realtime-contracts --max-warnings 0",
     "test": "npm run build:game && npm run build:contracts && vitest run && npm run test --workspace @frontier-isles/game-core && npm run test --workspace @frontier-isles/game-ai",
     "test:server": "npm run build:game && npm run build:contracts && npm run test --workspace @frontier-isles/realtime-contracts && npm run test --workspace @frontier-isles/server",
+    "test:recovery": "npm run build:game && npm run build:contracts && npm exec --workspace @frontier-isles/server -- vitest run test/multiplayer-repository.test.ts test/multiplayer-recovery.test.ts test/multiplayer-restart.integration.test.ts",
     "test:watch": "vitest",
     "build": "npm run build:game && npm run build:contracts && tsc -b && vite build",
     "build:contracts": "npm run build --workspace @frontier-isles/realtime-contracts",

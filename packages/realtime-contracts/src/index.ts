@@ -134,3 +134,6 @@ export { gameCommandSchema, GAME_COMMAND_TYPES, ruleViolationCodeSchema } from '
 export { playerViewSchema } from './game-view.js'
 export { playerEventSchema } from './game-events.js'
 export { gameIdSchema, playerIdSchema, commandIdSchema } from './game-values.js'
+// Reusable public value schemas; authoritative persistence envelopes stay server-only.
+export { boardSchema, turnSchema, resourceBagSchema, controllerSchema, cardIdSchema,
+  cardTypeSchema, robberCauseSchema, tradeOfferSchema, integerSchema, tileIdSchema } from './game-values.js'

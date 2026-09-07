@@ -300,10 +300,33 @@ all-Human disconnection retains grace; no remaining eligible Human session close
 The 30-minute abandoned/finished retention timer cancels on resolved replacement or closure.
 Disposal cancels lifecycle work and clears Room/session membership before late socket callbacks.
 
-## 16. Deferred decisions
+## 16. Implemented durable recovery boundary
+
+V2-11 implements [ADR-V2-0012](ADR-V2-0012-transactional-multiplayer-recovery.md). The production
+entry point opens a private SQLite store before accepting clients. MultiplayerRepository writes
+one strict versioned Room/game/session/cache aggregate per synchronous WAL/FULL transaction.
+The in-memory adapter retains focused test composition; the historical InMemoryRoomService name
+now describes live in-process authority, with an injected repository for durable records.
+
+Game commits include authoritative state, AI bookkeeping and command results before publication
+or acknowledgement. Room mutation responses commit changed Room/session metadata before exposure;
+read-only lookups project public state directly. Any write failure stops in-process authority and exposes only
+a safe refusal. Recovery uses persisted digests, exact GameState/RNG, original seat mappings,
+controller replacements and bounded cached results. Restart presence pauses active games and
+retains prior disconnection deadlines, while previously connected Humans receive a 120-second
+recovery window. Game publication revision advances for new recovery presence; Room revision
+stays unchanged until an accepted lifecycle mutation such as resume.
+
+Startup checks database structure/integrity and strict record/checksum/coherence. Invalid records
+are quarantined, including a duplicated session across Rooms; unrelated valid Rooms recover.
+Unreadable, unsupported or structurally inconsistent databases are never initialized over.
+Graceful shutdown blocks admission, cancels a pending AI choice, drains the queue, flushes and
+closes transports/storage. It preserves durable games; explicit/expired closure deletes them
+transactionally. See the private [recovery runbook](V2_PERSISTENCE_RECOVERY.md).
+
+## 17. Deferred decisions
 
 - final public server host
-- database vendor
 - multi-instance scaling
 - Redis
 - accounts

@@ -7,6 +7,8 @@ export interface ServerConfig {
   readonly reconnectGraceMs: number
   readonly roomIdleTtlMs: number
   readonly gameAbandonedTtlMs?: number
+  readonly persistenceFile?: string
+  readonly restartRecoveryGraceMs?: number
 }
 const DEFAULT_PORT = '3001'
 const DEFAULT_CLIENT_ORIGIN = 'http://127.0.0.1:5173'
@@ -73,6 +75,11 @@ function parseTimerDelay(value: string, label: string): number {
 }
 
 export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig {
+  const persistenceFile = environment.PERSISTENCE_FILE ?? 'data/frontier-isles.sqlite'
+  if (persistenceFile.trim() !== persistenceFile || persistenceFile.length === 0 || persistenceFile.length > 4096
+    || persistenceFile.includes('\0') || persistenceFile.startsWith('\\\\') || !persistenceFile.endsWith('.sqlite')) {
+    throw new Error('PERSISTENCE_FILE must name a local SQLite file ending in .sqlite.')
+  }
   return {
     port: parsePort(environment.PORT ?? DEFAULT_PORT),
     clientOrigin: parseClientOrigin(environment.CLIENT_ORIGIN ?? DEFAULT_CLIENT_ORIGIN),
@@ -86,5 +93,7 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
       'ROOM_IDLE_TTL_MS',
     ),
     gameAbandonedTtlMs: parseTimerDelay(environment.GAME_ABANDONED_TTL_MS ?? DEFAULT_ROOM_IDLE_TTL_MS, 'GAME_ABANDONED_TTL_MS'),
+    persistenceFile,
+    restartRecoveryGraceMs: parseTimerDelay(environment.RESTART_RECOVERY_GRACE_MS ?? '120000', 'RESTART_RECOVERY_GRACE_MS'),
   }
 }

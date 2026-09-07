@@ -41,6 +41,9 @@ import {
   type NetworkIdentifierGenerators,
 } from './network-identifiers.js'
 import { digestResumeToken, resumeTokenMatches } from './resume-token-digest.js'
+import { InMemoryMultiplayerRepository, PersistenceError, type MultiplayerRepository, type PersistenceDiagnostic } from '../persistence/multiplayer-repository.js'
+import { MULTIPLAYER_PERSISTENCE_VERSION, type MultiplayerRecord } from '../persistence/multiplayer-record.js'
+import { canonicalJson } from '../persistence/canonical-json.js'
 
 interface EmptyRoomSeat {
   readonly seatId: SeatId
@@ -125,12 +128,16 @@ export interface InMemoryRoomServiceOptions {
   readonly roomIdleTtlMs?: number
   readonly gameAbandonedTtlMs?: number
   readonly runtime?: RoomLifecycleRuntime
+  readonly repository?: MultiplayerRepository
+  readonly restartRecoveryGraceMs?: number
+  readonly onPersistenceDiagnostic?: (diagnostic: PersistenceDiagnostic) => void
 }
 
 const DEFAULT_MAXIMUM_IDENTIFIER_ATTEMPTS = 32
 export const DEFAULT_RECONNECT_GRACE_MS = 30_000
 export const DEFAULT_ROOM_IDLE_TTL_MS = 1_800_000
 export const DEFAULT_GAME_ABANDONED_TTL_MS = 1_800_000
+export const DEFAULT_RESTART_RECOVERY_GRACE_MS = 120_000
 
 function emptySeats(): readonly EmptyRoomSeat[] {
   return CANONICAL_SEAT_IDS.map((seatId) => ({ seatId, occupancy: 'EMPTY' }))
@@ -176,6 +183,11 @@ export class InMemoryRoomService {
   readonly #sessions = new Map<SessionId, StoredSession>()
   readonly #listeners = new Set<RoomLifecycleListener>()
   #disposed = false
+  #stopping = false
+  readonly #repository: MultiplayerRepository
+  readonly #restartRecoveryGraceMs: number
+  readonly #onPersistenceDiagnostic: (diagnostic: PersistenceDiagnostic) => void
+  readonly #committedRecords = new Map<RoomCode, string>()
 
   public constructor(options: InMemoryRoomServiceOptions = {}) {
     this.#nextGameIdentity = options.nextGameIdentity ?? createGameIdentity
@@ -195,6 +207,48 @@ export class InMemoryRoomService {
     )
     this.#gameAbandonedTtlMs = validatePositiveInteger(options.gameAbandonedTtlMs ?? DEFAULT_GAME_ABANDONED_TTL_MS, 'gameAbandonedTtlMs')
     this.#runtime = options.runtime ?? createSystemRoomLifecycleRuntime()
+    this.#repository = options.repository ?? new InMemoryMultiplayerRepository()
+    this.#restartRecoveryGraceMs = validatePositiveInteger(options.restartRecoveryGraceMs ?? DEFAULT_RESTART_RECOVERY_GRACE_MS, 'restartRecoveryGraceMs')
+    this.#onPersistenceDiagnostic = options.onPersistenceDiagnostic ?? (() => {})
+    try { this.#recover(this.#repository.load()) } catch {
+      this.dispose()
+      throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
+    }
+  }
+
+  #safely<T>(operation: () => RoomServiceResult<T>): RoomServiceResult<T> {
+    if (this.#stopping || this.#disposed) return serviceFailure('GAME_UNAVAILABLE', 'The multiplayer server is unavailable. Resume shortly.')
+    try { return operation() } catch {
+      this.dispose()
+      return serviceFailure('INTERNAL_ERROR', 'The server could not complete the request.')
+    }
+  }
+
+  public createRoom(displayName: string): RoomServiceResult<RoomSessionData> {
+    // Preserve the established disposal response for callers that have already detached.
+    if (this.#disposed) return serviceFailure('ROOM_CLOSED', 'The multiplayer service is closing.')
+    return this.#safely(() => this.#createRoom(displayName))
+  }
+  public joinRoom(roomCode: RoomCode, displayName: string): RoomServiceResult<RoomSessionData> {
+    return this.#safely(() => this.#joinRoom(roomCode, displayName))
+  }
+  public resumeSession(credential: SessionCredential): RoomServiceResult<RoomResumeData> {
+    return this.#safely(() => this.#resumeSession(credential))
+  }
+  public markDisconnected(sessionId: SessionId): RoomServiceResult<RoomMutationData> {
+    return this.#safely(() => this.#markDisconnected(sessionId))
+  }
+  public setReady(sessionId: SessionId, revision: RoomRevision, ready: boolean): RoomServiceResult<RoomMutationData> {
+    return this.#safely(() => this.#setReady(sessionId, revision, ready))
+  }
+  public setAiSeat(sessionId: SessionId, revision: RoomRevision, seatId: SeatId, profileId: AiProfileId | null): RoomServiceResult<RoomMutationData> {
+    return this.#safely(() => this.#setAiSeat(sessionId, revision, seatId, profileId))
+  }
+  public leaveRoom(sessionId: SessionId): RoomServiceResult<RoomLeaveResult> { return this.#safely(() => this.#leaveRoom(sessionId)) }
+  public requestSnapshot(sessionId: SessionId): RoomServiceResult<RoomSnapshotData> { return this.#safely(() => this.#requestSnapshot(sessionId)) }
+  public requestStart(sessionId: SessionId, revision: RoomRevision): RoomServiceResult<RoomSnapshotData> { return this.#safely(() => this.#requestStart(sessionId, revision)) }
+  public closeActiveGame(sessionId: SessionId, gameId: GameId, revision: RoomRevision): RoomServiceResult<RoomLeaveData> {
+    return this.#safely(() => this.#closeActiveGame(sessionId, gameId, revision))
   }
 
   public subscribeToLifecycle(listener: RoomLifecycleListener): () => void {
@@ -202,7 +256,7 @@ export class InMemoryRoomService {
     return () => this.#listeners.delete(listener)
   }
 
-  public createRoom(displayName: string): RoomServiceResult<RoomSessionData> {
+  #createRoom(displayName: string): RoomServiceResult<RoomSessionData> {
     if (this.#disposed) return serviceFailure('ROOM_CLOSED', 'The multiplayer service is closing.')
     const parsedName = displayNameSchema.safeParse(displayName)
     if (!parsedName.success) {
@@ -250,7 +304,7 @@ export class InMemoryRoomService {
     }
   }
 
-  public joinRoom(roomCode: RoomCode, displayName: string): RoomServiceResult<RoomSessionData> {
+  #joinRoom(roomCode: RoomCode, displayName: string): RoomServiceResult<RoomSessionData> {
     const room = this.#rooms.get(roomCode)
     if (room === undefined) return serviceFailure('ROOM_NOT_FOUND', 'Room not found.')
     if (room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'This room has already started.')
@@ -293,7 +347,7 @@ export class InMemoryRoomService {
     }
   }
 
-  public resumeSession(credential: SessionCredential): RoomServiceResult<RoomResumeData> {
+  #resumeSession(credential: SessionCredential): RoomServiceResult<RoomResumeData> {
     const session = this.#sessions.get(credential.sessionId)
     if (
       session === undefined
@@ -346,7 +400,7 @@ export class InMemoryRoomService {
     }
   }
 
-  public markDisconnected(sessionId: SessionId): RoomServiceResult<RoomMutationData> {
+  #markDisconnected(sessionId: SessionId): RoomServiceResult<RoomMutationData> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
     const seat = membership.room.seats.find(
@@ -368,7 +422,7 @@ export class InMemoryRoomService {
     membership.room.revision = incrementRevision(membership.room.revision)
     membership.session.reconnectTask?.cancel()
     membership.session.reconnectDeadlineMs = deadline
-    membership.session.reconnectTask = this.#runtime.schedule(
+    membership.session.reconnectTask = this.#schedule(
       this.#reconnectGraceMs,
       () => this.#expireDisconnectedSession(sessionId, deadline),
     )
@@ -379,7 +433,7 @@ export class InMemoryRoomService {
     }
   }
 
-  public setReady(
+  #setReady(
     sessionId: SessionId,
     expectedRevision: RoomRevision,
     ready: boolean,
@@ -409,7 +463,7 @@ export class InMemoryRoomService {
     return { ok: true, data: { changed: true, snapshot: this.#snapshot(membership.room) } }
   }
 
-  public setAiSeat(
+  #setAiSeat(
     sessionId: SessionId,
     expectedRevision: RoomRevision,
     seatId: SeatId,
@@ -443,7 +497,7 @@ export class InMemoryRoomService {
     return { ok: true, data: { changed: true, snapshot: this.#snapshot(membership.room) } }
   }
 
-  public leaveRoom(sessionId: SessionId): RoomServiceResult<RoomLeaveResult> {
+  #leaveRoom(sessionId: SessionId): RoomServiceResult<RoomLeaveResult> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
     const { room, session } = membership
@@ -471,14 +525,14 @@ export class InMemoryRoomService {
     }
   }
 
-  public requestSnapshot(sessionId: SessionId): RoomServiceResult<RoomSnapshotData> {
+  #requestSnapshot(sessionId: SessionId): RoomServiceResult<RoomSnapshotData> {
     const membership = this.#membership(sessionId)
     if (!membership.ok) return membership
     this.#touchRoom(membership.room)
     return { ok: true, data: { snapshot: this.#snapshot(membership.room) } }
   }
 
-  public requestStart(
+  #requestStart(
     sessionId: SessionId,
     expectedRevision: RoomRevision,
   ): RoomServiceResult<RoomSnapshotData> {
@@ -489,7 +543,7 @@ export class InMemoryRoomService {
     if (room.game !== null) return serviceFailure('ROOM_NOT_WAITING', 'This room has already started.')
     const revisionFailure = this.#checkRevision(membership.room, expectedRevision)
     if (revisionFailure !== null) return revisionFailure
-    if (!this.#snapshot(room).startReadiness.ready) {
+    if (!this.#snapshot(room, false).startReadiness.ready) {
       return serviceFailure('START_CONDITIONS_NOT_MET', 'Fill all seats and have every connected Human ready up.')
     }
     const seats: GameSeat[] = []
@@ -505,22 +559,9 @@ export class InMemoryRoomService {
     }
     try {
       const identity = this.#nextGameIdentity()
-      const game = new GameSession(room.roomCode, identity.gameId, seats, identity.seed, this.#gameDependencies)
-      let finishedPublished = false
-      game.subscribe((publication) => {
-        if (publication.update.lifecycleStatus === 'FINISHED' && !finishedPublished) {
-          finishedPublished = true
-          // Finish the current per-viewer publication before emitting retention metadata.
-          queueMicrotask(() => {
-            if (this.#rooms.get(room.roomCode) !== room) return
-            this.#scheduleGameCleanup(room)
-            room.revision = incrementRevision(room.revision)
-            this.#synchronizeGamePresence(room)
-            this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
-          })
-        }
-        for (const listener of this.#gameListeners) listener(publication)
-      })
+      const game = new GameSession(room.roomCode, identity.gameId, seats, identity.seed,
+        { ...this.#gameDependencies, commit: () => this.#persist(room) })
+      this.#subscribeGame(room, game)
       room.game = game
       room.revision = incrementRevision(room.revision)
       room.idleTask?.cancel()
@@ -543,6 +584,14 @@ export class InMemoryRoomService {
     seatId: SeatId,
     profileId: AiProfileId,
     isTransportCurrent: () => boolean = () => true,
+  ): Promise<RoomServiceResult<RoomSnapshotData>> {
+    try { return await this.#replaceExpiredHuman(hostSessionId, gameId, expectedRevision, seatId, profileId, isTransportCurrent) }
+    catch { return serviceFailure('INTERNAL_ERROR', 'The server could not complete the request.') }
+  }
+
+  async #replaceExpiredHuman(
+    hostSessionId: SessionId, gameId: GameId, expectedRevision: RoomRevision, seatId: SeatId,
+    profileId: AiProfileId, isTransportCurrent: () => boolean,
   ): Promise<RoomServiceResult<RoomSnapshotData>> {
     const authority = this.#replacementAuthority(hostSessionId, gameId, expectedRevision)
     if (!authority.ok) return authority
@@ -570,7 +619,7 @@ export class InMemoryRoomService {
     return { ok: true, data: { snapshot: this.#snapshot(room) } }
   }
 
-  public closeActiveGame(hostSessionId: SessionId, gameId: GameId, expectedRevision: RoomRevision): RoomServiceResult<RoomLeaveData> {
+  #closeActiveGame(hostSessionId: SessionId, gameId: GameId, expectedRevision: RoomRevision): RoomServiceResult<RoomLeaveData> {
     const authority = this.#replacementAuthority(hostSessionId, gameId, expectedRevision)
     if (!authority.ok) return authority
     const roomCode = authority.room.roomCode
@@ -604,10 +653,12 @@ export class InMemoryRoomService {
   ): Promise<GameCommandAcknowledgement> {
     const authority = this.#gameAuthority(sessionId, request)
     if (!authority.ok) return authority
-    return authority.data.dispatchHuman(sessionId, request, () => {
-      const current = this.#gameAuthority(sessionId, request)
-      return isTransportCurrent() && current.ok && current.data === authority.data
-    })
+    try {
+      return await authority.data.dispatchHuman(sessionId, request, () => {
+        const current = this.#gameAuthority(sessionId, request)
+        return isTransportCurrent() && current.ok && current.data === authority.data
+      })
+    } catch { return serviceFailure('INTERNAL_ERROR', 'The server could not complete the request.') }
   }
 
   public requestGameSnapshot(sessionId: SessionId, request: GameRequestSnapshotRequest): GameRequestSnapshotAcknowledgement {
@@ -632,7 +683,7 @@ export class InMemoryRoomService {
 
   public getSnapshot(roomCode: RoomCode): RoomSnapshot | null {
     const room = this.#rooms.get(roomCode)
-    return room === undefined ? null : this.#snapshot(room)
+    return room === undefined ? null : this.#snapshot(room, false)
   }
 
   public get roomCount(): number {
@@ -652,6 +703,117 @@ export class InMemoryRoomService {
     this.#rooms.clear()
     this.#listeners.clear()
     this.#gameListeners.clear()
+    this.#committedRecords.clear()
+  }
+
+  public async shutdown(): Promise<void> {
+    if (this.#disposed) { this.#repository.close(); return }
+    this.#stopping = true
+    const games = [...this.#rooms.values()].flatMap((room) => room.game === null ? [] : [room.game])
+    for (const room of this.#rooms.values()) { room.idleTask?.cancel(); room.abandonedTask?.cancel() }
+    for (const session of this.#sessions.values()) session.reconnectTask?.cancel()
+    for (const game of games) game.stop()
+    await Promise.all(games.map((game) => game.drain()))
+    this.#repository.flush()
+  }
+  public closeRepository(): void { this.#repository.close() }
+
+  #persistenceFailed(): never {
+    this.#onPersistenceDiagnostic({ code: 'PERSISTENCE_WRITE_FAILED' })
+    this.dispose()
+    throw new PersistenceError('PERSISTENCE_WRITE_FAILED')
+  }
+
+  #persist(room: RoomState): void {
+    if (this.#disposed) throw new PersistenceError('PERSISTENCE_WRITE_FAILED')
+    if (room.game?.lifecycleStatus === 'FINISHED' && room.abandonedDeadlineMs === null) {
+      this.#scheduleGameCleanup(room)
+      this.#synchronizeGamePresence(room, false)
+    }
+    const record: MultiplayerRecord = {
+      persistenceVersion: MULTIPLAYER_PERSISTENCE_VERSION, roomCode: room.roomCode,
+      revision: room.revision, hostSessionId: room.hostSessionId, seats: structuredClone([...room.seats]),
+      idleDeadlineMs: room.idleDeadlineMs, abandonedDeadlineMs: room.abandonedDeadlineMs,
+      sessions: CANONICAL_SEAT_IDS.flatMap((seatId) => {
+        const seat = room.seats.find((candidate) => candidate.seatId === seatId)
+        const session = seat?.occupancy === 'HUMAN' ? this.#sessions.get(seat.sessionId) : undefined
+        return session === undefined ? [] : [{ sessionId: session.sessionId, seatId,
+          resumeTokenDigest: session.resumeTokenDigest, reconnectDeadlineMs: session.reconnectDeadlineMs }]
+      }),
+      game: room.game?.exportPersistence() ?? null,
+    }
+    try {
+      const serialized = canonicalJson(record)
+      if (this.#committedRecords.get(room.roomCode) === serialized) return
+      this.#repository.save(record)
+      this.#committedRecords.set(room.roomCode, serialized)
+    } catch { this.#persistenceFailed() }
+  }
+
+  #runLifecycle(operation: () => void): void {
+    if (this.#stopping || this.#disposed) return
+    try { operation() } catch {
+      if (!this.#disposed) { this.#onPersistenceDiagnostic({ code: 'PERSISTENCE_WRITE_FAILED' }); this.dispose() }
+    }
+  }
+  #schedule(delay: number, operation: () => void): ScheduledLifecycleTask {
+    return this.#runtime.schedule(delay, () => this.#runLifecycle(operation))
+  }
+
+  #subscribeGame(room: RoomState, game: GameSession): void {
+    let finishedPublished = game.lifecycleStatus === 'FINISHED'
+    game.subscribe((publication) => {
+      if (publication.update.lifecycleStatus === 'FINISHED' && !finishedPublished) {
+        finishedPublished = true
+        queueMicrotask(() => this.#runLifecycle(() => {
+          if (this.#rooms.get(room.roomCode) !== room) return
+          room.revision = incrementRevision(room.revision)
+          this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
+        }))
+      }
+      for (const listener of this.#gameListeners) listener(publication)
+    })
+  }
+
+  #recover(records: readonly MultiplayerRecord[]): void {
+    const now = this.#runtime.now()
+    for (const record of records) {
+      if ((record.game === null && record.idleDeadlineMs <= now)
+        || (record.abandonedDeadlineMs !== null && record.abandonedDeadlineMs <= now)) {
+        this.#repository.remove(record.roomCode)
+        continue
+      }
+      if (record.sessions.some((session) => this.#sessions.has(session.sessionId))) throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
+      const room: RoomState = { roomCode: record.roomCode, revision: record.revision,
+        hostSessionId: record.hostSessionId, seats: structuredClone(record.seats), game: null,
+        idleDeadlineMs: record.idleDeadlineMs, idleTask: null,
+        abandonedDeadlineMs: record.abandonedDeadlineMs, abandonedTask: null }
+      this.#rooms.set(room.roomCode, room)
+      for (const saved of record.sessions) {
+        const deadline = saved.reconnectDeadlineMs ?? now + this.#restartRecoveryGraceMs
+        const session: StoredSession = { ...saved, roomCode: record.roomCode, reconnectDeadlineMs: deadline, reconnectTask: null }
+        this.#sessions.set(session.sessionId, session)
+        room.seats = room.seats.map((seat) => seat.occupancy === 'HUMAN' && seat.sessionId === session.sessionId
+          ? { ...seat, connectionStatus: 'RECONNECTING', reconnectDeadlineMs: deadline } : seat)
+        session.reconnectTask = this.#schedule(Math.max(1, deadline - now), () => this.#expireDisconnectedSession(session.sessionId, deadline))
+      }
+      if (record.game !== null) {
+        room.game = GameSession.restore(record.roomCode, record.game, { ...this.#gameDependencies, commit: () => this.#persist(room) })
+        this.#subscribeGame(room, room.game)
+        this.#synchronizeGamePresence(room)
+      } else room.idleTask = this.#schedule(room.idleDeadlineMs - now, () => this.#expireIdleRoom(room.roomCode, room.idleDeadlineMs))
+      if (room.abandonedDeadlineMs !== null && room.abandonedTask === null) {
+        const deadline = room.abandonedDeadlineMs
+        room.abandonedTask = this.#schedule(deadline - now, () => this.#expireAbandonedGame(room.roomCode, deadline))
+      }
+      for (const saved of record.sessions) {
+        const session = this.#sessions.get(saved.sessionId)
+        if (session?.reconnectDeadlineMs !== null && session?.reconnectDeadlineMs !== undefined && session.reconnectDeadlineMs <= now) {
+          this.#expireDisconnectedSession(session.sessionId, session.reconnectDeadlineMs)
+        }
+      }
+      if (this.#rooms.has(room.roomCode)) this.#persist(room)
+    }
   }
 
   #nextUniqueRoomCode(): RoomCode | null {
@@ -695,6 +857,7 @@ export class InMemoryRoomService {
   #membership(sessionId: SessionId):
     | { readonly ok: true; readonly session: StoredSession; readonly room: RoomState }
     | { readonly ok: false; readonly error: SafeError } {
+    if (this.#stopping || this.#disposed) return serviceFailure('GAME_UNAVAILABLE', 'The multiplayer server is unavailable. Resume shortly.')
     const session = this.#sessions.get(sessionId)
     if (session === undefined) {
       return serviceFailure('NOT_ROOM_MEMBER', 'Join a room before using this action.')
@@ -720,7 +883,7 @@ export class InMemoryRoomService {
     if (room.game !== null) { room.idleTask = null; return }
     const deadline = this.#runtime.now() + this.#roomIdleTtlMs
     room.idleDeadlineMs = deadline
-    room.idleTask = this.#runtime.schedule(
+    room.idleTask = this.#schedule(
       this.#roomIdleTtlMs,
       () => this.#expireIdleRoom(room.roomCode, deadline),
     )
@@ -731,7 +894,7 @@ export class InMemoryRoomService {
     if (room === undefined || room.game !== null || room.idleDeadlineMs !== expectedDeadline) return
     const remaining = expectedDeadline - this.#runtime.now()
     if (remaining > 0) {
-      room.idleTask = this.#runtime.schedule(
+      room.idleTask = this.#schedule(
         remaining,
         () => this.#expireIdleRoom(roomCode, expectedDeadline),
       )
@@ -746,7 +909,7 @@ export class InMemoryRoomService {
     if (session === undefined || session.reconnectDeadlineMs !== expectedDeadline) return
     const remaining = expectedDeadline - this.#runtime.now()
     if (remaining > 0) {
-      session.reconnectTask = this.#runtime.schedule(
+      session.reconnectTask = this.#schedule(
         remaining,
         () => this.#expireDisconnectedSession(sessionId, expectedDeadline),
       )
@@ -811,6 +974,8 @@ export class InMemoryRoomService {
   }
 
   #closeRoom(room: RoomState): void {
+    try { this.#repository.remove(room.roomCode) } catch { this.#persistenceFailed() }
+    this.#committedRecords.delete(room.roomCode)
     room.idleTask?.cancel()
     room.abandonedTask?.cancel()
     room.game?.close()
@@ -828,7 +993,7 @@ export class InMemoryRoomService {
     if (next !== undefined) room.hostSessionId = next.sessionId
   }
 
-  #synchronizeGamePresence(room: RoomState): void {
+  #synchronizeGamePresence(room: RoomState, publish = true): void {
     if (room.game === null) return
     const disconnected: DisconnectedSeatPresence[] = this.#humanSeats(room).flatMap((seat) => {
       if (seat.connectionStatus === 'CONNECTED') return []
@@ -841,14 +1006,14 @@ export class InMemoryRoomService {
       room.abandonedTask = null
       room.abandonedDeadlineMs = null
     }
-    room.game.setPresence(disconnected, room.abandonedDeadlineMs)
+    room.game.setPresence(disconnected, room.abandonedDeadlineMs, publish)
   }
 
   #scheduleGameCleanup(room: RoomState): void {
     if (room.abandonedDeadlineMs !== null) return
     const deadline = this.#runtime.now() + this.#gameAbandonedTtlMs
     room.abandonedDeadlineMs = deadline
-    room.abandonedTask = this.#runtime.schedule(this.#gameAbandonedTtlMs, () => this.#expireAbandonedGame(room.roomCode, deadline))
+    room.abandonedTask = this.#schedule(this.#gameAbandonedTtlMs, () => this.#expireAbandonedGame(room.roomCode, deadline))
   }
 
   #expireAbandonedGame(roomCode: RoomCode, expectedDeadline: number): void {
@@ -856,7 +1021,7 @@ export class InMemoryRoomService {
     if (room?.game === null || room === undefined || room.abandonedDeadlineMs !== expectedDeadline) return
     const remaining = expectedDeadline - this.#runtime.now()
     if (remaining > 0) {
-      room.abandonedTask = this.#runtime.schedule(remaining, () => this.#expireAbandonedGame(roomCode, expectedDeadline))
+      room.abandonedTask = this.#schedule(remaining, () => this.#expireAbandonedGame(roomCode, expectedDeadline))
       return
     }
     this.#closeRoom(room)
@@ -867,7 +1032,8 @@ export class InMemoryRoomService {
     for (const listener of this.#listeners) listener(event)
   }
 
-  #snapshot(room: RoomState): RoomSnapshot {
+  #snapshot(room: RoomState, commit = true): RoomSnapshot {
+    if (commit) this.#persist(room)
     const lifecycleStatus = room.game === null ? 'WAITING'
       : room.game.lifecycleStatus === 'FINISHED' ? 'FINISHED' : 'ACTIVE'
     const hostSeat = room.seats.find(

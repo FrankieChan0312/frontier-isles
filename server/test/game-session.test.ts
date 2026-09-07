@@ -14,6 +14,28 @@ const north = requireValue(TEST_SESSION_IDS[0])
 const east = requireValue(TEST_SESSION_IDS[1])
 
 describe('authoritative GameSession', () => {
+  it('reuses only current-state projections and isolates returned data before invalidating on a transition', async () => {
+    const game = testSession(4, { createState: actionFixture })
+    const project = vi.spyOn(gameEngine, 'createPlayerView')
+    try {
+      const original = game.snapshot(north)
+      const detached = game.snapshot(north)
+      Reflect.set(detached.view.self.resources, 'LUMBER', 999)
+      expect(game.snapshot(north)).toEqual(original)
+      expect(project).toHaveBeenCalledTimes(1)
+      const other = game.snapshot(east)
+      expect(other.view.self.id).not.toBe(original.view.self.id)
+      expect(project).toHaveBeenCalledTimes(2)
+      successData(await game.submitHuman(north, requestFor(game, north, { type: 'BUY_DEVELOPMENT_CARD' })))
+      const changed = game.snapshot(north)
+      expect(changed.view.stateVersion).toBe(original.view.stateVersion + 1)
+      expect(changed.view.self.developmentCards.length).toBe(original.view.self.developmentCards.length + 1)
+      expect(project).toHaveBeenCalledTimes(3)
+      expect(game.snapshot(east).view.opponents.every((player) => !('resources' in player))).toBe(true)
+      expect(project).toHaveBeenCalledTimes(4)
+    } finally { project.mockRestore(); game.close() }
+  })
+
   it.each([2, 3, 4])('maps %i Humans and canonical authoritative AI profiles without socket identity', (humans) => {
     const game = testSession(humans)
     expect(game.playerForSeat('NORTH')).toBe('player:ABC234:NORTH')

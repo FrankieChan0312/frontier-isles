@@ -20,7 +20,7 @@ The working ruleset identifier is `BASE_4P_COMBINED_ACTION_V1`.
 
 ## Run locally
 
-Prerequisites are Node.js 24 and a compatible npm 11 release.
+Prerequisites are Node.js 24.19.0 or newer within the Node 24 line, and a compatible npm 11 release.
 
 ```sh
 npm ci
@@ -51,6 +51,12 @@ to the first connected Human in NORTH/EAST/SOUTH/WEST order. Unresolved abandone
 finished games expire after `GAME_ABANDONED_TTL_MS` (30 minutes by default); games close when no
 eligible Human session remains. See [the presence policy](docs/v2/ADR-V2-0011-active-game-presence-and-ai-replacement.md).
 
+The server now stores Rooms, games and resume-token digests in a private SQLite file. A restart
+restores exact state/RNG and pauses active games. Previously connected Humans have 120 seconds
+to resume; existing disconnected deadlines are preserved. Keep the same `PERSISTENCE_FILE` on
+local persistent disk and run one server process. See the [recovery runbook](docs/v2/V2_PERSISTENCE_RECOVERY.md)
+for startup failures, private backups and recovery boundaries.
+
 ## Quality and release commands
 
 ```sh
@@ -61,6 +67,7 @@ npm run build
 npm run check
 npm run simulate
 npm run simulate:online
+npm run test:recovery
 npx playwright install chromium
 npm run e2e
 npm run e2e:lobby
@@ -85,7 +92,7 @@ npm run dev:server
 The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
 Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
 the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
-in-memory four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
+durable four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
 leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle settings. Accepted
 `room:start` creates one server-owned GameSession, fixes its seats, and publishes per-Human views.
 AI executes on the server. Copy the
@@ -119,8 +126,9 @@ deck, or RNG cursor. Browser localStorage necessarily holds the authoritative of
 is not rendered or placed in UI stores.
 Online mode uses SocketGameGateway on the Lobby's attached socket. Commands omit actor identity,
 which the server derives from the Human session. Reconnect, stale responses and **Resync game**
-request a fresh authoritative view. Delivery retries and active pause/replacement are implemented;
-durable restart recovery remains the next milestone. See [Goal C progress](docs/v2/V2_GOAL_C_PROGRESS.md).
+request a fresh authoritative view. Delivery retries, active pause/replacement and durable restart
+recovery are implemented. Production security/deployment qualification remains the next milestone.
+See [Goal C progress](docs/v2/V2_GOAL_C_PROGRESS.md).
 
 Start with [AGENTS.md](AGENTS.md), [product scope](docs/PRODUCT_SCOPE.md),
 [game rules](docs/GAME_RULES.md), and [architecture](docs/ARCHITECTURE.md) before changing code.

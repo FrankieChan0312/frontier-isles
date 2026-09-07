@@ -24,6 +24,8 @@ export type RealtimeServer = Server<
   InterServerEvents,
   SocketData
 >
+const roomServices = new WeakMap<RealtimeServer, InMemoryRoomService>()
+export function realtimeRoomService(server: RealtimeServer): InMemoryRoomService | undefined { return roomServices.get(server) }
 
 export function createRealtimeServerOptions(
   config: ServerConfig,
@@ -51,13 +53,12 @@ export function createRealtimeServer(
     InterServerEvents,
     SocketData
   >(httpServer, createRealtimeServerOptions(config))
-  registerLobbyHandlers(
-    realtimeServer,
-    dependencies.roomService ?? new InMemoryRoomService({
+  const roomService = dependencies.roomService ?? new InMemoryRoomService({
       reconnectGraceMs: config.reconnectGraceMs,
       roomIdleTtlMs: config.roomIdleTtlMs,
       ...(config.gameAbandonedTtlMs === undefined ? {} : { gameAbandonedTtlMs: config.gameAbandonedTtlMs }),
-    }),
-  )
+    })
+  roomServices.set(realtimeServer, roomService)
+  registerLobbyHandlers(realtimeServer, roomService)
   return realtimeServer
 }
