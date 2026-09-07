@@ -124,6 +124,20 @@ Its recovery paths refresh a Ready Human into the same SessionId/SeatId, copy a 
 duplicate tab to prove newest-wins replacement, transfer Host after leave, and retain synchronized
 Ready/AI state through resume.
 
+V2-09 adds queue, fingerprint and retention tests in `server/test/game-delivery.test.ts` and real
+Socket.IO concurrency/reconnect coverage in `server/test/game-delivery.integration.test.ts`.
+The latter holds an AI decision while another Room on the same server progresses, replaces a
+socket with work queued, races same-session/current/non-current commands and competing trade
+responders, and resumes pending trade/discard/robber decisions before replaying their saved requests.
+Every accepted command family in `online-workflows.test.ts` is replayed after AI advancement,
+checking exact outcomes, unchanged projected state and unchanged publication counts.
+Gateway tests drop/delay acknowledgements, delay requests, reconnect unresolved commands, exhaust
+bounded retries, cancel work on replacement/completion and reject malformed snapshots without
+poisoning the view. `tests/e2e/online-delivery.spec.ts` uses a test-owned WebSocket proxy to drop an
+acknowledgement and to send simultaneous exact/conflicting requests. It checks visible pending
+delivery, stable retry payloads, one build/event and safe conflict results through real browsers.
+No source timeout, assertion or accepted regression journey is relaxed for those tests.
+
 The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
 counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without
 a second counter, and buy a known schema-valid Development Card. The card path asserts the exact

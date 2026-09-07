@@ -127,7 +127,7 @@ export function GamePage({
             </Box>
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
               {lastRoll === null ? null : <Chip label={`Last roll: ${lastRoll.dice[0]} + ${lastRoll.dice[1]} = ${lastRoll.total}`} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />}
-              <Chip label={online?.status ?? (aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`)} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
+              <Chip aria-live="polite" role="status" label={online?.status ?? (aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`)} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
               {online === undefined ? <>
                 <Button color="inherit" disabled={busy} onClick={onSave} variant="outlined">Save</Button>
                 <Button color="inherit" disabled={busy || !canRestart} onClick={onRestart}>Restart seed</Button>

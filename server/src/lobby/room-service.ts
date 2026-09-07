@@ -513,9 +513,17 @@ export class InMemoryRoomService {
     return this.#rooms.get(roomCode)?.game ?? null
   }
 
-  public submitGameCommand(sessionId: SessionId, request: GameCommandRequest): GameCommandAcknowledgement {
+  public async submitGameCommand(
+    sessionId: SessionId,
+    request: GameCommandRequest,
+    isTransportCurrent: () => boolean = () => true,
+  ): Promise<GameCommandAcknowledgement> {
     const authority = this.#gameAuthority(sessionId, request)
-    return authority.ok ? authority.data.submitHuman(sessionId, request) : authority
+    if (!authority.ok) return authority
+    return authority.data.dispatchHuman(sessionId, request, () => {
+      const current = this.#gameAuthority(sessionId, request)
+      return isTransportCurrent() && current.ok && current.data === authority.data
+    })
   }
 
   public requestGameSnapshot(sessionId: SessionId, request: GameRequestSnapshotRequest): GameRequestSnapshotAcknowledgement {

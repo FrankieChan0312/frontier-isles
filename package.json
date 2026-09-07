@@ -31,7 +31,7 @@
     "simulate:online": "npm run build:server && node server/dist/test/run-online-simulations.js",
     "e2e": "playwright test",
     "e2e:lobby": "playwright test tests/e2e/lobby.spec.ts",
-    "e2e:online": "playwright test tests/e2e/online-game.spec.ts tests/e2e/online-workflows.spec.ts",
+    "e2e:online": "playwright test tests/e2e/online-game.spec.ts tests/e2e/online-workflows.spec.ts tests/e2e/online-delivery.spec.ts",
     "e2e:server": "npm run build:game && npm run build:contracts && tsx tests/e2e/realtime-test-server.ts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "check:server": "npm run typecheck:server && npm run lint:server && npm run test:server && npm run build:server",

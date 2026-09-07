@@ -17,6 +17,8 @@ import {
   type GameCommandAcknowledgement, type GameCommandRequest, type GameCommandResult,
   type GameUpdate, type RoomCode, type SeatId, type SessionId,
 } from '@frontier-isles/realtime-contracts'
+import { commandRequestFingerprint } from './command-request-fingerprint.js'
+import { GameExecutionQueue, GameQueueFullError } from './game-execution-queue.js'
 
 export type GameSeat =
   | { readonly seatId: SeatId; readonly occupancy: 'HUMAN'; readonly sessionId: SessionId; readonly displayName: string }
@@ -27,6 +29,7 @@ export interface GameSessionDependencies {
   readonly aiSafetyLimits?: AiSafetyLimits
   readonly maxAiCommandsPerAdvance?: number
   readonly commandCacheSize?: number
+  readonly maxQueuedOperations?: number
   /** Internal composition boundary, including invariant-valid fixtures in Node tests. */
   readonly createState?: (config: GameConfig, seed: string) => GameState
   readonly afterTransition?: (state: GameState, command: GameCommand) => void
@@ -35,6 +38,16 @@ export interface GameSessionDependencies {
 export interface GamePublication {
   readonly sessionId: SessionId
   readonly update: GameUpdate
+}
+
+interface CachedCommandResult {
+  readonly fingerprint: string
+  readonly result: GameCommandResult
+}
+
+interface HumanExecution {
+  readonly acknowledgement: GameCommandAcknowledgement
+  readonly changed: boolean
 }
 
 export function nextGameDecisionActor(state: GameState): PlayerId {
@@ -66,7 +79,8 @@ export class GameSession {
   public readonly gameId: GameId
   readonly #humanPlayers = new Map<SessionId, PlayerId>()
   readonly #seatPlayers = new Map<SeatId, PlayerId>()
-  readonly #cache = new Map<SessionId, Map<CommandId, GameCommandResult>>()
+  readonly #cache = new Map<SessionId, Map<CommandId, CachedCommandResult>>()
+  readonly #queue: GameExecutionQueue
   readonly #listeners = new Set<(publication: GamePublication) => void>()
   readonly #aiAgent: AiAgent
   readonly #aiLimits: AiSafetyLimits
@@ -96,6 +110,8 @@ export class GameSession {
     for (const limit of Object.values(this.#aiLimits)) positiveInteger(limit)
     this.#advanceLimit = positiveInteger(dependencies.maxAiCommandsPerAdvance ?? 256)
     this.#cacheLimit = positiveInteger(dependencies.commandCacheSize ?? 128)
+    if (this.#cacheLimit > 1024) throw new Error('Command cache capacity must not exceed 1024.')
+    this.#queue = new GameExecutionQueue(dependencies.maxQueuedOperations ?? 64)
     this.#afterTransition = dependencies.afterTransition
     const colors = ['RED', 'BLUE', 'ORANGE', 'WHITE'] as const
     const players = CANONICAL_SEAT_IDS.map((seatId, index): PlayerConfig => {
@@ -152,17 +168,51 @@ export class GameSession {
     })
   }
 
-  /** Caller must verify the attached session is still connected before entering the cache. */
-  public submitHuman(sessionId: SessionId, request: GameCommandRequest): GameCommandAcknowledgement {
-    const actorId = this.#humanPlayers.get(sessionId)
-    if (actorId === undefined) return createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat first.')
-    if (request.roomCode !== this.roomCode || request.gameId !== this.gameId) {
-      return createSafeErrorAcknowledgement('GAME_NOT_FOUND', 'This game is unavailable for your session.')
+  /** Focused command boundary; explicit AI advances also use this same execution queue. */
+  public submitHuman(sessionId: SessionId, request: GameCommandRequest): Promise<GameCommandAcknowledgement> {
+    const detached = structuredClone(request)
+    return this.#enqueueHuman(() => this.#executeHuman(sessionId, detached).acknowledgement)
+  }
+
+  /** Complete transport pipeline. Revalidate the live attachment after admission and before cache lookup. */
+  public dispatchHuman(
+    sessionId: SessionId,
+    request: GameCommandRequest,
+    isAuthorized: () => boolean,
+  ): Promise<GameCommandAcknowledgement> {
+    const detached = structuredClone(request)
+    return this.#enqueueHuman(async () => {
+      if (!isAuthorized()) return createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat before playing.')
+      const execution = this.#executeHuman(sessionId, detached)
+      if (execution.changed) {
+        this.publish()
+        await this.#runAi()
+      }
+      return execution.acknowledgement
+    })
+  }
+
+  async #enqueueHuman(operation: () => GameCommandAcknowledgement | Promise<GameCommandAcknowledgement>): Promise<GameCommandAcknowledgement> {
+    try { return await this.#queue.run(operation) } catch (error: unknown) {
+      if (error instanceof GameQueueFullError) return createSafeErrorAcknowledgement('GAME_BUSY', 'The game is busy. Retry this action shortly.')
+      throw error
     }
-    const cache = this.#cache.get(sessionId) ?? new Map<CommandId, GameCommandResult>()
+  }
+
+  #executeHuman(sessionId: SessionId, request: GameCommandRequest): HumanExecution {
+    const unchanged = (acknowledgement: GameCommandAcknowledgement): HumanExecution => ({ acknowledgement, changed: false })
+    const actorId = this.#humanPlayers.get(sessionId)
+    if (actorId === undefined) return unchanged(createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat first.'))
+    if (request.roomCode !== this.roomCode || request.gameId !== this.gameId) {
+      return unchanged(createSafeErrorAcknowledgement('GAME_NOT_FOUND', 'This game is unavailable for your session.'))
+    }
+    const fingerprint = commandRequestFingerprint(request)
+    const cache = this.#cache.get(sessionId) ?? new Map<CommandId, CachedCommandResult>()
     const cached = cache.get(request.commandId)
-    if (cached !== undefined) return { ok: true, data: structuredClone(cached) }
-    if (this.#failed) return createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The game could not continue. Request a fresh snapshot.')
+    if (cached !== undefined) return unchanged(cached.fingerprint === fingerprint
+      ? { ok: true, data: structuredClone(cached.result) }
+      : createSafeErrorAcknowledgement('COMMAND_ID_CONFLICT', 'This command ID was already used for a different request. Resynchronize before a new action.'))
+    if (this.#failed) return unchanged(createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The game could not continue. Request a fresh snapshot.'))
     const result = gameEngine.execute(this.#state, {
       commandId: request.commandId, expectedStateVersion: request.expectedStateVersion,
       actorId, command: request.command,
@@ -172,16 +222,16 @@ export class GameSession {
       ? { accepted: true, commandId: request.commandId, stateVersion: this.#state.stateVersion }
       : { accepted: false, commandId: request.commandId, stateVersion: this.#state.stateVersion,
           violation: { code: result.violation.code } }
-    cache.set(request.commandId, data)
+    cache.set(request.commandId, { fingerprint, result: data })
     if (cache.size > this.#cacheLimit) {
       const oldest = cache.keys().next().value
       if (oldest !== undefined) cache.delete(oldest)
     }
     this.#cache.set(sessionId, cache)
-    return { ok: true, data: structuredClone(data) }
+    return { acknowledgement: { ok: true, data: structuredClone(data) }, changed: result.ok }
   }
 
-  /** Called after acknowledgement, including start; every emission is viewer-specific. */
+  /** Publish a committed transition or lifecycle change; every emission is viewer-specific. */
   public publish(): void {
     this.#publicationRevision += 1
     const events = this.#pendingEvents
@@ -194,7 +244,7 @@ export class GameSession {
 
   public advanceAi(): Promise<void> {
     if (this.#aiTask !== null) return this.#aiTask
-    this.#aiTask = this.#runAi().finally(() => { this.#aiTask = null })
+    this.#aiTask = this.#queue.run(() => this.#runAi()).finally(() => { this.#aiTask = null })
     return this.#aiTask
   }
 
@@ -206,7 +256,7 @@ export class GameSession {
     if (identity !== this.#turnIdentity) {
       this.#ownCommandKeys.clear()
       this.#turnIdentity = identity
-    } else {
+    } else if (state.players[actorId]?.controller.type === 'AI') {
       const keys = this.#ownCommandKeys.get(actorId) ?? []
       // An AI never receives another actor's private discard, card or trade command history.
       keys.push(createAiCommandKey(command))
@@ -227,12 +277,12 @@ export class GameSession {
         }
         const version = this.#state.stateVersion
         const keys = this.#ownCommandKeys.get(actorId) ?? []
+        if (keys.length >= this.#aiLimits.maxCommandsPerTurn) throw new Error('AI turn command bound reached.')
         const command = await this.#aiAgent.chooseNextCommand(gameEngine.createPlayerView(this.#state, actorId), {
           profileId: player.controller.profileId, commandNumberThisTurn: keys.length,
           commandNumberThisGame: this.#aiCommandCount, previousCommandKeysThisTurn: [...keys], limits: this.#aiLimits,
         })
-        // A simultaneous eligible Human discard can advance the state while an agent awaits.
-        if (version !== this.#state.stateVersion) continue
+        if (version !== this.#state.stateVersion) throw new Error('Game mutation escaped the execution queue.')
         const key = createAiCommandKey(command)
         if (keys.filter((previous) => previous === key).length >= this.#aiLimits.maxRepeatedCommandPerTurn) {
           throw new Error('AI repeated-command guard reached.')

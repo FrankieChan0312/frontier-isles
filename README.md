@@ -38,6 +38,12 @@ Every Human enters the same server game with their own private view. Refresh wit
 resumes the same tab-scoped Human session and current game. Waiting Rooms expire after 30 minutes
 without accepted activity. Online games have no browser save; Single Player saves remain separate.
 
+Online actions use an ordered delivery queue with bounded acknowledgement retries. A retry keeps
+the same request and command ID; the server serializes Human and AI mutations per game and rejects
+conflicting reuse. Sending, retry, reconnect and resync states are visible. If delivery remains
+uncertain, use the fresh authoritative view and **Resync game** before deciding on a new action.
+See [the delivery ADR](docs/v2/ADR-V2-0010-command-delivery-and-serialized-execution.md).
+
 ## Quality and release commands
 
 ```sh

@@ -9,6 +9,13 @@ import { playerEventSchema } from './game-events.js'
 const identity = {
   protocolVersion: z.literal(REALTIME_PROTOCOL_VERSION), roomCode: roomCodeSchema, gameId: gameIdSchema,
 }
+/** Public-safe browser delivery notifications; never include request bodies or credentials. */
+export const gameDeliveryStateSchema = z.strictObject({
+  status: z.enum(['IDLE', 'QUEUED', 'SUBMITTING', 'RETRYING', 'WAITING_RECONNECT', 'RESYNCHRONIZING', 'RESYNC_REQUIRED']),
+  attempt: z.number().int().min(0).max(6),
+  queuedCommands: z.number().int().min(0).max(32),
+})
+export type GameDeliveryState = Readonly<z.infer<typeof gameDeliveryStateSchema>>
 export const gameCommandRequestSchema = z.strictObject({
   ...identity, commandId: commandIdSchema.refine((id) => !id.startsWith('server-ai:'), 'Reserved command namespace.'),
   expectedStateVersion: integerSchema, command: gameCommandSchema,

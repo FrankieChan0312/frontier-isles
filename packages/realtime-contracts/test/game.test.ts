@@ -4,7 +4,7 @@ import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
 import { createCompletedGoldenSetup, GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import {
   REALTIME_PROTOCOL_VERSION, gameCommandRequestSchema, gameCommandAcknowledgementSchema,
-  gameUpdateSchema, playerViewSchema, GAME_COMMAND_TYPES,
+  gameUpdateSchema, playerViewSchema, GAME_COMMAND_TYPES, gameDeliveryStateSchema,
 } from '../src/index.js'
 
 const bag = { LUMBER: 1, BRICK: 0, WOOL: 0, GRAIN: 0, ORE: 0 }
@@ -42,6 +42,21 @@ function update() {
 }
 
 describe('strict online game protocol', () => {
+  it('strictly validates safe conflict, overload and bounded delivery status notifications', () => {
+    for (const code of ['COMMAND_ID_CONFLICT', 'GAME_BUSY']) {
+      const error = { code, message: 'Resynchronize before trying again.' }
+      expect(gameCommandAcknowledgementSchema.safeParse({ ok: false, error }).success).toBe(true)
+      for (const extra of [{ fingerprint: 'private' }, { result: { accepted: true } }, { sessionId: 'private' }]) {
+        expect(gameCommandAcknowledgementSchema.safeParse({ ok: false, error: { ...error, ...extra } }).success).toBe(false)
+      }
+    }
+    const status = { status: 'RETRYING', attempt: 2, queuedCommands: 1 }
+    expect(gameDeliveryStateSchema.safeParse(status).success).toBe(true)
+    for (const malformed of [{ ...status, attempt: 7 }, { ...status, queuedCommands: 33 },
+      { ...status, status: 'UNKNOWN' }, { ...status, request: commands.DISCARD_RESOURCES }, { ...status, commandId: 'private' }]) {
+      expect(gameDeliveryStateSchema.safeParse(malformed).success).toBe(false)
+    }
+  })
   it.each(GAME_COMMAND_TYPES)('accepts the domain %s command and rejects nested spoofed fields', (type) => {
     const command = commands[type]
     expect(gameCommandRequestSchema.safeParse(request(command)).success).toBe(true)

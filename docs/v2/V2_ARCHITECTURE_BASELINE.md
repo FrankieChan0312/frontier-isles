@@ -265,7 +265,24 @@ families through the browser. The accepted core and server gateway behavior requ
 multiplayer rule implementation. Test-only Node fixtures cover rare workflows without a production
 state-installation interface; see ADR-V2-0009 and the Goal B acceptance matrix.
 
-## 14. Deferred decisions
+## 14. Implemented delivery boundary
+
+V2-09 implements [ADR-V2-0010](ADR-V2-0010-command-delivery-and-serialized-execution.md).
+Each GameSession has an explicit FIFO execution queue, including all server AI advancement;
+unrelated Rooms have independent queues. Current socket/session authority is rechecked at dequeue.
+Each Human has a bounded insertion-order result cache binding the complete canonical request.
+Exact retained retries return their original compact result without mutation, RNG, AI or gameplay
+publication. Conflicting reuse returns `COMMAND_ID_CONFLICT`; queue overload returns `GAME_BUSY`.
+
+SocketGameGateway admits at most eight commands, sends one at a time, and by default uses an
+eight-second acknowledgement timeout with two retries and capped exponential backoff. Configuration
+is validated at gateway construction. Unresolved commands may wait at most 30 seconds per transport
+reattachment attempt; permanent session changes cancel delivery. Fresh viewer-validated snapshots
+repair uncertain outcomes, stale versions, reconnects, invalid/mismatched updates and version gaps.
+Snapshot validation retries once, then leaves an accessible manual resync action. View and
+publication versions never move backwards; a newer view alone never proves command success.
+
+## 15. Deferred decisions
 
 - final public server host
 - database vendor

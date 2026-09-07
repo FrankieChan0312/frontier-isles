@@ -51,6 +51,14 @@ async function submit(network: NetworkGame, index: number, command: GameCommand,
   if (accepted) covered.add(command.type)
   else expect(outcome.stateVersion).toBe(before.view.stateVersion)
   await requireValue(network.service.getGameSession(network.snapshot().roomCode)).advanceAi()
+  // V2-09: replay every command family through the real delivery boundary, including
+  // results whose original state version now precedes automatic AI advancement.
+  const beforeReplay = await view(network, index)
+  const publicationsBeforeReplay = network.updates.map((entries) => entries.length)
+  const replay = gameCommandAcknowledgementSchema.parse(await requireValue(network.clients[index]).timeout(5_000).emitWithAck('game:command', request))
+  expect(replay).toEqual(acknowledgement)
+  expect(await view(network, index)).toEqual(beforeReplay)
+  expect(network.updates.map((entries) => entries.length)).toEqual(publicationsBeforeReplay)
   const updates = await Promise.all(network.clients.map((client) => networkSnapshot(network, client)))
   const publicState = requireValue(updates[0]).view.publicGame
   for (const [viewer, update] of updates.entries()) {

@@ -16,7 +16,10 @@
   their own localStorage with developer tools.
 - Online browsers store only their current PlayerView/event projection in memory and a Room
   resume credential in sessionStorage. They never write an authoritative online save. Interrupted
-  commands trigger snapshot resync; automatic retry and full delivery guarantees remain V2-09.
+  commands use a bounded ordered retry queue and authoritative snapshot resync. The queue is
+  memory-only and does not survive a reload. Exact-result replay retains the latest 128 results
+  per Human session by insertion order; evicted successful requests are rejected as stale.
+  Exhausted retries report an uncertain outcome, even when a newer view has arrived.
 - Finishing a game allows each browser to return Home by detaching its own credential. Started
   server seats remain fixed; Room reuse and extended post-game lifecycle are not part of Goal B.
 - AI is deterministic, heuristic, and bounded. It does not learn, search exhaustively, or claim

@@ -5,10 +5,12 @@ import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
 import {
   REALTIME_PROTOCOL_VERSION, gameCommandRequestSchema, gameCommandAcknowledgementSchema,
   gameRequestSnapshotRequestSchema, gameRequestSnapshotAcknowledgementSchema, gameUpdateSchema,
+  gameDeliveryStateSchema, type GameDeliveryState, type GameCommandRequest,
   type ClientToServerEvents, type ServerToClientEvents, type GameUpdate as WireGameUpdate,
 } from '@frontier-isles/realtime-contracts'
 import type { CommandResponse, GameUpdate, OnlineGameGateway } from './game-gateway.ts'
 import type { LobbyGatewayState, LobbyGatewayListener } from './lobby-gateway.ts'
+import { abortable, commandDeliverySettings, deliveryDelay, type CommandDeliveryOptions, type CommandDeliverySettings } from './command-delivery.ts'
 
 type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>
 export interface SocketGameGatewayOptions {
@@ -16,6 +18,14 @@ export interface SocketGameGatewayOptions {
   readonly subscribeToLobby: (listener: LobbyGatewayListener) => () => void
   readonly isSessionAttached: () => boolean
   readonly commandNamespaceFactory?: () => string
+  readonly commandDelivery?: CommandDeliveryOptions
+}
+
+interface QueuedCommand {
+  readonly request: GameCommandRequest
+  readonly cancellation: AbortController
+  readonly resolve: (response: CommandResponse) => void
+  readonly reject: (error: Error) => void
 }
 
 const OFFLINE_ONLY = 'Online games resume through your Room session; browser saves are for Single Player.'
@@ -30,6 +40,14 @@ export class SocketGameGateway implements OnlineGameGateway {
   readonly #namespaceFactory: () => string
   readonly #unsubscribeLobby: () => void
   readonly #listeners = new Set<(update: GameUpdate) => void>()
+  readonly #settings: CommandDeliverySettings
+  readonly #queue: QueuedCommand[] = []
+  readonly #attachmentWaiters = new Set<() => void>()
+  #active: QueuedCommand | null = null
+  #draining = false
+  #attempt = 0
+  #deliveryPhase: GameDeliveryState['status'] = 'IDLE'
+  #resyncRequired = false
   #lobby: LobbyGatewayState | null = null
   #wire: WireGameUpdate | null = null
   #namespace: string | null = null
@@ -44,6 +62,7 @@ export class SocketGameGateway implements OnlineGameGateway {
     this.#socket = options.socket
     this.#isSessionAttached = options.isSessionAttached
     this.#namespaceFactory = options.commandNamespaceFactory ?? browserCommandNamespace
+    this.#settings = commandDeliverySettings(options.commandDelivery)
     this.#socket.on('game:update', this.#onGameUpdate)
     this.#unsubscribeLobby = options.subscribeToLobby(this.#onLobbyUpdate)
   }
@@ -56,49 +75,135 @@ export class SocketGameGateway implements OnlineGameGateway {
 
   public async submit(envelope: CommandEnvelope): Promise<CommandResponse> {
     if (!this.#attached() || this.#wire === null) throw new Error('Reconnect to your Room before playing.')
-    if (this.#submitting || this.#resynchronizing) throw new Error('Wait for the current game update before playing.')
+    if (this.#resyncRequired && this.#active === null) throw new Error('Resynchronize the game before playing.')
     if (this.#wire.lifecycleStatus === 'ERROR') throw new Error('The server could not continue this game.')
-    const epoch = this.#epoch
+    if (this.#wire.lifecycleStatus === 'FINISHED' || this.#lobby?.snapshot?.lifecycleStatus === 'FINISHED') throw new Error('This game has finished.')
+    if (this.#queue.length + (this.#active === null ? 0 : 1) >= this.#settings.queueCapacity) throw new Error('The command queue is full. Wait for the current game update.')
     this.#namespace ??= this.#namespaceFactory()
     const parsedRequest = gameCommandRequestSchema.safeParse({
       protocolVersion: REALTIME_PROTOCOL_VERSION, roomCode: this.#wire.roomCode, gameId: this.#wire.gameId,
-      // The same envelope keeps the same ID across a reconnect or caller retry. A new tab
-      // or page load gets a different namespace. This adds no automatic retry policy.
+      // Admission detaches the complete request. Every retry sends this exact object.
       commandId: `human:${this.#namespace}:${envelope.commandId}`,
       expectedStateVersion: envelope.expectedStateVersion, command: envelope.command,
     })
     if (!parsedRequest.success) throw new Error('This game action could not be submitted. Resynchronize and try again.')
-    const request = parsedRequest.data
-    this.#submitting = true
-    this.#error = null
-    this.#publish([])
+    return new Promise<CommandResponse>((resolve, reject) => {
+      this.#queue.push({ request: parsedRequest.data, cancellation: new AbortController(), resolve, reject })
+      void this.#drain()
+      this.#publish([])
+    })
+  }
+
+  async #drain(): Promise<void> {
+    if (this.#draining) return
+    this.#draining = true
     try {
-      const untrusted: unknown = await this.#socket.timeout(8_000).emitWithAck('game:command', request)
-      if (epoch !== this.#epoch || !this.#attached()) throw new Error('Your connection changed. Resynchronize before playing.')
-      const parsed = gameCommandAcknowledgementSchema.safeParse(untrusted)
-      if (!parsed.success) throw new Error(INVALID_RESPONSE)
-      if (!parsed.data.ok) throw new Error(parsed.data.error.message)
-      if (parsed.data.data.commandId !== request.commandId) throw new Error(INVALID_RESPONSE)
-      await this.requestSnapshot()
-      const view = this.#requireView()
-      if (view.stateVersion < parsed.data.data.stateVersion) throw new Error(INVALID_RESPONSE)
-      if (parsed.data.data.accepted) return { ok: true, view, events: [] }
-      return { ok: false, view, violation: parsed.data.data.violation }
-    } catch (error: unknown) {
-      if (epoch === this.#epoch && !this.#disposed) {
-        this.#error = error instanceof Error && error.message !== 'operation has timed out'
-          ? error.message : 'The command response was interrupted. Resynchronize before trying again.'
-        // A transport failure may follow an accepted command. Read the current view without
-        // re-sending the command or guessing its result from local events.
-        if (this.#attached()) await this.requestSnapshot().catch(() => {})
+      for (let entry = this.#queue.shift(); entry !== undefined; entry = this.#queue.shift()) {
+        this.#active = entry
+        this.#submitting = true
+        this.#error = null
+        try { entry.resolve(await this.#deliver(entry)) } catch (error: unknown) {
+          entry.reject(error instanceof Error ? error : new Error('Unable to deliver the game action.'))
+        } finally { this.#active = null }
       }
-      throw new Error(this.#error ?? 'The game connection changed. Resynchronize before playing.', { cause: error })
     } finally {
-      if (epoch === this.#epoch && !this.#disposed) {
-        this.#submitting = false
-        this.#publish([])
-      }
+      this.#draining = false
+      this.#submitting = false
+      this.#attempt = 0
+      this.#deliveryPhase = 'IDLE'
+      this.#publish([])
     }
+  }
+
+  async #deliver(entry: QueuedCommand): Promise<CommandResponse> {
+    const { request, cancellation } = entry
+    const signal = cancellation.signal
+    try {
+      for (let attempt = 1; attempt <= this.#settings.maxRetries + 1; attempt += 1) {
+        signal.throwIfAborted()
+        this.#attempt = attempt
+        if (!this.#attached()) await this.#waitForAttachment(signal)
+        if (attempt > 1 || this.#resyncRequired || this.#snapshotTask !== null) {
+          await abortable(this.requestSnapshot(), signal)
+        }
+        if (attempt > 1) {
+          this.#deliveryPhase = 'RETRYING'
+          this.#publish([])
+          await deliveryDelay(Math.min(this.#settings.maxRetryDelayMs,
+            this.#settings.retryDelayMs * 2 ** (attempt - 2)), signal)
+        }
+        if (!this.#attached()) {
+          await this.#waitForAttachment(signal)
+          await abortable(this.requestSnapshot(), signal)
+        }
+        signal.throwIfAborted()
+        this.#deliveryPhase = 'SUBMITTING'
+        this.#publish([])
+        let untrusted: unknown
+        try {
+          untrusted = await abortable(this.#socket.timeout(this.#settings.acknowledgementTimeoutMs)
+            .emitWithAck('game:command', request), signal)
+        } catch {
+          signal.throwIfAborted()
+          this.#resyncRequired = true
+          continue
+        }
+        const parsed = gameCommandAcknowledgementSchema.safeParse(untrusted)
+        if (!parsed.success || (parsed.data.ok && parsed.data.data.commandId !== request.commandId)) {
+          this.#resyncRequired = true
+          continue
+        }
+        if (!parsed.data.ok) {
+          if (parsed.data.error.code === 'GAME_BUSY'
+            || (parsed.data.error.code === 'NOT_ROOM_MEMBER' && !this.#attached())) {
+            this.#resyncRequired = true
+            continue
+          }
+          throw new Error(parsed.data.error.message)
+        }
+        await abortable(this.requestSnapshot(), signal)
+        signal.throwIfAborted()
+        const view = this.#requireView()
+        if (view.stateVersion < parsed.data.data.stateVersion) throw new Error(INVALID_RESPONSE)
+        return parsed.data.data.accepted ? { ok: true, view, events: [] }
+          : { ok: false, view, violation: parsed.data.data.violation }
+      }
+      throw new Error('The command outcome is uncertain after bounded retries. A fresh snapshot is required.')
+    } catch (error: unknown) {
+      if (signal.aborted || this.#disposed) throw new Error('The game session changed. Pending delivery was cancelled.', { cause: error })
+      const message = error instanceof Error ? error.message : 'Unable to deliver the game action.'
+      this.#resyncRequired = true
+      if (this.#attached()) await abortable(this.requestSnapshot(), signal).catch(() => {})
+      if (!signal.aborted && !this.#disposed) { this.#error = message; this.#publish([]) }
+      throw new Error(message, { cause: error })
+    }
+  }
+
+  #waitForAttachment(signal: AbortSignal): Promise<void> {
+    this.#deliveryPhase = 'WAITING_RECONNECT'
+    this.#publish([])
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        this.#attachmentWaiters.delete(wake)
+        signal.removeEventListener('abort', cancel)
+      }
+      const wake = (): void => { if (this.#attached()) { cleanup(); resolve() } }
+      const cancel = (): void => { cleanup(); reject(new Error('Pending delivery was cancelled.')) }
+      const timer = setTimeout(() => { cleanup(); reject(new Error('Reconnect timed out. Resynchronize before playing.')) }, this.#settings.reconnectTimeoutMs)
+      this.#attachmentWaiters.add(wake)
+      if (signal.aborted) cancel()
+      else { signal.addEventListener('abort', cancel, { once: true }); wake() }
+    })
+  }
+
+  #cancelQueued(message: string): void {
+    for (const entry of this.#queue.splice(0)) { entry.cancellation.abort(); entry.reject(new Error(message)) }
+  }
+
+  #cancelDelivery(): void {
+    this.#cancelQueued('The game session changed. Pending delivery was cancelled.')
+    this.#active?.cancellation.abort()
   }
 
   public requestSnapshot(): Promise<void> {
@@ -114,16 +219,24 @@ export class SocketGameGateway implements OnlineGameGateway {
     this.#publish([])
     const task = (async (): Promise<void> => {
       try {
-        const untrusted: unknown = await this.#socket.timeout(8_000).emitWithAck('game:request-snapshot', request)
-        if (epoch !== this.#epoch || !this.#attached()) return
-        const parsed = gameRequestSnapshotAcknowledgementSchema.safeParse(untrusted)
-        if (!parsed.success) throw new Error(INVALID_RESPONSE)
-        if (!parsed.data.ok) throw new Error(parsed.data.error.message)
-        if (!this.#matchesViewer(parsed.data.data)) throw new Error(INVALID_RESPONSE)
-        this.#error = parsed.data.data.lifecycleStatus === 'ERROR' ? 'The server could not continue this game.' : null
-        this.#accept(parsed.data.data, false)
+        // One additional authoritative request repairs a malformed or mismatched snapshot.
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const untrusted: unknown = await this.#socket.timeout(this.#settings.acknowledgementTimeoutMs).emitWithAck('game:request-snapshot', request)
+          if (epoch !== this.#epoch || !this.#attached()) return
+          const parsed = gameRequestSnapshotAcknowledgementSchema.safeParse(untrusted)
+          if (!parsed.success || (parsed.data.ok && !this.#matchesViewer(parsed.data.data))) {
+            if (attempt === 0) continue
+            throw new Error(INVALID_RESPONSE)
+          }
+          if (!parsed.data.ok) throw new Error(parsed.data.error.message)
+          this.#error = parsed.data.data.lifecycleStatus === 'ERROR' ? 'The server could not continue this game.' : null
+          this.#accept(parsed.data.data, false)
+          this.#resyncRequired = false
+          return
+        }
       } catch (error: unknown) {
         if (epoch !== this.#epoch || this.#disposed) return
+        this.#resyncRequired = true
         this.#error = error instanceof Error && error.message !== 'operation has timed out'
           ? error.message : 'Unable to refresh the online game. Try Resync game.'
         throw new Error(this.#error, { cause: error })
@@ -149,6 +262,7 @@ export class SocketGameGateway implements OnlineGameGateway {
   public dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
+    this.#cancelDelivery()
     this.#epoch += 1
     this.#unsubscribeLobby()
     this.#socket.off('game:update', this.#onGameUpdate)
@@ -180,12 +294,16 @@ export class SocketGameGateway implements OnlineGameGateway {
     if (identityChanged || !this.#attached()) {
       this.#epoch += 1
       this.#snapshotTask = null
-      this.#submitting = false
       this.#resynchronizing = false
+      this.#resyncRequired = !identityChanged && lobby.snapshot?.gameId !== undefined
       if (identityChanged) this.#wire = null
     }
+    if (identityChanged || lobby.error?.code === 'SESSION_REPLACED' || lobby.error?.code === 'SESSION_INVALID'
+      || lobby.error?.code === 'ROOM_CLOSED') this.#cancelDelivery()
+    if (lobby.snapshot?.lifecycleStatus === 'FINISHED') this.#cancelQueued('This game has finished.')
     this.#error = lobby.error?.message ?? null
     this.#publish([])
+    for (const wake of this.#attachmentWaiters) wake()
     if (this.#attached() && lobby.snapshot?.gameId !== undefined && (identityChanged || !wasAttached
       || previous?.snapshot?.lifecycleStatus !== lobby.snapshot.lifecycleStatus)) {
       void this.requestSnapshot().catch(() => {})
@@ -212,6 +330,7 @@ export class SocketGameGateway implements OnlineGameGateway {
     const gap = previous !== null && (update.view.stateVersion > previous.view.stateVersion + 1
       || update.publicationRevision > previous.publicationRevision + 1)
     this.#wire = update
+    if (update.lifecycleStatus === 'FINISHED') this.#cancelQueued('This game has finished.')
     this.#error = update.lifecycleStatus === 'ERROR' ? 'The server could not continue this game.' : null
     this.#publish(fromEvent ? update.events : [])
     if (fromEvent && gap) void this.requestSnapshot().catch(() => {})
@@ -228,7 +347,10 @@ export class SocketGameGateway implements OnlineGameGateway {
       connectionStatus: this.#attached() ? this.#wire?.lifecycleStatus === 'ERROR' ? 'ERROR' : 'READY'
         : this.#lobby?.connectionState === 'RECONNECTING' ? 'RECONNECTING'
           : this.#lobby?.connectionState === 'CONNECTING' ? 'CONNECTING' : 'DISCONNECTED',
-      error: this.#error, submitting: this.#submitting, resynchronizing: this.#resynchronizing }
+      error: this.#error, submitting: this.#submitting, resynchronizing: this.#resynchronizing,
+      delivery: gameDeliveryStateSchema.parse({ status: this.#resynchronizing ? 'RESYNCHRONIZING'
+        : this.#resyncRequired && this.#attached() ? 'RESYNC_REQUIRED' : this.#deliveryPhase,
+        attempt: this.#attempt, queuedCommands: this.#queue.length }) }
   }
 
   #publish(events: readonly PlayerEventView[]): void {

@@ -36,6 +36,7 @@ import {
 } from '@frontier-isles/realtime-contracts'
 import type { LobbyCredentialStore } from '../../infrastructure/realtime/lobby-credential-store.ts'
 import { SocketGameGateway } from './socket-game-gateway.ts'
+import type { CommandDeliveryOptions } from './command-delivery.ts'
 import type {
   LobbyGateway,
   LobbyGatewayListener,
@@ -45,6 +46,7 @@ import type {
 type LobbySocket = Socket<ServerToClientEvents, ClientToServerEvents>
 
 export interface SocketLobbyGatewayOptions {
+  readonly commandDelivery?: CommandDeliveryOptions
   readonly commandNamespaceFactory?: () => string
   readonly credentialStore?: LobbyCredentialStore
   readonly socket?: LobbySocket
@@ -100,6 +102,7 @@ export class SocketLobbyGateway implements LobbyGateway {
     })
     this.#registerTransportListeners()
     this.gameGateway = new SocketGameGateway({ socket: this.#socket,
+      ...(options.commandDelivery === undefined ? {} : { commandDelivery: options.commandDelivery }),
       subscribeToLobby: (listener) => this.subscribe(listener), isSessionAttached: () => this.#sessionAttached,
       ...(options.commandNamespaceFactory === undefined ? {} : { commandNamespaceFactory: options.commandNamespaceFactory }) })
   }

@@ -249,7 +249,7 @@ export function App({
     <GamePage
       aiThinking={session.aiThinking}
       buildMode={ui.selectedBuildMode}
-      busy={busy || (mode === 'ONLINE' && (session.submitting || session.resynchronizing || session.connectionStatus !== 'READY'))}
+      busy={busy || (mode === 'ONLINE' && (session.submitting || session.resynchronizing || session.delivery?.status === 'RESYNC_REQUIRED' || session.connectionStatus !== 'READY'))}
       canRestart={activeSetup !== null}
       createTradeId={createTradeId}
       error={effectiveError}
@@ -274,7 +274,11 @@ export function App({
       saveStatus={session.saveStatus}
       {...(mode === 'ONLINE' && lobby.snapshot !== null ? { online: {
         roomCode: lobby.snapshot.roomCode,
-        status: session.resynchronizing ? 'Resynchronizing' : session.submitting ? 'Sending command'
+        status: session.resynchronizing ? 'Resynchronizing'
+          : session.delivery?.status === 'RETRYING' ? `Retrying command (${session.delivery.attempt - 1})`
+            : session.delivery?.status === 'WAITING_RECONNECT' ? 'Waiting to reconnect'
+              : session.delivery?.status === 'RESYNC_REQUIRED' ? 'Resync required'
+                : session.submitting ? 'Sending command'
           : session.connectionStatus === 'READY' ? 'Connected'
             : session.connectionStatus === 'RECONNECTING' ? 'Reconnecting'
               : session.connectionStatus === 'CONNECTING' ? 'Connecting'

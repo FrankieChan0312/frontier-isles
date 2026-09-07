@@ -27,7 +27,6 @@ import {
   type SafeErrorCode,
   type ServerToClientEvents,
   type SessionId,
-  type GameCommandAcknowledgement,
   gameCommandRequestSchema,
   gameCommandAcknowledgementSchema,
   gameRequestSnapshotRequestSchema,
@@ -218,18 +217,12 @@ export function registerLobbyHandlers(
         acknowledge(gameCommandAcknowledgementSchema.parse(failure ?? internalFailure()))
         return
       }
-      let result: GameCommandAcknowledgement
-      try {
-        result = roomService.submitGameCommand(sessionId, parsed.data)
-      } catch {
+      void roomService.submitGameCommand(sessionId, parsed.data,
+        () => gameMembershipRequired() === null && socket.data.sessionId === sessionId).then((result) => {
+        acknowledge(gameCommandAcknowledgementSchema.parse(result))
+      }).catch(() => {
         acknowledge(gameCommandAcknowledgementSchema.parse(internalFailure()))
-        return
-      }
-      acknowledge(gameCommandAcknowledgementSchema.parse(result))
-      if (result.ok) {
-        const game = roomService.getGameSession(parsed.data.roomCode)
-        publishAndAdvanceGame(game, socket)
-      }
+      })
     })
 
     socket.on('game:request-snapshot', (payload: unknown, acknowledge) => {

@@ -25,28 +25,29 @@ describe('authoritative GameSession', () => {
     expect(gameUpdateSchema.safeParse(game.snapshot(east)).success).toBe(true)
   })
 
-  it('injects the session actor, rejects stale/non-current commands and caches the original result exactly once', () => {
+  it('injects the session actor, rejects stale/non-current commands and caches the original result exactly once', async () => {
     const accepted = vi.fn()
     const game = testSession(2, { createState: actionFixture, afterTransition: accepted })
-    const wrongActor = game.submitHuman(east, requestFor(game, east, { type: 'END_TURN' }))
+    const wrongActor = await game.submitHuman(east, requestFor(game, east, { type: 'END_TURN' }))
     expect(wrongActor).toMatchObject({ ok: true, data: { accepted: false, violation: { code: 'NOT_YOUR_TURN' } } })
     const request = requestFor(game, north, { type: 'BUY_DEVELOPMENT_CARD' })
-    const first = game.submitHuman(north, request)
+    const first = await game.submitHuman(north, request)
     expect(first).toMatchObject({ ok: true, data: { accepted: true, stateVersion: 17 } })
-    expect(game.submitHuman(north, { ...request, command: { type: 'END_TURN' } })).toEqual(first)
+    expect(await game.submitHuman(north, request)).toEqual(first)
+    expect(await game.submitHuman(north, { ...request, command: { type: 'END_TURN' } })).toMatchObject({ ok: false, error: { code: 'COMMAND_ID_CONFLICT' } })
     expect(accepted).toHaveBeenCalledTimes(1)
     const stale = { ...requestFor(game, north, { type: 'END_TURN' }), expectedStateVersion: 0 }
-    expect(game.submitHuman(north, stale)).toMatchObject({ ok: true,
+    expect(await game.submitHuman(north, stale)).toMatchObject({ ok: true,
       data: { accepted: false, violation: { code: 'STALE_STATE_VERSION' } } })
-    expect(game.submitHuman(sessionIdSchema.parse('unknown_session_0001'), request)).toMatchObject({ ok: false })
+    expect(await game.submitHuman(sessionIdSchema.parse('unknown_session_0001'), request)).toMatchObject({ ok: false })
     expect(JSON.stringify(first)).not.toMatch(/cardType|developmentCards|resources|details|random|seed/u)
   })
 
-  it('projects separate private views and redacts purchase events for every other Human', () => {
+  it('projects separate private views and redacts purchase events for every other Human', async () => {
     const game = testSession(4, { createState: actionFixture })
     const updates: GameUpdate[] = []
     game.subscribe(({ update }) => updates.push(update))
-    successData(game.submitHuman(north, requestFor(game, north, { type: 'BUY_DEVELOPMENT_CARD' })))
+    successData(await game.submitHuman(north, requestFor(game, north, { type: 'BUY_DEVELOPMENT_CARD' })))
     game.publish()
     expect(updates).toHaveLength(4)
     for (const update of updates) {
@@ -83,7 +84,7 @@ describe('authoritative GameSession', () => {
         ? { type: 'PLACE_INITIAL_SETTLEMENT', vertexId: requireValue(view.legalActions.legalInitialSettlementVertexIds?.[0]) }
         : { type: 'PLACE_INITIAL_ROAD', edgeId: requireValue(view.legalActions.legalInitialRoadEdgeIds?.[0]) }
       const before = transitions
-      expect(successData(game.submitHuman(session, requestFor(game, session, command))).accepted).toBe(true)
+      expect(successData(await game.submitHuman(session, requestFor(game, session, command))).accepted).toBe(true)
       game.publish()
       await game.advanceAi()
       observedAiAdvancement = transitions > before + 1
@@ -116,9 +117,9 @@ describe('authoritative GameSession', () => {
     expect(transitions).toBe(0)
     expect(game.snapshot(north).view.pendingDecision?.type).toBe('RESPOND_TO_TRADE')
     expect(game.snapshot(east).view.pendingDecision).toMatchObject({ type: 'TRADE_IN_PROGRESS' })
-    expect(successData(game.submitHuman(east, requestFor(game, east,
+    expect(successData(await game.submitHuman(east, requestFor(game, east,
       { type: 'REJECT_TRADE', tradeId: 'trade:pause' as TradeId }))).accepted).toBe(false)
-    expect(successData(game.submitHuman(north, requestFor(game, north,
+    expect(successData(await game.submitHuman(north, requestFor(game, north,
       { type: 'REJECT_TRADE', tradeId: 'trade:pause' as TradeId }))).accepted).toBe(true)
     game.publish()
     await game.advanceAi()
@@ -150,7 +151,7 @@ describe('authoritative GameSession', () => {
     expect(game.snapshot(east).view.pendingDecision?.type).toBe('AWAITING_DISCARDS')
     const updates: GameUpdate[] = []
     game.subscribe(({ update }) => updates.push(update))
-    expect(successData(game.submitHuman(north, requestFor(game, north,
+    expect(successData(await game.submitHuman(north, requestFor(game, north,
       { type: 'DISCARD_RESOURCES', resources: { ...createEmptyResourceBag(), BRICK: 4 } }))).accepted).toBe(true)
     game.publish()
     expect(updates.find((update) => update.view.self.id === game.playerForSession(east))?.events)
@@ -168,7 +169,7 @@ describe('authoritative GameSession', () => {
     const game = testSession(2, { createState: (config, seed) =>
       moveStandardCardToPlayer(actionFixture(config, seed), config.players[0].id, 'INVENTION') })
     const cardId = requireValue(game.snapshot(north).view.self.developmentCards[0]?.id)
-    expect(successData(game.submitHuman(north, requestFor(game, north, { type: 'PLAY_DEVELOPMENT_CARD', cardId }))).accepted).toBe(true)
+    expect(successData(await game.submitHuman(north, requestFor(game, north, { type: 'PLAY_DEVELOPMENT_CARD', cardId }))).accepted).toBe(true)
     await game.advanceAi()
     expect(game.snapshot(north).view.pendingDecision?.type).toBe('CHOOSE_INVENTION_RESOURCES')
     expect(game.snapshot(east).view.pendingDecision).toBeNull()
@@ -185,7 +186,7 @@ describe('authoritative GameSession', () => {
     await game.advanceAi()
     expect(game.snapshot(north)).toMatchObject({ lifecycleStatus: 'ERROR', aiThinking: false })
     expect(JSON.stringify(game.snapshot(north))).not.toContain('SECRET')
-    expect(game.submitHuman(north, requestFor(game, north, { type: 'END_TURN' }))).toMatchObject({ ok: false, error: { code: 'GAME_UNAVAILABLE' } })
+    expect(await game.submitHuman(north, requestFor(game, north, { type: 'END_TURN' }))).toMatchObject({ ok: false, error: { code: 'GAME_UNAVAILABLE' } })
     const bounded = testSession(2, { maxAiCommandsPerAdvance: 1,
       createState: (config, seed) => {
         const state = actionFixture(config, seed)
