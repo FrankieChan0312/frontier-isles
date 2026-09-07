@@ -9,7 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
 import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
 import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
@@ -44,7 +44,7 @@ import { PlayerPanels } from '../panels/PlayerPanels.tsx'
 import { ResourceHand } from '../panels/ResourceHand.tsx'
 
 export interface GamePageProps {
-  readonly online?: { readonly roomCode: string; readonly status: string; readonly onResync: () => void; readonly resyncDisabled: boolean }
+  readonly online?: { readonly roomCode: string; readonly status: string; readonly onResync: () => void; readonly resyncDisabled: boolean; readonly paused: boolean; readonly presence: ReactNode }
   readonly view: PlayerView
   readonly events: readonly PlayerEventView[]
   readonly buildMode: BuildMode
@@ -127,7 +127,7 @@ export function GamePage({
             </Box>
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
               {lastRoll === null ? null : <Chip label={`Last roll: ${lastRoll.dice[0]} + ${lastRoll.dice[1]} = ${lastRoll.total}`} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />}
-              <Chip aria-live="polite" role="status" label={online?.status ?? (aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`)} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
+              <Chip aria-label="Command delivery" aria-live="polite" role="status" label={online?.status ?? (aiThinking ? 'AI thinking…' : `Save: ${saveStatus.toLowerCase()}`)} sx={{ bgcolor: 'rgba(255,255,255,.92)' }} />
               {online === undefined ? <>
                 <Button color="inherit" disabled={busy} onClick={onSave} variant="outlined">Save</Button>
                 <Button color="inherit" disabled={busy || !canRestart} onClick={onRestart}>Restart seed</Button>
@@ -139,6 +139,7 @@ export function GamePage({
         {aiThinking ? <LinearProgress color="secondary" sx={{ mt: 1.5 }} /> : null}
       </Box>
       <Container maxWidth={false}>
+        {online?.presence}
         {error === null ? null : <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         {online !== undefined && view.publicGame.winnerId === null && (view.legalActions.permittedCommandTypes?.length ?? 0) === 0
           ? <Alert severity="info" sx={{ mb: 2 }}>Waiting for another player’s decision.</Alert> : null}
@@ -200,6 +201,7 @@ export function GamePage({
         </Box>
       </Container>
 
+      {online?.paused ? null : <>
       <DiscardDecisionDialog busy={busy} onSubmit={(resources) => onCommand({ type: 'DISCARD_RESOURCES', resources })} view={view} />
       <InventionDecisionDialog busy={busy} onSubmit={(resources) => onCommand({ type: 'CHOOSE_INVENTION_RESOURCES', resources })} view={view} />
       <MonopolyDecisionDialog busy={busy} onSubmit={(resource) => onCommand({ type: 'CHOOSE_MONOPOLY_RESOURCE', resource })} view={view} />
@@ -244,6 +246,7 @@ export function GamePage({
         view={view}
       />
       <VictoryDialog onNewGame={onNewGame} view={view} />
+      </>}
     </Box>
   )
 }

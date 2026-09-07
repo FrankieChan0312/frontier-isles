@@ -13,6 +13,7 @@ import { createUiInteractionStore } from '../application/stores/ui-interaction-s
 import { HomePage } from '../ui/pages/HomePage.tsx'
 import { LobbyPage } from '../ui/pages/LobbyPage.tsx'
 import { GamePage } from '../ui/pages/GamePage.tsx'
+import { GamePresencePanel } from '../ui/panels/GamePresencePanel.tsx'
 import { formatRuleViolation } from '../ui/game/ui-format.ts'
 import {
   createBrowserGameConfig,
@@ -158,6 +159,9 @@ export function App({
   }, [sessionStore])
 
   const effectiveError = localError ?? lobby.error?.message ?? session.error
+  const onlinePaused = mode === 'ONLINE' && (session.connectionStatus !== 'READY'
+    || session.presence?.lifecycleStatus === 'PAUSED_RECONNECTING'
+    || session.presence?.lifecycleStatus === 'PAUSED_REPLACEMENT_REQUIRED')
 
   if (screen === 'LOBBY' && lobby.snapshot !== null && lobby.selfSeatId !== null) {
     return (
@@ -190,10 +194,16 @@ export function App({
     return <Container component="main" maxWidth="sm" sx={{ py: 5 }}>
       <Stack spacing={2}>
         <Typography component="h1" variant="h4">Online Multiplayer</Typography>
-        <Typography>Loading your current game view…</Typography>
+        <Typography>{lobby.snapshot === null ? 'Your online session is no longer active.' : 'Loading your current game view…'}</Typography>
         {effectiveError === null ? <LinearProgress /> : <Alert severity="error">{effectiveError}</Alert>}
         <Button disabled={busy || session.resynchronizing || session.connectionStatus !== 'READY'}
           onClick={() => { void run(async () => { await onlineGateway?.requestSnapshot() }) }}>Resync game</Button>
+        {lobby.snapshot !== null ? null : <Button onClick={() => { void run(async () => {
+          await lobbyGateway.leaveRoom()
+          onlineSessionStore.getState().reset()
+          setMode('LOCAL')
+          setScreen('HOME')
+        }) }}>Return Home</Button>}
       </Stack>
     </Container>
   }
@@ -249,7 +259,7 @@ export function App({
     <GamePage
       aiThinking={session.aiThinking}
       buildMode={ui.selectedBuildMode}
-      busy={busy || (mode === 'ONLINE' && (session.submitting || session.resynchronizing || session.delivery?.status === 'RESYNC_REQUIRED' || session.connectionStatus !== 'READY'))}
+      busy={busy || onlinePaused || (mode === 'ONLINE' && (session.submitting || session.resynchronizing || session.delivery?.status === 'RESYNC_REQUIRED' || session.connectionStatus !== 'READY'))}
       canRestart={activeSetup !== null}
       createTradeId={createTradeId}
       error={effectiveError}
@@ -274,6 +284,11 @@ export function App({
       saveStatus={session.saveStatus}
       {...(mode === 'ONLINE' && lobby.snapshot !== null ? { online: {
         roomCode: lobby.snapshot.roomCode,
+        paused: onlinePaused,
+        presence: lobby.selfSeatId === null ? null : <GamePresencePanel snapshot={lobby.snapshot} selfSeatId={lobby.selfSeatId}
+          connected={lobby.connectionState === 'CONNECTED' && session.connectionStatus === 'READY'} busy={busy}
+          onReplace={(seatId, profileId) => { void run(() => lobbyGateway.replaceExpiredHuman(seatId, profileId)) }}
+          onClose={() => { void run(() => lobbyGateway.closeGame()) }} />,
         status: session.resynchronizing ? 'Resynchronizing'
           : session.delivery?.status === 'RETRYING' ? `Retrying command (${session.delivery.attempt - 1})`
             : session.delivery?.status === 'WAITING_RECONNECT' ? 'Waiting to reconnect'

@@ -124,7 +124,7 @@ describe('acknowledgement and server-event contracts', () => {
   it('compiles complete typed Socket.IO event maps', () => {
     const clientEvents: ReadonlyArray<keyof ClientToServerEvents> = CLIENT_EVENT_NAMES
     const serverEvents: ReadonlyArray<keyof ServerToClientEvents> = SERVER_EVENT_NAMES
-    expect(clientEvents).toHaveLength(10)
+    expect(clientEvents).toHaveLength(12)
     expect(serverEvents).toHaveLength(6)
   })
 })

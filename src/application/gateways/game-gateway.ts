@@ -4,7 +4,7 @@ import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player
 import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
 import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
 import type { GameId } from '@frontier-isles/game-core/model/ids'
-import type { GameDeliveryState } from '@frontier-isles/realtime-contracts'
+import type { GameDeliveryState, GamePresence } from '@frontier-isles/realtime-contracts'
 
 export type GatewayConnectionStatus = 'IDLE' | 'READY' | 'ERROR' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED'
 export type GatewaySaveStatus = 'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'
@@ -19,6 +19,7 @@ export interface GameUpdate {
   readonly submitting?: boolean
   readonly resynchronizing?: boolean
   readonly delivery?: GameDeliveryState
+  readonly presence?: GamePresence
 }
 
 export type CommandResponse =

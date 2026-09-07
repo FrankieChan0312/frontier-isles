@@ -2,7 +2,7 @@ import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
 import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
 import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
-import type { GameDeliveryState } from '@frontier-isles/realtime-contracts'
+import type { GameDeliveryState, GamePresence } from '@frontier-isles/realtime-contracts'
 import type { GameUpdate, GatewayConnectionStatus, GatewaySaveStatus } from '../gateways/game-gateway.ts'
 
 export interface GameSessionStoreState {
@@ -15,6 +15,7 @@ export interface GameSessionStoreState {
   readonly submitting: boolean
   readonly resynchronizing: boolean
   readonly delivery: GameDeliveryState | null
+  readonly presence: GamePresence | null
   readonly applyGatewayUpdate: (update: GameUpdate) => void
   readonly clearError: () => void
   readonly reset: () => void
@@ -30,6 +31,7 @@ const INITIAL_SESSION_STATE = {
   submitting: false,
   resynchronizing: false,
   delivery: null as GameDeliveryState | null,
+  presence: null as GamePresence | null,
 }
 
 export function createGameSessionStore(): StoreApi<GameSessionStoreState> {
@@ -46,6 +48,7 @@ export function createGameSessionStore(): StoreApi<GameSessionStoreState> {
       submitting: update.submitting ?? false,
       resynchronizing: update.resynchronizing ?? false,
       delivery: update.delivery ?? null,
+      presence: update.presence ?? null,
     })),
     clearError: (): void => set({ error: null }),
     reset: (): void => set(INITIAL_SESSION_STATE),

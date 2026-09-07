@@ -31,6 +31,11 @@ import {
   gameCommandAcknowledgementSchema,
   gameRequestSnapshotRequestSchema,
   gameRequestSnapshotAcknowledgementSchema,
+  roomReplaceHumanRequestSchema,
+  roomReplaceHumanAcknowledgementSchema,
+  roomCloseGameRequestSchema,
+  roomCloseGameAcknowledgementSchema,
+  type RoomClosedNotice,
 } from '@frontier-isles/realtime-contracts'
 import type {
   InterServerEvents,
@@ -102,16 +107,20 @@ function roomChannel(roomCode: string): string {
   return `frontier-isles:room:${roomCode}`
 }
 
-function closedMessage(reason: 'EMPTY' | 'IDLE_TIMEOUT'): string {
-  return reason === 'IDLE_TIMEOUT'
-    ? 'The room closed after its waiting-room idle limit.'
-    : 'The room closed because no eligible Human players remain.'
+function closedMessage(reason: RoomClosedNotice['reason']): string {
+  const messages: Readonly<Record<RoomClosedNotice['reason'], string>> = {
+    EMPTY: 'The room closed because no eligible Human players remain.',
+    IDLE_TIMEOUT: 'The room closed after its waiting-room idle limit.',
+    HOST_CLOSED: 'The Host closed the paused game.',
+    ABANDONED_TIMEOUT: 'The game closed after its replacement or completed-game retention limit.',
+  }
+  return messages[reason]
 }
 
 function publishClosed(
   server: RealtimeServer,
   roomCode: RoomCode,
-  reason: 'EMPTY' | 'IDLE_TIMEOUT',
+  reason: RoomClosedNotice['reason'],
   disconnectSockets: boolean,
 ): void {
   const channel = roomChannel(roomCode)
@@ -223,6 +232,33 @@ export function registerLobbyHandlers(
       }).catch(() => {
         acknowledge(gameCommandAcknowledgementSchema.parse(internalFailure()))
       })
+    })
+
+    socket.on('room:replace-human', (payload: unknown, acknowledge) => {
+      if (typeof acknowledge !== 'function') return
+      const parsed = roomReplaceHumanRequestSchema.safeParse(payload)
+      if (!parsed.success) { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(validationFailure(payload, parsed.error))); return }
+      const failure = gameMembershipRequired()
+      const sessionId = socket.data.sessionId
+      if (failure !== null || sessionId === undefined) { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(failure ?? internalFailure())); return }
+      void roomService.replaceExpiredHuman(sessionId, parsed.data.gameId, parsed.data.expectedRevision,
+        parsed.data.seatId, parsed.data.profileId, () => gameMembershipRequired() === null && socket.data.sessionId === sessionId)
+        .then((result) => { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(result)) })
+        .catch(() => { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(internalFailure())) })
+    })
+
+    socket.on('room:close-game', (payload: unknown, acknowledge) => {
+      if (typeof acknowledge !== 'function') return
+      const parsed = roomCloseGameRequestSchema.safeParse(payload)
+      if (!parsed.success) { acknowledge(roomCloseGameAcknowledgementSchema.parse(validationFailure(payload, parsed.error))); return }
+      const failure = gameMembershipRequired()
+      const sessionId = socket.data.sessionId
+      if (failure !== null || sessionId === undefined) { acknowledge(roomCloseGameAcknowledgementSchema.parse(failure ?? internalFailure())); return }
+      try {
+        const result = roomService.closeActiveGame(sessionId, parsed.data.gameId, parsed.data.expectedRevision)
+        acknowledge(roomCloseGameAcknowledgementSchema.parse(result))
+        if (result.ok) publishClosed(server, result.data.roomCode, 'HOST_CLOSED', true)
+      } catch { acknowledge(roomCloseGameAcknowledgementSchema.parse(internalFailure())) }
     })
 
     socket.on('game:request-snapshot', (payload: unknown, acknowledge) => {
@@ -431,6 +467,7 @@ export function registerLobbyHandlers(
         const game = roomService.getGameSession(result.data.credential.roomCode)
         if (game !== null) {
           publishPrivateGameUpdate(socket, game.snapshot(result.data.credential.sessionId))
+          void game.advanceAi().catch(() => { socket.emit('server:error', internalFailure().error) })
         }
         if (result.data.changed) {
           server.to(roomChannel(result.data.snapshot.roomCode)).emit(

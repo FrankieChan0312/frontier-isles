@@ -138,6 +138,19 @@ acknowledgement and to send simultaneous exact/conflicting requests. It checks v
 delivery, stable retry payloads, one build/event and safe conflict results through real browsers.
 No source timeout, assertion or accepted regression journey is relaxed for those tests.
 
+V2-10 adds `server/test/game-presence.test.ts` with an injected clock and held AI choices:
+current/non-current Human disconnect, exact grace boundaries, private discard/robber/trade
+retention, multiple disconnects, Host transfer, same-PlayerId AI takeover, pause-safe AI resume,
+abandoned/finished cleanup and disposal races. Actual socket presence integration tests reject
+non-Host, stale, spoofed and wrong-game intents and prove private discard redaction on takeover.
+Contract tests reject contradictory presence, extra/private fields and invalid deadlines.
+Gateway tests cover pause/replacement, duplicate-tab authority and closure cleanup; UI tests
+prove countdown zero cannot authorize replacement and live timers are disposed.
+`tests/e2e/online-presence.spec.ts` uses real WebSocket interruption and the unchanged 30-second
+grace for reconnect, Host expiry/AI takeover, duplicate tabs during pause, and explicit closure.
+It checks public metadata, credential invalidation, privacy, disabled gameplay and all three
+required viewport widths. Successful replacement screenshots are stored under `test-results/`.
+
 The V1 UAT regression paths additionally load an accepted pending AI offer, edit both complete
 counter bundles above one, prove a favorable AI acceptance and an unfavorable AI rejection without
 a second counter, and buy a known schema-valid Development Card. The card path asserts the exact

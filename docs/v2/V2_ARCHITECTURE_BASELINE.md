@@ -282,7 +282,25 @@ repair uncertain outcomes, stale versions, reconnects, invalid/mismatched update
 Snapshot validation retries once, then leaves an accessible manual resync action. View and
 publication versions never move backwards; a newer view alone never proves command success.
 
-## 15. Deferred decisions
+## 15. Implemented active-game presence boundary
+
+V2-10 implements [ADR-V2-0011](ADR-V2-0011-active-game-presence-and-ai-replacement.md).
+GameSession lifecycle wraps the unchanged core GamePhase. Any disconnected Human sets an
+immediate presence safety latch; queued commands check it before mutation and an awaited AI
+decision checks both lifecycle and presence epoch before execution. Recovering every Human
+resumes the same state; no board, pending decision, private hand or RNG changes during pause.
+The public presence schema carries only lifecycle, disconnected seats/deadlines, replacement
+profiles and abandoned deadline. Strict Room/Game projections must agree with their seat metadata.
+
+Expired credentials lose authority. The connected current Host may select an AI profile after
+server-confirmed expiry or close the game. A GameSession controller overlay keeps the original
+core PlayerId and state, removes the Human mapping/cache and supplies only that player's redacted
+view to AI. Canonical connected-Human Host transfer precedes replacement authorization. Temporary
+all-Human disconnection retains grace; no remaining eligible Human session closes the Room.
+The 30-minute abandoned/finished retention timer cancels on resolved replacement or closure.
+Disposal cancels lifecycle work and clears Room/session membership before late socket callbacks.
+
+## 16. Deferred decisions
 
 - final public server host
 - database vendor

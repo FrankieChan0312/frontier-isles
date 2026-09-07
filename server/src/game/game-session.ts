@@ -1,5 +1,7 @@
 import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
 import type { GameEvent } from '@frontier-isles/game-core/contracts/events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerController } from '@frontier-isles/game-core/model/player'
 import type { GameConfig, FourPlayerTuple, PlayerConfig } from '@frontier-isles/game-core/model/game-config'
 import type { GameState } from '@frontier-isles/game-core/model/game-state'
 import type { AiProfileId, CommandId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
@@ -12,10 +14,11 @@ import { DEFAULT_AI_SAFETY_LIMITS, type AiAgent, type AiSafetyLimits } from '@fr
 import { createAiCommandKey } from '@frontier-isles/game-ai/core-ai-agent'
 import { PersonalityAiAgent } from '@frontier-isles/game-ai/personality-ai-agent'
 import {
-  CANONICAL_SEAT_IDS, REALTIME_PROTOCOL_VERSION, gameUpdateSchema,
+  CANONICAL_SEAT_IDS, REALTIME_PROTOCOL_VERSION, gameUpdateSchema, gamePresenceSchema,
   createSafeErrorAcknowledgement, type AiProfileId as LobbyAiProfileId,
   type GameCommandAcknowledgement, type GameCommandRequest, type GameCommandResult,
   type GameUpdate, type RoomCode, type SeatId, type SessionId,
+  type DisconnectedSeatPresence, type GamePresence,
 } from '@frontier-isles/realtime-contracts'
 import { commandRequestFingerprint } from './command-request-fingerprint.js'
 import { GameExecutionQueue, GameQueueFullError } from './game-execution-queue.js'
@@ -95,6 +98,11 @@ export class GameSession {
   #aiCommandCount = 0
   #turnIdentity = ''
   #ownCommandKeys = new Map<PlayerId, string[]>()
+  readonly #replacementProfiles = new Map<SeatId, LobbyAiProfileId>()
+  #disconnectedSeats: readonly DisconnectedSeatPresence[] = []
+  #abandonedDeadlineMs: number | null = null
+  #presenceEpoch = 0
+  #closed = false
 
   public constructor(
     roomCode: RoomCode,
@@ -144,7 +152,78 @@ export class GameSession {
   }
 
   public get lifecycleStatus(): GameUpdate['lifecycleStatus'] {
-    return this.#state.winnerId !== null ? 'FINISHED' : this.#failed ? 'ERROR' : 'ACTIVE'
+    return this.#closed ? 'CLOSED' : this.#state.winnerId !== null ? 'FINISHED' : this.#failed ? 'ERROR'
+      : this.#disconnectedSeats.some((seat) => seat.replacementRequired) ? 'PAUSED_REPLACEMENT_REQUIRED'
+        : this.#disconnectedSeats.length > 0 ? 'PAUSED_RECONNECTING' : 'ACTIVE'
+  }
+
+  public get presenceSnapshot(): GamePresence {
+    return gamePresenceSchema.parse({ lifecycleStatus: this.lifecycleStatus,
+      disconnectedSeats: this.#disconnectedSeats, abandonedDeadlineMs: this.#abandonedDeadlineMs,
+      replacements: CANONICAL_SEAT_IDS.flatMap((seatId) => {
+        const profileId = this.#replacementProfiles.get(seatId)
+        return profileId === undefined ? [] : [{ seatId, profileId }]
+      }) })
+  }
+
+  /** Immediate transport safety latch; this never changes core state or RNG. */
+  public setPresence(disconnectedSeats: readonly DisconnectedSeatPresence[], abandonedDeadlineMs: number | null): void {
+    if (this.#closed) return
+    if (JSON.stringify(disconnectedSeats) === JSON.stringify(this.#disconnectedSeats)
+      && abandonedDeadlineMs === this.#abandonedDeadlineMs) return
+    this.#disconnectedSeats = structuredClone(disconnectedSeats)
+    this.#abandonedDeadlineMs = abandonedDeadlineMs
+    this.#presenceEpoch += 1
+    this.publish()
+  }
+
+  public async replaceHuman(
+    sessionId: SessionId,
+    profileId: LobbyAiProfileId,
+    isAuthorized: () => boolean,
+    applyRoomReplacement: () => void,
+  ): Promise<'REPLACED' | 'NOT_AUTHORIZED' | 'NOT_REPLACEABLE' | 'BUSY'> {
+    try {
+      return await this.#queue.run(async () => {
+        if (!isAuthorized()) return 'NOT_AUTHORIZED'
+        const actorId = this.#humanPlayers.get(sessionId)
+        const seatId = CANONICAL_SEAT_IDS.find((seat) => this.#seatPlayers.get(seat) === actorId)
+        if (actorId === undefined || seatId === undefined || this.lifecycleStatus !== 'PAUSED_REPLACEMENT_REQUIRED'
+          || !this.#disconnectedSeats.some((seat) => seat.seatId === seatId && seat.replacementRequired)) return 'NOT_REPLACEABLE'
+        this.#replacementProfiles.set(seatId, profileId)
+        this.#humanPlayers.delete(sessionId)
+        this.#cache.delete(sessionId)
+        this.#presenceEpoch += 1
+        applyRoomReplacement()
+        await this.#runAi()
+        return 'REPLACED'
+      })
+    } catch (error: unknown) {
+      if (error instanceof GameQueueFullError) return 'BUSY'
+      throw error
+    }
+  }
+
+  public close(): void {
+    this.#closed = true
+    this.#presenceEpoch += 1
+    this.#listeners.clear()
+    this.#cache.clear()
+  }
+
+  #controller(playerId: PlayerId): PlayerController {
+    const seatId = CANONICAL_SEAT_IDS.find((seat) => this.#seatPlayers.get(seat) === playerId)
+    const replacement = seatId === undefined ? undefined : this.#replacementProfiles.get(seatId)
+    if (replacement !== undefined) return { type: 'AI', profileId: replacement as AiProfileId }
+    const controller = this.#state.players[playerId]?.controller
+    if (controller === undefined) throw new Error('Online controller requires a game player.')
+    return controller
+  }
+
+  #playerView(playerId: PlayerId): PlayerView {
+    const view = gameEngine.createPlayerView(this.#state, playerId)
+    return { ...view, self: { ...view.self, controller: this.#controller(view.self.id) },
+      opponents: view.opponents.map((player) => ({ ...player, controller: this.#controller(player.id) })) }
   }
 
   public playerForSeat(seatId: SeatId): PlayerId | undefined { return this.#seatPlayers.get(seatId) }
@@ -161,9 +240,10 @@ export class GameSession {
     return gameUpdateSchema.parse({
       protocolVersion: REALTIME_PROTOCOL_VERSION, roomCode: this.roomCode, gameId: this.gameId,
       publicationRevision: this.#publicationRevision, lifecycleStatus: this.lifecycleStatus,
+      presence: this.presenceSnapshot,
       aiThinking: this.lifecycleStatus === 'ACTIVE'
-        && this.#state.players[nextGameDecisionActor(this.#state)]?.controller.type === 'AI',
-      view: gameEngine.createPlayerView(this.#state, viewer),
+        && this.#controller(nextGameDecisionActor(this.#state)).type === 'AI',
+      view: this.#playerView(viewer),
       events: createPlayerEventViews(events, viewer),
     })
   }
@@ -212,6 +292,10 @@ export class GameSession {
     if (cached !== undefined) return unchanged(cached.fingerprint === fingerprint
       ? { ok: true, data: structuredClone(cached.result) }
       : createSafeErrorAcknowledgement('COMMAND_ID_CONFLICT', 'This command ID was already used for a different request. Resynchronize before a new action.'))
+    if (this.#closed) return unchanged(createSafeErrorAcknowledgement('ROOM_CLOSED', 'This online game has closed.'))
+    if (this.lifecycleStatus === 'PAUSED_RECONNECTING' || this.lifecycleStatus === 'PAUSED_REPLACEMENT_REQUIRED') {
+      return unchanged(createSafeErrorAcknowledgement('GAME_PAUSED', 'The game is paused until every Human reconnects or an expired seat is replaced.'))
+    }
     if (this.#failed) return unchanged(createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The game could not continue. Request a fresh snapshot.'))
     const result = gameEngine.execute(this.#state, {
       commandId: request.commandId, expectedStateVersion: request.expectedStateVersion,
@@ -243,6 +327,7 @@ export class GameSession {
   }
 
   public advanceAi(): Promise<void> {
+    if (this.lifecycleStatus !== 'ACTIVE') return Promise.resolve()
     if (this.#aiTask !== null) return this.#aiTask
     this.#aiTask = this.#queue.run(() => this.#runAi()).finally(() => { this.#aiTask = null })
     return this.#aiTask
@@ -256,7 +341,7 @@ export class GameSession {
     if (identity !== this.#turnIdentity) {
       this.#ownCommandKeys.clear()
       this.#turnIdentity = identity
-    } else if (state.players[actorId]?.controller.type === 'AI') {
+    } else if (this.#controller(actorId).type === 'AI') {
       const keys = this.#ownCommandKeys.get(actorId) ?? []
       // An AI never receives another actor's private discard, card or trade command history.
       keys.push(createAiCommandKey(command))
@@ -270,18 +355,21 @@ export class GameSession {
     try {
       for (let count = 0; this.lifecycleStatus === 'ACTIVE'; count += 1) {
         const actorId = nextGameDecisionActor(this.#state)
-        const player = this.#state.players[actorId]
-        if (player?.controller.type !== 'AI') return
+        const controller = this.#controller(actorId)
+        if (controller.type !== 'AI') return
         if (count >= this.#advanceLimit || this.#aiCommandCount >= this.#aiLimits.maxCommandsPerGame) {
           throw new Error('AI command bound reached.')
         }
         const version = this.#state.stateVersion
+        const presenceEpoch = this.#presenceEpoch
         const keys = this.#ownCommandKeys.get(actorId) ?? []
         if (keys.length >= this.#aiLimits.maxCommandsPerTurn) throw new Error('AI turn command bound reached.')
-        const command = await this.#aiAgent.chooseNextCommand(gameEngine.createPlayerView(this.#state, actorId), {
-          profileId: player.controller.profileId, commandNumberThisTurn: keys.length,
+        const command = await this.#aiAgent.chooseNextCommand(this.#playerView(actorId), {
+          profileId: controller.profileId, commandNumberThisTurn: keys.length,
           commandNumberThisGame: this.#aiCommandCount, previousCommandKeysThisTurn: [...keys], limits: this.#aiLimits,
         })
+        if (this.lifecycleStatus !== 'ACTIVE') return
+        if (presenceEpoch !== this.#presenceEpoch) continue
         if (version !== this.#state.stateVersion) throw new Error('Game mutation escaped the execution queue.')
         const key = createAiCommandKey(command)
         if (keys.filter((previous) => previous === key).length >= this.#aiLimits.maxRepeatedCommandPerTurn) {
@@ -297,6 +385,7 @@ export class GameSession {
         this.publish()
       }
     } catch {
+      if (this.lifecycleStatus !== 'ACTIVE') return
       this.#failed = true
       this.publish()
     }

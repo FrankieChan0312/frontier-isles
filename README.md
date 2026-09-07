@@ -44,6 +44,13 @@ conflicting reuse. Sending, retry, reconnect and resync states are visible. If d
 uncertain, use the fresh authoritative view and **Resync game** before deciding on a new action.
 See [the delivery ADR](docs/v2/ADR-V2-0010-command-delivery-and-serialized-execution.md).
 
+Any active Human disconnect pauses gameplay and AI immediately. A public countdown shows the
+server's 30-second reconnect deadline. After expiry, the connected Host explicitly selects an AI
+profile to take over the same player permanently, or closes the game. An expired Host transfers
+to the first connected Human in NORTH/EAST/SOUTH/WEST order. Unresolved abandoned games and
+finished games expire after `GAME_ABANDONED_TTL_MS` (30 minutes by default); games close when no
+eligible Human session remains. See [the presence policy](docs/v2/ADR-V2-0011-active-game-presence-and-ai-replacement.md).
+
 ## Quality and release commands
 
 ```sh
@@ -112,8 +119,8 @@ deck, or RNG cursor. Browser localStorage necessarily holds the authoritative of
 is not rendered or placed in UI stores.
 Online mode uses SocketGameGateway on the Lobby's attached socket. Commands omit actor identity,
 which the server derives from the Human session. Reconnect, stale responses and **Resync game**
-request a fresh authoritative view. Delivery retries, extended disconnect policy and durable game
-recovery remain later milestones; see [Goal B progress](docs/v2/V2_GOAL_B_PROGRESS.md).
+request a fresh authoritative view. Delivery retries and active pause/replacement are implemented;
+durable restart recovery remains the next milestone. See [Goal C progress](docs/v2/V2_GOAL_C_PROGRESS.md).
 
 Start with [AGENTS.md](AGENTS.md), [product scope](docs/PRODUCT_SCOPE.md),
 [game rules](docs/GAME_RULES.md), and [architecture](docs/ARCHITECTURE.md) before changing code.

@@ -6,6 +6,7 @@ export interface ServerConfig {
   readonly nodeEnv: ServerEnvironment
   readonly reconnectGraceMs: number
   readonly roomIdleTtlMs: number
+  readonly gameAbandonedTtlMs?: number
 }
 const DEFAULT_PORT = '3001'
 const DEFAULT_CLIENT_ORIGIN = 'http://127.0.0.1:5173'
@@ -84,5 +85,6 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
       environment.ROOM_IDLE_TTL_MS ?? DEFAULT_ROOM_IDLE_TTL_MS,
       'ROOM_IDLE_TTL_MS',
     ),
+    gameAbandonedTtlMs: parseTimerDelay(environment.GAME_ABANDONED_TTL_MS ?? DEFAULT_ROOM_IDLE_TTL_MS, 'GAME_ABANDONED_TTL_MS'),
   }
 }

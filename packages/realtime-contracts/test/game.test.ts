@@ -38,6 +38,7 @@ function request(command: unknown): unknown {
 function update() {
   const state = createCompletedGoldenSetup()
   return { ...identity, publicationRevision: 1, lifecycleStatus: 'ACTIVE', aiThinking: false,
+    presence: { lifecycleStatus: 'ACTIVE', disconnectedSeats: [], replacements: [], abandonedDeadlineMs: null },
     view: gameEngine.createPlayerView(state, GOLDEN_PLAYER_IDS.human), events: [] }
 }
 

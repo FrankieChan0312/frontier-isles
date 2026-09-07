@@ -30,6 +30,8 @@ export interface LobbyGateway {
   setReady(ready: boolean): Promise<void>
   setAiSeat(seatId: SeatId, profileId: AiProfileId | null): Promise<void>
   startGame(): Promise<void>
+  replaceExpiredHuman(seatId: SeatId, profileId: AiProfileId): Promise<void>
+  closeGame(): Promise<void>
   requestSnapshot(): Promise<void>
   leaveRoom(): Promise<void>
   dispose(): void

@@ -24,6 +24,10 @@ import {
   sessionReplacedNoticeSchema,
   sessionResumeAcknowledgementSchema,
   sessionResumeRequestSchema,
+  roomReplaceHumanRequestSchema,
+  roomReplaceHumanAcknowledgementSchema,
+  roomCloseGameRequestSchema,
+  roomCloseGameAcknowledgementSchema,
   type Acknowledgement,
   type AiProfileId,
   type ClientToServerEvents,
@@ -204,6 +208,28 @@ export class SocketLobbyGateway implements LobbyGateway {
     const untrusted: unknown = await this.#socket.timeout(8_000).emitWithAck('room:start', request)
     const data = validatedResultData(roomStartAcknowledgementSchema, untrusted)
     this.#acceptSnapshot(data.snapshot)
+  }
+
+  public async replaceExpiredHuman(seatId: SeatId, profileId: AiProfileId): Promise<void> {
+    const snapshot = this.#requireSnapshot()
+    const request = roomReplaceHumanRequestSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION,
+      gameId: snapshot.gameId, expectedRevision: snapshot.revision, seatId, profileId })
+    try {
+      const result: unknown = await this.#socket.timeout(8_000).emitWithAck('room:replace-human', request)
+      this.#acceptSnapshot(validatedResultData(roomReplaceHumanAcknowledgementSchema, result).snapshot)
+      await this.gameGateway.requestSnapshot()
+    } catch (error: unknown) {
+      await this.requestSnapshot().catch(() => {})
+      throw error
+    }
+  }
+
+  public async closeGame(): Promise<void> {
+    const snapshot = this.#requireSnapshot()
+    const request = roomCloseGameRequestSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION,
+      gameId: snapshot.gameId, expectedRevision: snapshot.revision })
+    const result: unknown = await this.#socket.timeout(8_000).emitWithAck('room:close-game', request)
+    validatedResultData(roomCloseGameAcknowledgementSchema, result)
   }
 
   public async leaveRoom(): Promise<void> {

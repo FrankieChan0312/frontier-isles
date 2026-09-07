@@ -54,12 +54,13 @@ export function observeOnline(page: Page): OnlineObserver {
   } }
 }
 
-export async function openOnlineBrowsers(browser: Browser, hostName = 'Ada Host', beforeHostConnect?: (page: Page) => Promise<void>): Promise<OnlineBrowsers> {
+export async function openOnlineBrowsers(browser: Browser, hostName = 'Ada Host', beforeHostConnect?: (page: Page) => Promise<void>, beforeJoinerConnect?: (page: Page) => Promise<void>): Promise<OnlineBrowsers> {
   const hostContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const joinerContext = await browser.newContext({ viewport: { width: 1024, height: 768 } })
   const host = observeOnline(await hostContext.newPage())
   const joiner = observeOnline(await joinerContext.newPage())
   await beforeHostConnect?.(host.page)
+  await beforeJoinerConnect?.(joiner.page)
   await host.page.goto('/')
   await host.page.getByLabel('Your name').fill(hostName)
   await host.page.getByRole('button', { name: 'Create online Room' }).click()

@@ -35,11 +35,11 @@ test('a lost game acknowledgement retries the same request once and shows one pu
   try {
     await game.host.page.getByRole('button', { name: /^Build on vertex:/ }).first().press('Enter')
     await expectSharedPublicState([game.host, game.joiner], 1)
-    await expect(game.host.page.getByRole('status')).toContainText('Sending command')
+    await expect(game.host.page.getByRole('status', { name: 'Command delivery' })).toContainText('Sending command')
     await expect.poll(() => requests.length, { timeout: 15_000 }).toBe(2)
     expect(dropped).toBe(true)
     expect(requests[0]).toEqual(requests[1])
-    await expect(game.host.page.getByRole('status')).toContainText('Connected')
+    await expect(game.host.page.getByRole('status', { name: 'Command delivery' })).toContainText('Connected')
     await expect(game.joiner.page.locator('[data-layer="buildings"] [data-vertex-id]')).toHaveCount(1)
     expect(game.host.current().view.stateVersion).toBe(1)
     expect(game.joiner.updates.flatMap((update) => update.events).filter((event) => event.type === 'SETTLEMENT_BUILT')).toHaveLength(1)

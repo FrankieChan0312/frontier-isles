@@ -56,6 +56,7 @@ export function createRealtimeServer(
     dependencies.roomService ?? new InMemoryRoomService({
       reconnectGraceMs: config.reconnectGraceMs,
       roomIdleTtlMs: config.roomIdleTtlMs,
+      ...(config.gameAbandonedTtlMs === undefined ? {} : { gameAbandonedTtlMs: config.gameAbandonedTtlMs }),
     }),
   )
   return realtimeServer

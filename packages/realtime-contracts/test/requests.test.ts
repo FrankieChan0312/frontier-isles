@@ -35,13 +35,15 @@ const validRequests = {
     seatId: 'EAST',
   },
   'room:start': { protocolVersion: version, expectedRevision: 2 },
+  'room:replace-human': { protocolVersion: version, gameId: 'game:test', expectedRevision: 2, seatId: 'EAST', profileId: 'BUILDER' },
+  'room:close-game': { protocolVersion: version, gameId: 'game:test', expectedRevision: 2 },
   'game:command': { protocolVersion: version, roomCode: 'ABC234', gameId: 'game:test',
     commandId: 'command:test', expectedStateVersion: 0, command: { type: 'ROLL_DICE' } },
   'game:request-snapshot': { protocolVersion: version, roomCode: 'ABC234', gameId: 'game:test' },
 } as const
 
 describe('client request contracts', () => {
-  it('preserves Goal A events and adds the minimal Goal B client inventory', () => {
+  it('preserves Goal A/B events and adds the explicit Goal C Host decisions', () => {
     expect(CLIENT_EVENT_NAMES).toEqual([
       'room:create',
       'room:join',
@@ -51,6 +53,8 @@ describe('client request contracts', () => {
       'room:request-snapshot',
       'session:resume',
       'room:start',
+      'room:replace-human',
+      'room:close-game',
       'game:command',
       'game:request-snapshot',
     ])

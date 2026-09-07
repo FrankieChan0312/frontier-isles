@@ -30,6 +30,7 @@ describe('server configuration', () => {
       nodeEnv: 'development',
       reconnectGraceMs: 30_000,
       roomIdleTtlMs: 1_800_000,
+      gameAbandonedTtlMs: 1_800_000,
     })
   })
 
@@ -40,6 +41,7 @@ describe('server configuration', () => {
   it.each(['', '0', '-1', '3.5', '2147483648'])('rejects invalid lifecycle delay %j', (value) => {
     expect(() => parseServerConfig({ RECONNECT_GRACE_MS: value })).toThrow('RECONNECT_GRACE_MS')
     expect(() => parseServerConfig({ ROOM_IDLE_TTL_MS: value })).toThrow('ROOM_IDLE_TTL_MS')
+    expect(() => parseServerConfig({ GAME_ABANDONED_TTL_MS: value })).toThrow('GAME_ABANDONED_TTL_MS')
   })
 
   it.each([

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { REALTIME_PROTOCOL_VERSION } from './protocol-version.js'
 import { gameIdSchema } from './game-values.js'
+import { gamePresenceSchema } from './game-presence.js'
 import {
   aiProfileIdSchema,
   CANONICAL_SEAT_IDS,
@@ -111,6 +112,7 @@ export const roomSnapshotSchema = z.strictObject({
   revision: roomRevisionSchema,
   lifecycleStatus: roomLifecycleStatusSchema,
   gameId: gameIdSchema.optional(),
+  gamePresence: gamePresenceSchema.optional(),
   hostSeatId: seatIdSchema,
   seats: roomSeatsSchema,
   startReadiness: startReadinessSchema,
@@ -118,6 +120,28 @@ export const roomSnapshotSchema = z.strictObject({
   if ((snapshot.lifecycleStatus === 'ACTIVE' || snapshot.lifecycleStatus === 'FINISHED')
     !== (snapshot.gameId !== undefined)) {
     context.addIssue({ code: 'custom', message: 'Started Rooms must identify their game.' })
+  }
+  if ((snapshot.gameId !== undefined) !== (snapshot.gamePresence !== undefined)
+    || (snapshot.gamePresence !== undefined && (snapshot.lifecycleStatus === 'FINISHED') !== (snapshot.gamePresence.lifecycleStatus === 'FINISHED'))) {
+    context.addIssue({ code: 'custom', message: 'Started Rooms must have coherent public game presence.' })
+  }
+  for (const presence of snapshot.gamePresence?.disconnectedSeats ?? []) {
+    const seat = snapshot.seats.find((candidate) => candidate.seatId === presence.seatId)
+    if (seat?.occupancy !== 'HUMAN' || seat.connectionStatus !== (presence.replacementRequired ? 'DISCONNECTED' : 'RECONNECTING')) {
+      context.addIssue({ code: 'custom', message: 'Disconnected presence must match public Human seats.' })
+    }
+  }
+  if (snapshot.gamePresence !== undefined) for (const seat of snapshot.seats) {
+    if (seat.occupancy === 'HUMAN' && seat.connectionStatus !== 'CONNECTED'
+      && !snapshot.gamePresence.disconnectedSeats.some((presence) => presence.seatId === seat.seatId)) {
+      context.addIssue({ code: 'custom', message: 'Every disconnected Human must have public presence.' })
+    }
+  }
+  for (const replacement of snapshot.gamePresence?.replacements ?? []) {
+    const seat = snapshot.seats.find((candidate) => candidate.seatId === replacement.seatId)
+    if (seat?.occupancy !== 'AI' || seat.profileId !== replacement.profileId) {
+      context.addIssue({ code: 'custom', message: 'Replacement must match its public AI seat.' })
+    }
   }
   const expected = deriveStartReadiness(snapshot.seats, snapshot.lifecycleStatus)
   if (

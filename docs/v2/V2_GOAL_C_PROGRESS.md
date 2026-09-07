@@ -37,7 +37,8 @@ Task specification: [Goal C](../../tasks/V2_GOAL_C_RECOVERABLE_ONLINE_ALPHA.md)
 
 Status: COMPLETE
 
-Full task gate passed. Commit subject: `fix: harden multiplayer command delivery and concurrency`.
+Full task gate passed. Commit: `37362a6517ccf359b207eda55f4114f0f356fa2f`
+(`fix: harden multiplayer command delivery and concurrency`). Working tree verified clean after commit.
 
 - Per-GameSession FIFO serializes Human execution, result recording, publication and AI.
   Dequeue rechecks current transport and session authority. Queue capacity defaults to 64.
@@ -102,7 +103,67 @@ remain later task work. No unrelated or future product feature was implemented i
 
 ## V2-10 — Active-game presence and AI replacement
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Full task gate passed. Required commit message:
+`feat: add active-game reconnect and AI replacement policy`.
+
+Implemented immediate pause on any Human disconnect, retaining the 30-second grace. New Human
+commands are refused while paused; exact retained results remain readable. AI checks presence
+after awaiting a choice and discards a choice that crossed a presence change. Core state and RNG
+remain unchanged through disconnect/reconnect. Multiple Humans must all recover or be replaced.
+
+Expired credentials lose authority. Only the current connected Host can select Builder, Merchant
+or Sentinel to take over an expired Human's same PlayerId permanently. The GameSession controller
+overlay leaves the original core player/state intact and gives AI only the redacted player view.
+An expired Host transfers in canonical seat order; if another eligible Human is still within
+grace, that Human may resume before transfer. No eligible Human sessions closes the Room.
+
+The Host can close a replacement-required game. `GAME_ABANDONED_TTL_MS` defaults to 30 minutes
+from the first unresolved expiry or game completion; snapshot reads do not extend it. Resolving
+replacement cancels the deadline. Closure/disposal cancels timers and stops AI; late socket
+callbacks cannot rebuild closed Room presence or retain session membership.
+
+Strict Room/Game presence projections expose only public seat/deadline/profile metadata. The UI
+shows pause/countdown, server-confirmed expiry, Host-only replacement/profile/closure controls,
+non-Host waiting and accessible active-state announcements. Browser countdown zero never grants
+authority. All three required viewport screenshots were visually reviewed and have no overflow.
+
+Files created: strict shared presence schema/tests; server presence unit and actual-socket
+integration tests; GamePresencePanel and UI tests; online presence browser suite; ADR-V2-0011.
+Files changed: Room/GameSession lifecycle, config/composition/handlers and environment example;
+realtime request/acknowledgement/event/Room/Game schemas and inventories; Lobby/Game gateways,
+projection store, App/GamePage, gateway tests and test lifecycle/network/browser helpers;
+online browser script, README, architecture, testing, limitations and this report.
+
+No dependencies added. No core, AI-package, local gateway, rules, deterministic entropy or V1
+save implementation changed. Durability and production hardening remain the following tasks;
+there is no unrelated future feature in this task.
+
+Focused final verification: root/server typechecks and zero-warning lint exit 0; presence and
+related server selection originally 45/45 passes; final actual-socket selection 2/2 passes;
+contracts 7 files / 66 tests pass; gateway/UI 2 files / 20 tests pass; Playwright delivery/presence
+6/6 pass (2.4 minutes). Full regression gate passed. Development test failures were corrected:
+an event inventory needed the two new intents, a discard assertion used `count` instead of the
+existing `quantity`, and gateway teardown exposed the fixed late-disconnect disposal bug. No
+accepted assertion, grace interval or production limit was weakened.
+
+Full gate results (all exit 0):
+
+- `npm run check:all`: 95 files / 582 tests; frontend 23 / 101, core 35 / 261,
+  AI 15 / 36, contracts 7 / 66, server 15 / 118. Root/server typechecks, zero-warning
+  lint and all builds pass; only the existing Vite chunk-size advisory remains.
+- `npm run simulate`: 100/100 legal winners, 65,341 commands, hash `1adc49e8`.
+  Complete JSON report and every summary exactly match the accepted baseline.
+- `npm run simulate:online`: 6/6 legal winners across repeated 2H+2AI, 3H+1AI and
+  4H. Complete JSON summaries exactly match baseline, including version 749, 134 turns,
+  383 RNG draws and public hash `ead66aa5cb05a2b907c1ea9f7e40078389d9cf34c32e1bf132e40b03123652a3`.
+- `npm run e2e:lobby`: all 6 accepted journeys pass (1.3 minutes).
+- `npm run e2e:online`: 19/19 pass (5.4 minutes), retaining all 13 Goal B journeys
+  and both V2-09 fault journeys, plus the four new presence journeys.
+- `npm run e2e`: 33/33 pass (6.3 minutes), including all 8 Single Player and all 6
+  Goal A regressions. No test skipped, ignored or weakened.
+- `git diff --check`: exit 0. Logs: `logs/goal-c-10-gate-*.log`.
 
 ## V2-11 — Durable Room/Game recovery
 

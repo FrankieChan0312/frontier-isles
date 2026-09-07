@@ -5,6 +5,7 @@ import { gameIdSchema, commandIdSchema, integerSchema } from './game-values.js'
 import { gameCommandSchema, ruleViolationCodeSchema } from './game-command.js'
 import { playerViewSchema } from './game-view.js'
 import { playerEventSchema } from './game-events.js'
+import { gameLifecycleStatusSchema, gamePresenceSchema } from './game-presence.js'
 
 const identity = {
   protocolVersion: z.literal(REALTIME_PROTOCOL_VERSION), roomCode: roomCodeSchema, gameId: gameIdSchema,
@@ -23,11 +24,12 @@ export const gameCommandRequestSchema = z.strictObject({
 export const gameRequestSnapshotRequestSchema = z.strictObject(identity)
 export const gameUpdateSchema = z.strictObject({
   ...identity, publicationRevision: integerSchema,
-  lifecycleStatus: z.enum(['ACTIVE', 'FINISHED', 'ERROR']), aiThinking: z.boolean(),
+  lifecycleStatus: gameLifecycleStatusSchema, presence: gamePresenceSchema, aiThinking: z.boolean(),
   view: playerViewSchema, events: z.array(playerEventSchema).max(128),
 }).superRefine((update, context) => {
   if (update.gameId !== update.view.publicGame.gameId
-    || (update.lifecycleStatus === 'FINISHED') !== (update.view.publicGame.winnerId !== null)
+    || update.lifecycleStatus !== update.presence.lifecycleStatus
+    || (update.lifecycleStatus !== 'CLOSED' && (update.lifecycleStatus === 'FINISHED') !== (update.view.publicGame.winnerId !== null))
     || (update.lifecycleStatus !== 'ACTIVE' && update.aiThinking)) {
     context.addIssue({ code: 'custom', message: 'Game identity and lifecycle must match the view.' })
   }

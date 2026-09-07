@@ -16,6 +16,7 @@ import { requireValue, successData } from './game-test-helpers.js'
 
 export type GameClient = Socket<ServerToClientEvents, ClientToServerEvents>
 export interface NetworkGame {
+  readonly runtime: FakeLifecycleRuntime
   readonly service: InMemoryRoomService
   readonly clients: readonly GameClient[]
   readonly members: readonly RoomSessionData[]
@@ -28,7 +29,8 @@ export interface NetworkGame {
 
 export async function networkGame(humans = 2, dependencies: GameSessionDependencies = {}, seed = 'NETWORK-GAME-TEST-0'): Promise<NetworkGame> {
   let gameNumber = 0
-  const service = new InMemoryRoomService({ runtime: new FakeLifecycleRuntime(),
+  const runtime = new FakeLifecycleRuntime()
+  const service = new InMemoryRoomService({ runtime,
     // NORTH starts with this fixed seed; AI-first and private-response pauses have separate tests.
     nextGameIdentity: () => ({ gameId: gameIdSchema.parse(gameNumber++ === 0 ? 'game:network-test' : `game:network-test:${gameNumber}`), seed }),
     gameDependencies: dependencies })
@@ -83,7 +85,7 @@ export async function networkGame(humans = 2, dependencies: GameSessionDependenc
   for (const client of clients) successData(await client.timeout(5_000).emitWithAck('room:set-ready', {
     protocolVersion: REALTIME_PROTOCOL_VERSION, expectedRevision: snapshot().revision, ready: true,
   }))
-  return { service, clients, members, updates, connect, snapshot,
+  return { runtime, service, clients, members, updates, connect, snapshot,
     recoveryPackets: () => {
       // Inspect the real adapter in tests only; no production introspection endpoint exists.
       const packets: unknown = Object.getOwnPropertyDescriptor(realtimeServer.of('/').adapter, 'packets')?.value

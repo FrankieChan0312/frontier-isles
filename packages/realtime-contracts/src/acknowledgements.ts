@@ -56,6 +56,10 @@ export const roomLeaveAcknowledgementSchema = acknowledgementSchema(roomLeaveDat
 export const roomRequestSnapshotAcknowledgementSchema = acknowledgementSchema(roomSnapshotDataSchema)
 export const sessionResumeAcknowledgementSchema = acknowledgementSchema(roomSessionDataSchema)
 export const roomStartAcknowledgementSchema = acknowledgementSchema(roomSnapshotDataSchema)
+export const roomReplaceHumanAcknowledgementSchema = acknowledgementSchema(roomSnapshotDataSchema)
+export const roomCloseGameAcknowledgementSchema = acknowledgementSchema(roomLeaveDataSchema)
+export type RoomReplaceHumanAcknowledgement = Acknowledgement<RoomSnapshotData>
+export type RoomCloseGameAcknowledgement = Acknowledgement<RoomLeaveData>
 
 export type RoomCreateAcknowledgement = Acknowledgement<RoomSessionData>
 export type RoomJoinAcknowledgement = Acknowledgement<RoomSessionData>

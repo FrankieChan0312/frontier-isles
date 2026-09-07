@@ -6,9 +6,11 @@
 - Online Rooms and sessions are process-local: a server restart loses them. Resume credentials are
   tab-scoped sessionStorage data, reconnect grace defaults to 30 seconds, waiting-Room idle expiry
   defaults to 30 minutes, and only one long-running server process is supported.
-- Started game seats remain fixed. Active-game resume is supported within the reconnect grace;
-  expiration invalidates the credential without removing the player or substituting AI. Extended
-  pause/replacement, game persistence and server restart recovery remain later V2 work.
+- Started game PlayerIds and board positions remain fixed. Any active Human disconnect pauses
+  Human commands and AI. Within grace the same Human can resume; after expiry only the connected
+  Host can permanently replace that Human with a selected AI profile, or close the game. The
+  expired credential cannot reclaim the seat. There is no Human substitution or undo of replacement.
+  Game persistence and server restart recovery remain later V2 work.
 - One latest Single Player save is stored in localStorage for the current browser origin. It is not encrypted or
   tamper-proof and disappears if the user clears site data.
 - The browser save contains authoritative offline state by necessity. Hidden data is excluded from
@@ -20,8 +22,10 @@
   memory-only and does not survive a reload. Exact-result replay retains the latest 128 results
   per Human session by insertion order; evicted successful requests are rejected as stale.
   Exhausted retries report an uncertain outcome, even when a newer view has arrived.
-- Finishing a game allows each browser to return Home by detaching its own credential. Started
-  server seats remain fixed; Room reuse and extended post-game lifecycle are not part of Goal B.
+- Finishing a game allows each browser to return Home by detaching its own credential. Finished
+  games and games awaiting replacement expire after `GAME_ABANDONED_TTL_MS` (30 minutes by
+  default), unaffected by snapshot polling. No eligible Human sessions closes a game immediately.
+  Room reuse is not supported.
 - AI is deterministic, heuristic, and bounded. It does not learn, search exhaustively, or claim
   optimal play; one-for-one offers and one minimal counter keep domestic negotiation finite.
 - The mobile/tablet board fits its full topology and stacks controls vertically; V1 has no board

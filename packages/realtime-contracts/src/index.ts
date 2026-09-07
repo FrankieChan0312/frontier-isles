@@ -69,6 +69,10 @@ export {
   roomSetAiSeatRequestSchema,
   roomSetReadyRequestSchema,
   roomStartRequestSchema,
+  roomReplaceHumanRequestSchema,
+  roomCloseGameRequestSchema,
+  type RoomReplaceHumanRequest,
+  type RoomCloseGameRequest,
   sessionResumeRequestSchema,
   type RoomCreateRequest,
   type RoomJoinRequest,
@@ -92,6 +96,10 @@ export {
   roomSetReadyAcknowledgementSchema,
   roomSnapshotDataSchema,
   roomStartAcknowledgementSchema,
+  roomReplaceHumanAcknowledgementSchema,
+  roomCloseGameAcknowledgementSchema,
+  type RoomReplaceHumanAcknowledgement,
+  type RoomCloseGameAcknowledgement,
   sessionCredentialSchema,
   sessionResumeAcknowledgementSchema,
   type Acknowledgement,
@@ -121,6 +129,7 @@ export {
   type SessionReplacedNotice,
 } from './events.js'
 export * from './game.js'
+export * from './game-presence.js'
 export { gameCommandSchema, GAME_COMMAND_TYPES, ruleViolationCodeSchema } from './game-command.js'
 export { playerViewSchema } from './game-view.js'
 export { playerEventSchema } from './game-events.js'

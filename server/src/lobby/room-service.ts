@@ -1,3 +1,4 @@
+import type { GameId } from '@frontier-isles/game-core/model/ids'
 import {
   CANONICAL_SEAT_IDS,
   REALTIME_PROTOCOL_VERSION,
@@ -25,6 +26,8 @@ import {
   type GameCommandAcknowledgement,
   type GameRequestSnapshotRequest,
   type GameRequestSnapshotAcknowledgement,
+  type RoomClosedNotice,
+  type DisconnectedSeatPresence,
 } from '@frontier-isles/realtime-contracts'
 import { createGameIdentity, type GameIdentity } from '../game/game-entropy.js'
 import { GameSession, type GamePublication, type GameSeat, type GameSessionDependencies } from '../game/game-session.js'
@@ -51,6 +54,7 @@ interface HumanRoomSeat {
   readonly displayName: string
   readonly ready: boolean
   readonly connectionStatus: ConnectionStatus
+  readonly reconnectDeadlineMs: number | null
 }
 
 interface AiRoomSeat {
@@ -69,6 +73,8 @@ interface RoomState {
   seats: readonly RoomSeat[]
   idleDeadlineMs: number
   idleTask: ScheduledLifecycleTask | null
+  abandonedDeadlineMs: number | null
+  abandonedTask: ScheduledLifecycleTask | null
 }
 
 interface StoredSession {
@@ -105,7 +111,7 @@ export type RoomLifecycleEvent =
   | {
       readonly type: 'ROOM_CLOSED'
       readonly roomCode: RoomCode
-      readonly reason: 'EMPTY' | 'IDLE_TIMEOUT'
+      readonly reason: RoomClosedNotice['reason']
     }
 
 export type RoomLifecycleListener = (event: RoomLifecycleEvent) => void
@@ -117,12 +123,14 @@ export interface InMemoryRoomServiceOptions {
   readonly maximumIdentifierAttempts?: number
   readonly reconnectGraceMs?: number
   readonly roomIdleTtlMs?: number
+  readonly gameAbandonedTtlMs?: number
   readonly runtime?: RoomLifecycleRuntime
 }
 
 const DEFAULT_MAXIMUM_IDENTIFIER_ATTEMPTS = 32
 export const DEFAULT_RECONNECT_GRACE_MS = 30_000
 export const DEFAULT_ROOM_IDLE_TTL_MS = 1_800_000
+export const DEFAULT_GAME_ABANDONED_TTL_MS = 1_800_000
 
 function emptySeats(): readonly EmptyRoomSeat[] {
   return CANONICAL_SEAT_IDS.map((seatId) => ({ seatId, occupancy: 'EMPTY' }))
@@ -162,10 +170,12 @@ export class InMemoryRoomService {
   readonly #maximumIdentifierAttempts: number
   readonly #reconnectGraceMs: number
   readonly #roomIdleTtlMs: number
+  readonly #gameAbandonedTtlMs: number
   readonly #runtime: RoomLifecycleRuntime
   readonly #rooms = new Map<RoomCode, RoomState>()
   readonly #sessions = new Map<SessionId, StoredSession>()
   readonly #listeners = new Set<RoomLifecycleListener>()
+  #disposed = false
 
   public constructor(options: InMemoryRoomServiceOptions = {}) {
     this.#nextGameIdentity = options.nextGameIdentity ?? createGameIdentity
@@ -183,6 +193,7 @@ export class InMemoryRoomService {
       options.roomIdleTtlMs ?? DEFAULT_ROOM_IDLE_TTL_MS,
       'roomIdleTtlMs',
     )
+    this.#gameAbandonedTtlMs = validatePositiveInteger(options.gameAbandonedTtlMs ?? DEFAULT_GAME_ABANDONED_TTL_MS, 'gameAbandonedTtlMs')
     this.#runtime = options.runtime ?? createSystemRoomLifecycleRuntime()
   }
 
@@ -192,6 +203,7 @@ export class InMemoryRoomService {
   }
 
   public createRoom(displayName: string): RoomServiceResult<RoomSessionData> {
+    if (this.#disposed) return serviceFailure('ROOM_CLOSED', 'The multiplayer service is closing.')
     const parsedName = displayNameSchema.safeParse(displayName)
     if (!parsedName.success) {
       return serviceFailure('INVALID_DISPLAY_NAME', 'Enter a valid display name.')
@@ -218,9 +230,12 @@ export class InMemoryRoomService {
         displayName: parsedName.data,
         ready: false,
         connectionStatus: 'CONNECTED',
+        reconnectDeadlineMs: null,
       }),
       idleDeadlineMs: 0,
       idleTask: null,
+      abandonedDeadlineMs: null,
+      abandonedTask: null,
     }
     this.#rooms.set(roomCode, room)
     this.#sessions.set(generated.stored.sessionId, generated.stored)
@@ -263,6 +278,7 @@ export class InMemoryRoomService {
       displayName: parsedName.data,
       ready: false,
       connectionStatus: 'CONNECTED',
+      reconnectDeadlineMs: null,
     })
     room.revision = incrementRevision(room.revision)
     this.#sessions.set(generated.stored.sessionId, generated.stored)
@@ -313,9 +329,12 @@ export class InMemoryRoomService {
       membership.room.seats = replaceSeat(membership.room.seats, seat.seatId, {
         ...seat,
         connectionStatus: 'CONNECTED',
+        reconnectDeadlineMs: null,
       })
       membership.room.revision = incrementRevision(membership.room.revision)
     }
+    this.#transferExpiredHost(membership.room)
+    this.#synchronizeGamePresence(membership.room)
     this.#touchRoom(membership.room)
     return {
       ok: true,
@@ -340,18 +359,20 @@ export class InMemoryRoomService {
       return { ok: true, data: { changed: false, snapshot: this.#snapshot(membership.room) } }
     }
 
+    const deadline = this.#runtime.now() + this.#reconnectGraceMs
     membership.room.seats = replaceSeat(membership.room.seats, seat.seatId, {
       ...seat,
       connectionStatus: 'RECONNECTING',
+      reconnectDeadlineMs: deadline,
     })
     membership.room.revision = incrementRevision(membership.room.revision)
-    const deadline = this.#runtime.now() + this.#reconnectGraceMs
     membership.session.reconnectTask?.cancel()
     membership.session.reconnectDeadlineMs = deadline
     membership.session.reconnectTask = this.#runtime.schedule(
       this.#reconnectGraceMs,
       () => this.#expireDisconnectedSession(sessionId, deadline),
     )
+    this.#synchronizeGamePresence(membership.room)
     return {
       ok: true,
       data: { changed: true, snapshot: this.#snapshot(membership.room) },
@@ -489,8 +510,14 @@ export class InMemoryRoomService {
       game.subscribe((publication) => {
         if (publication.update.lifecycleStatus === 'FINISHED' && !finishedPublished) {
           finishedPublished = true
-          room.revision = incrementRevision(room.revision)
-          this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
+          // Finish the current per-viewer publication before emitting retention metadata.
+          queueMicrotask(() => {
+            if (this.#rooms.get(room.roomCode) !== room) return
+            this.#scheduleGameCleanup(room)
+            room.revision = incrementRevision(room.revision)
+            this.#synchronizeGamePresence(room)
+            this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
+          })
         }
         for (const listener of this.#gameListeners) listener(publication)
       })
@@ -507,6 +534,63 @@ export class InMemoryRoomService {
   public subscribeToGames(listener: (publication: GamePublication) => void): () => void {
     this.#gameListeners.add(listener)
     return () => this.#gameListeners.delete(listener)
+  }
+
+  public async replaceExpiredHuman(
+    hostSessionId: SessionId,
+    gameId: GameId,
+    expectedRevision: RoomRevision,
+    seatId: SeatId,
+    profileId: AiProfileId,
+    isTransportCurrent: () => boolean = () => true,
+  ): Promise<RoomServiceResult<RoomSnapshotData>> {
+    const authority = this.#replacementAuthority(hostSessionId, gameId, expectedRevision)
+    if (!authority.ok) return authority
+    const { room, game } = authority
+    const target = room.seats.find((seat) => seat.seatId === seatId)
+    if (target?.occupancy !== 'HUMAN' || target.connectionStatus !== 'DISCONNECTED') {
+      return serviceFailure('REPLACEMENT_NOT_AVAILABLE', 'Only a Human seat whose reconnect grace has expired can be replaced.')
+    }
+    let refusal: SafeError | null = null
+    const result = await game.replaceHuman(target.sessionId, profileId, () => {
+      const current = this.#replacementAuthority(hostSessionId, gameId, expectedRevision)
+      if (!isTransportCurrent()) { refusal = { code: 'NOT_HOST', message: 'Resume the authoritative Host session before replacing a seat.' }; return false }
+      if (!current.ok) { refusal = current.error; return false }
+      return current.room === room && current.game === game
+    }, () => {
+      room.seats = replaceSeat(room.seats, target.seatId, { seatId: target.seatId, occupancy: 'AI', profileId })
+      room.revision = incrementRevision(room.revision)
+      this.#synchronizeGamePresence(room)
+      this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
+    })
+    if (result === 'BUSY') return serviceFailure('GAME_BUSY', 'The game is busy. Retry the replacement shortly.')
+    if (result === 'NOT_AUTHORIZED') return { ok: false, error: refusal ?? { code: 'NOT_HOST', message: 'Only the connected Host can replace this seat.' } }
+    if (result !== 'REPLACED') return serviceFailure('REPLACEMENT_NOT_AVAILABLE', 'This seat no longer requires replacement.')
+    if (this.#rooms.get(room.roomCode) !== room) return serviceFailure('ROOM_CLOSED', 'This online game has closed.')
+    return { ok: true, data: { snapshot: this.#snapshot(room) } }
+  }
+
+  public closeActiveGame(hostSessionId: SessionId, gameId: GameId, expectedRevision: RoomRevision): RoomServiceResult<RoomLeaveData> {
+    const authority = this.#replacementAuthority(hostSessionId, gameId, expectedRevision)
+    if (!authority.ok) return authority
+    const roomCode = authority.room.roomCode
+    this.#closeRoom(authority.room)
+    return { ok: true, data: { roomCode } }
+  }
+
+  #replacementAuthority(hostSessionId: SessionId, gameId: GameId, expectedRevision: RoomRevision):
+    | { readonly ok: true; readonly room: RoomState; readonly game: GameSession }
+    | { readonly ok: false; readonly error: SafeError } {
+    const membership = this.#membership(hostSessionId)
+    if (!membership.ok) return membership
+    const { room } = membership
+    const host = this.#humanSeats(room).find((seat) => seat.sessionId === hostSessionId)
+    if (room.hostSessionId !== hostSessionId || host?.connectionStatus !== 'CONNECTED') return serviceFailure('NOT_HOST', 'Only the connected Host can make this decision.')
+    if (room.game === null || room.game.gameId !== gameId) return serviceFailure('GAME_NOT_FOUND', 'This online game is unavailable.')
+    const revisionFailure = this.#checkRevision(room, expectedRevision)
+    if (revisionFailure !== null) return revisionFailure
+    if (room.game.lifecycleStatus !== 'PAUSED_REPLACEMENT_REQUIRED') return serviceFailure('REPLACEMENT_NOT_AVAILABLE', 'Wait until the server confirms that a Human reconnect grace has expired.')
+    return { ok: true, room, game: room.game }
   }
 
   public getGameSession(roomCode: RoomCode): GameSession | null {
@@ -560,8 +644,12 @@ export class InMemoryRoomService {
   }
 
   public dispose(): void {
-    for (const room of this.#rooms.values()) room.idleTask?.cancel()
+    if (this.#disposed) return
+    this.#disposed = true
+    for (const room of this.#rooms.values()) { room.idleTask?.cancel(); room.abandonedTask?.cancel(); room.game?.close() }
     for (const session of this.#sessions.values()) session.reconnectTask?.cancel()
+    this.#sessions.clear()
+    this.#rooms.clear()
     this.#listeners.clear()
     this.#gameListeners.clear()
   }
@@ -671,13 +759,19 @@ export class InMemoryRoomService {
     }
 
     if (room.game !== null) {
-      // Goal B promises resume only within grace. Preserve all authoritative game seats;
-      // extended pause, replacement and restart recovery are explicitly deferred.
       session.reconnectTask?.cancel()
       this.#sessions.delete(sessionId)
       room.seats = room.seats.map((seat) => seat.occupancy === 'HUMAN' && seat.sessionId === sessionId
         ? { ...seat, connectionStatus: 'DISCONNECTED' } : seat)
       room.revision = incrementRevision(room.revision)
+      if (!this.#humanSeats(room).some((seat) => this.#sessions.has(seat.sessionId))) {
+        this.#closeRoom(room)
+        this.#emit({ type: 'ROOM_CLOSED', roomCode: room.roomCode, reason: 'EMPTY' })
+        return
+      }
+      this.#transferExpiredHost(room)
+      this.#scheduleGameCleanup(room)
+      this.#synchronizeGamePresence(room)
       this.#emit({ type: 'SNAPSHOT_UPDATED', snapshot: this.#snapshot(room) })
       return
     }
@@ -718,12 +812,55 @@ export class InMemoryRoomService {
 
   #closeRoom(room: RoomState): void {
     room.idleTask?.cancel()
+    room.abandonedTask?.cancel()
+    room.game?.close()
     for (const seat of this.#humanSeats(room)) {
       const session = this.#sessions.get(seat.sessionId)
       session?.reconnectTask?.cancel()
       this.#sessions.delete(seat.sessionId)
     }
     this.#rooms.delete(room.roomCode)
+  }
+
+  #transferExpiredHost(room: RoomState): void {
+    if (room.game === null || this.#sessions.has(room.hostSessionId)) return
+    const next = this.#humanSeats(room).find((seat) => seat.connectionStatus === 'CONNECTED')
+    if (next !== undefined) room.hostSessionId = next.sessionId
+  }
+
+  #synchronizeGamePresence(room: RoomState): void {
+    if (room.game === null) return
+    const disconnected: DisconnectedSeatPresence[] = this.#humanSeats(room).flatMap((seat) => {
+      if (seat.connectionStatus === 'CONNECTED') return []
+      if (seat.reconnectDeadlineMs === null) throw new Error('Disconnected Human requires an authoritative deadline.')
+      return [{ seatId: seat.seatId, reconnectDeadlineMs: seat.reconnectDeadlineMs,
+        replacementRequired: seat.connectionStatus === 'DISCONNECTED' }]
+    })
+    if (!disconnected.some((seat) => seat.replacementRequired) && room.game.lifecycleStatus !== 'FINISHED') {
+      room.abandonedTask?.cancel()
+      room.abandonedTask = null
+      room.abandonedDeadlineMs = null
+    }
+    room.game.setPresence(disconnected, room.abandonedDeadlineMs)
+  }
+
+  #scheduleGameCleanup(room: RoomState): void {
+    if (room.abandonedDeadlineMs !== null) return
+    const deadline = this.#runtime.now() + this.#gameAbandonedTtlMs
+    room.abandonedDeadlineMs = deadline
+    room.abandonedTask = this.#runtime.schedule(this.#gameAbandonedTtlMs, () => this.#expireAbandonedGame(room.roomCode, deadline))
+  }
+
+  #expireAbandonedGame(roomCode: RoomCode, expectedDeadline: number): void {
+    const room = this.#rooms.get(roomCode)
+    if (room?.game === null || room === undefined || room.abandonedDeadlineMs !== expectedDeadline) return
+    const remaining = expectedDeadline - this.#runtime.now()
+    if (remaining > 0) {
+      room.abandonedTask = this.#runtime.schedule(remaining, () => this.#expireAbandonedGame(roomCode, expectedDeadline))
+      return
+    }
+    this.#closeRoom(room)
+    this.#emit({ type: 'ROOM_CLOSED', roomCode, reason: 'ABANDONED_TIMEOUT' })
   }
 
   #emit(event: RoomLifecycleEvent): void {
@@ -763,7 +900,7 @@ export class InMemoryRoomService {
       roomCode: room.roomCode,
       revision: room.revision,
       lifecycleStatus,
-      ...(room.game === null ? {} : { gameId: room.game.gameId }),
+      ...(room.game === null ? {} : { gameId: room.game.gameId, gamePresence: room.game.presenceSnapshot }),
       hostSeatId: hostSeat.seatId,
       seats,
       startReadiness: deriveStartReadiness(seats, lifecycleStatus),

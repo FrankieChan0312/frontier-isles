@@ -18,6 +18,7 @@ export class FakeLifecycleRuntime implements RoomLifecycleRuntime {
   public now(): number {
     return this.#currentTime
   }
+  public get activeTaskCount(): number { return this.#tasks.filter((task) => !task.cancelled).length }
 
   public schedule(delayMs: number, callback: () => void): ScheduledLifecycleTask {
     const task: FakeTask = {

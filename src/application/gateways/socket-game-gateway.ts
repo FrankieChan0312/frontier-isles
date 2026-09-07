@@ -77,6 +77,10 @@ export class SocketGameGateway implements OnlineGameGateway {
     if (!this.#attached() || this.#wire === null) throw new Error('Reconnect to your Room before playing.')
     if (this.#resyncRequired && this.#active === null) throw new Error('Resynchronize the game before playing.')
     if (this.#wire.lifecycleStatus === 'ERROR') throw new Error('The server could not continue this game.')
+    if (this.#wire.lifecycleStatus === 'PAUSED_RECONNECTING' || this.#wire.lifecycleStatus === 'PAUSED_REPLACEMENT_REQUIRED') {
+      throw new Error('The game is paused until every Human reconnects or an expired seat is replaced.')
+    }
+    if (this.#wire.lifecycleStatus === 'CLOSED') throw new Error('This online game has closed.')
     if (this.#wire.lifecycleStatus === 'FINISHED' || this.#lobby?.snapshot?.lifecycleStatus === 'FINISHED') throw new Error('This game has finished.')
     if (this.#queue.length + (this.#active === null ? 0 : 1) >= this.#settings.queueCapacity) throw new Error('The command queue is full. Wait for the current game update.')
     this.#namespace ??= this.#namespaceFactory()
@@ -348,6 +352,7 @@ export class SocketGameGateway implements OnlineGameGateway {
         : this.#lobby?.connectionState === 'RECONNECTING' ? 'RECONNECTING'
           : this.#lobby?.connectionState === 'CONNECTING' ? 'CONNECTING' : 'DISCONNECTED',
       error: this.#error, submitting: this.#submitting, resynchronizing: this.#resynchronizing,
+      ...(this.#wire === null ? {} : { presence: this.#wire.presence }),
       delivery: gameDeliveryStateSchema.parse({ status: this.#resynchronizing ? 'RESYNCHRONIZING'
         : this.#resyncRequired && this.#attached() ? 'RESYNC_REQUIRED' : this.#deliveryPhase,
         attempt: this.#attempt, queuedCommands: this.#queue.length }) }

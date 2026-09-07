@@ -24,6 +24,8 @@ import type {
   RoomSetReadyAcknowledgement,
   RoomStartAcknowledgement,
   SessionResumeAcknowledgement,
+  RoomReplaceHumanAcknowledgement,
+  RoomCloseGameAcknowledgement,
 } from './acknowledgements.js'
 import type {
   RoomCreateRequest,
@@ -34,6 +36,8 @@ import type {
   RoomSetReadyRequest,
   RoomStartRequest,
   SessionResumeRequest,
+  RoomReplaceHumanRequest,
+  RoomCloseGameRequest,
 } from './requests.js'
 
 export const serverHelloSchema = z.strictObject({
@@ -48,7 +52,7 @@ export const sessionReplacedNoticeSchema = z.strictObject({
 
 export const roomClosedNoticeSchema = z.strictObject({
   roomCode: roomCodeSchema,
-  reason: z.enum(['EMPTY', 'IDLE_TIMEOUT']),
+  reason: z.enum(['EMPTY', 'IDLE_TIMEOUT', 'HOST_CLOSED', 'ABANDONED_TIMEOUT']),
   message: publicMessageSchema,
 })
 
@@ -57,6 +61,8 @@ export type SessionReplacedNotice = Readonly<z.infer<typeof sessionReplacedNotic
 export type RoomClosedNotice = Readonly<z.infer<typeof roomClosedNoticeSchema>>
 
 export interface ClientToServerEvents {
+  readonly 'room:replace-human': (request: RoomReplaceHumanRequest, acknowledge: (result: RoomReplaceHumanAcknowledgement) => void) => void
+  readonly 'room:close-game': (request: RoomCloseGameRequest, acknowledge: (result: RoomCloseGameAcknowledgement) => void) => void
   readonly 'game:command': (request: GameCommandRequest, acknowledge: (result: GameCommandAcknowledgement) => void) => void
   readonly 'game:request-snapshot': (request: GameRequestSnapshotRequest, acknowledge: (result: GameRequestSnapshotAcknowledgement) => void) => void
   readonly 'room:create': (

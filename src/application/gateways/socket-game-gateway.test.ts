@@ -43,6 +43,7 @@ interface Harness {
   readonly joiner: TestClient
   readonly server: RealtimeServer
   readonly rooms: InMemoryRoomService
+  readonly runtime: FakeLifecycleRuntime
   readonly addClient: (namespace: string, store?: MemoryCredentialStore) => TestClient
   readonly close: () => Promise<void>
 }
@@ -51,7 +52,8 @@ function last(client: TestClient): GameUpdate { return requireValue(client.gameU
 function lobbyState(client: TestClient): LobbyGatewayState { return requireValue(client.lobbyUpdates.at(-1)) }
 
 async function startedHarness(commandDelivery: CommandDeliveryOptions = {}, dependencies: GameSessionDependencies = {}): Promise<Harness> {
-  const rooms = new InMemoryRoomService({ runtime: new FakeLifecycleRuntime(),
+  const runtime = new FakeLifecycleRuntime()
+  const rooms = new InMemoryRoomService({ runtime,
     nextGameIdentity: () => ({ gameId: gameIdSchema.parse('game:gateway-test'), seed: 'GATEWAY-TEST' }),
     gameDependencies: { createState: actionFixture, ...dependencies } })
   const http = createFrontierHttpServer()
@@ -71,7 +73,7 @@ async function startedHarness(commandDelivery: CommandDeliveryOptions = {}, depe
   }
   const host = addClient('test-host')
   const joiner = addClient('test-joiner')
-  const harness: Harness = { host, joiner, server, rooms, addClient, close: async () => {
+  const harness: Harness = { host, joiner, server, rooms, runtime, addClient, close: async () => {
     for (const client of clients) client.lobby.dispose()
     rooms.dispose()
     await createGracefulShutdown({ httpServer: http, realtimeServer: server })()
@@ -135,6 +137,57 @@ async function emitView(harness: Harness, client: TestClient, update: WireUpdate
 afterEach(async () => { for (const harness of harnesses.splice(0)) await harness.close() })
 
 describe('SocketGameGateway through the shared Lobby connection', () => {
+  it('propagates authoritative pause and permits Host replacement only after expiry over real sockets', async () => {
+    const harness = await startedHarness(delivery)
+    const before = requireValue(last(harness.host).view)
+    const east = requireValue(last(harness.joiner).view).self.id
+    harness.joiner.socket.disconnect()
+    await vi.waitFor(() => expect(last(harness.host).presence?.lifecycleStatus).toBe('PAUSED_RECONNECTING'))
+    await expect(harness.host.lobby.gameGateway.submit(buy(harness.host, 'paused'))).rejects.toThrow(/paused/)
+    await expect(harness.host.lobby.replaceExpiredHuman('EAST', 'SENTINEL')).rejects.toThrow(/grace has expired/)
+    harness.runtime.advanceBy(30_000)
+    await vi.waitFor(() => expect(lobbyState(harness.host).snapshot?.gamePresence?.lifecycleStatus).toBe('PAUSED_REPLACEMENT_REQUIRED'))
+    await harness.host.lobby.replaceExpiredHuman('EAST', 'SENTINEL')
+    expect(last(harness.host).presence?.lifecycleStatus).toBe('ACTIVE')
+    expect(last(harness.host).view?.stateVersion).toBe(before.stateVersion)
+    expect(last(harness.host).view?.opponents.find((player) => player.id === east)?.controller).toEqual({ type: 'AI', profileId: 'SENTINEL' })
+    expect(await harness.joiner.lobby.resumeSession()).toBe(false)
+    expect(harness.joiner.credentialStore.credential === null).toBe(true)
+    expect(last(harness.joiner).view).toBeNull()
+    expect(last(harness.host).view?.publicGame).toEqual(before.publicGame)
+  })
+
+  it('keeps a newest-tab replacement paused until the other Human resumes', async () => {
+    const harness = await startedHarness(delivery)
+    harness.joiner.socket.disconnect()
+    await vi.waitFor(() => expect(last(harness.host).presence?.lifecycleStatus).toBe('PAUSED_RECONNECTING'))
+    const before = last(harness.host).view
+    const store = new MemoryCredentialStore()
+    store.credential = requireValue(harness.host.credentialStore.credential)
+    const replacement = harness.addClient('new-host-during-pause', store)
+    expect(await replacement.lobby.resumeSession()).toBe(true)
+    await vi.waitFor(() => expect(last(replacement).presence?.lifecycleStatus).toBe('PAUSED_RECONNECTING'))
+    expect(last(replacement).view).toEqual(before)
+    await expect(harness.host.lobby.gameGateway.submit(buy(harness.host, 'old-host'))).rejects.toThrow(/Reconnect/)
+    expect(await harness.joiner.lobby.resumeSession()).toBe(true)
+    await vi.waitFor(() => expect(last(replacement).presence?.lifecycleStatus).toBe('ACTIVE'))
+    expect(last(replacement).view).toEqual(before)
+    expect(last(harness.host).connectionStatus).toBe('DISCONNECTED')
+  })
+
+  it('clears projections, credentials and delivery when the Host closes a replacement-required game', async () => {
+    const harness = await startedHarness(delivery)
+    harness.joiner.socket.disconnect()
+    await vi.waitFor(() => expect(last(harness.host).presence?.lifecycleStatus).toBe('PAUSED_RECONNECTING'))
+    harness.runtime.advanceBy(30_000)
+    await vi.waitFor(() => expect(lobbyState(harness.host).snapshot?.gamePresence?.lifecycleStatus).toBe('PAUSED_REPLACEMENT_REQUIRED'))
+    await harness.host.lobby.closeGame()
+    await vi.waitFor(() => expect(lobbyState(harness.host).error?.code).toBe('ROOM_CLOSED'))
+    expect(last(harness.host).view).toBeNull()
+    expect(harness.host.credentialStore.credential === null).toBe(true)
+    expect(harness.rooms.roomCount).toBe(0)
+    expect(harness.runtime.activeTaskCount).toBe(0)
+  })
   it.each(['request', 'acknowledgement'] as const)('handles a %s arriving after timeout and after its identical retry', async (fault) => {
     const transition = vi.fn()
     const harness = await startedHarness(delivery, { afterTransition: transition })

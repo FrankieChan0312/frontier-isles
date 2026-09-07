@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { REALTIME_PROTOCOL_VERSION } from './protocol-version.js'
 import { gameCommandRequestSchema, gameRequestSnapshotRequestSchema } from './game.js'
+import { gameIdSchema } from './game-values.js'
 import {
   aiProfileIdSchema,
   displayNameInputSchema,
@@ -57,6 +58,15 @@ export const roomStartRequestSchema = z.strictObject({
   protocolVersion: protocolVersionField,
   expectedRevision: roomRevisionSchema,
 })
+export const roomReplaceHumanRequestSchema = z.strictObject({
+  protocolVersion: protocolVersionField, gameId: gameIdSchema, expectedRevision: roomRevisionSchema,
+  seatId: seatIdSchema, profileId: aiProfileIdSchema,
+})
+export const roomCloseGameRequestSchema = z.strictObject({
+  protocolVersion: protocolVersionField, gameId: gameIdSchema, expectedRevision: roomRevisionSchema,
+})
+export type RoomReplaceHumanRequest = Readonly<z.infer<typeof roomReplaceHumanRequestSchema>>
+export type RoomCloseGameRequest = Readonly<z.infer<typeof roomCloseGameRequestSchema>>
 
 export type RoomCreateRequest = Readonly<z.infer<typeof roomCreateRequestSchema>>
 export type RoomJoinRequest = Readonly<z.infer<typeof roomJoinRequestSchema>>
@@ -76,6 +86,8 @@ export const CLIENT_REQUEST_SCHEMAS = Object.freeze({
   'room:request-snapshot': roomRequestSnapshotRequestSchema,
   'session:resume': sessionResumeRequestSchema,
   'room:start': roomStartRequestSchema,
+  'room:replace-human': roomReplaceHumanRequestSchema,
+  'room:close-game': roomCloseGameRequestSchema,
   'game:command': gameCommandRequestSchema,
   'game:request-snapshot': gameRequestSnapshotRequestSchema,
 })
