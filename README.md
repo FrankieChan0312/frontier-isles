@@ -47,6 +47,7 @@ npm run test
 npm run build
 npm run check
 npm run simulate
+npm run simulate:online
 npx playwright install chromium
 npm run e2e
 npm run e2e:lobby
@@ -55,6 +56,9 @@ npm run e2e:online
 
 `npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
 accepted command. Playwright browser installation is a one-time machine prerequisite for E2E.
+`npm run simulate:online` runs complete real Socket.IO games for 2H+2AI, 3H+1AI and 4H, each twice
+to verify identical seeded summaries. The [Goal B acceptance matrix](docs/v2/V2_GOAL_B_ACCEPTANCE.md)
+maps all 20 command families to server and browser coverage.
 
 ## V2 workspace foundation
 
@@ -86,7 +90,7 @@ The V2 foundation requires Node.js 24 LTS. See the
 
 ## Production build
 
-`npm run build` writes the accepted V1 static release to `dist/`. Its Single Player mode requires
+`npm run build` writes the static web client to `dist/`. Its Single Player mode requires
 no server, secret, runtime environment variable, or API. See [deployment](docs/DEPLOYMENT.md), the
 [release checklist](docs/RELEASE_CHECKLIST.md), [testing](docs/TESTING.md), and
 [known limitations](docs/KNOWN_LIMITATIONS.md).

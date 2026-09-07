@@ -223,16 +223,125 @@ Known limits remain process-local server state, tab-scoped resume within existin
 started seats and no delivery retry policy. Complete mixed-seat winner and rare workflow
 qualification is the next task. No V2-09+ or unrelated future feature is implemented.
 
-Passing task commit: `feat: connect online game gateway to the browser UI`. The next task records
-its resolved hash after the required clean-tree commit boundary.
+Passing task commit: `0161220 feat: connect online game gateway to the browser UI`.
+Working tree confirmed clean before continuing automatically to V2-08.
 
 ## V2-08 — Complete mixed Human and AI online gameplay
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Plan: qualify complete 2H+2AI, 3H+1AI and 4H games through real Socket.IO/GameSession execution,
+with repeated seeds and per-command state/resource/card/piece/score/RNG invariants. Use bounded
+Node drivers that see only their Human PlayerView. Add controlled invariant-valid Node fixtures
+for rare workflow/award/card/victory cases and exercise every command family through real online
+browser controls. Audit wire, views, events, acknowledgements, stores, props, DOM, accessibility,
+logs and public test traces. Fixtures remain outside production server/browser paths.
+
+Implemented the real Socket.IO full-game harness, repeated-seed qualification script, immutable
+per-transition invariant/RNG checks and bounded public failure traces. Added 17 network workflow
+cases with an exact 20-command inventory and three privacy/source/logging audit cases. Added 11
+online workflow browser journeys; the complete online suite passes 13/13. All three seating modes
+have already passed repeated full-game tests (six legal winners). No production rule, AI algorithm,
+gateway or server authority change was needed; the existing shared implementation handles these
+workflows. Fixtures derive from accepted core helpers and remain in Node test modules.
+
+Resolved test findings: explicit GameState narrowing was needed for state captured by a callback;
+two event assertions were corrected to the accepted nullable discard and ownerId/acquired-turn
+purchase contracts; the poisoned-actor test now constructs its branded base request through the
+runtime schema. No production behavior or accepted test was changed for these fixes. Final gates
+on the complete source are recorded below.
+
+Final source passed standalone typecheck, lint, tests and build. The first aggregate `check`
+reported two existing AI smoke-test timeouts across an anomalous overnight interval: Vitest
+reported 29,665.67 seconds overall, with no other assertion failures. The interruption's cause
+was not confirmed. The unchanged two-test rerun passed in 16.33 seconds with the original
+120/180-second limits. No timeout, seed, assertion or accepted test was relaxed; aggregate gates
+were resumed from `check`. The failed log and passing rerun are retained in ignored local logs.
+
+A subsequent `check:all` passed 84/85 server tests but the four-Human game stopped after command
+195. Its original generic trace did not identify the failing transport/check operation; later
+power-event inspection confirmed standby during that interval. Added safe operation/timeout/
+connected-client diagnostics. The
+standalone diagnostic repeat passed all six games, while its observed retained memory grew to
+nearly 2 GB. The full-game harness had unnecessarily retained every historical PlayerView from
+the shared network helper. It now releases those histories after each synchronized snapshot;
+each incoming publication is still schema-validated and every transition still checked. Focused
+event/privacy tests retain their complete histories. No timeout, seed or assertion changed.
+Final aggregate, simulation and browser gates are rerun with that memory-retention fix.
+Lint caught a missing-cause throw and an unused fallback assignment in the new diagnostic path.
+Attaching unrestricted causes would violate trace privacy, so the harness now materializes only
+the sanitized diagnostic after cleanup. Final zero-warning lint passes.
+
+A further aggregate run again passed 84/85 server tests, but the four-Human case reported
+552.448 seconds against its unchanged 180-second limit. A requested 30-second tool wait took
+515.48 seconds. Windows Kernel-Power events 506/507 then confirmed **Idle Timeout** Modern
+Standby from 09:18:24 to 09:27:10 on September 7, and from 09:03:40 to 09:04:33 during the
+preceding four-Human failure. The final verification process uses a temporary Windows system
+execution request, released on completion/process exit, to prevent idle sleep. No persistent
+power setting or application code is changed. Failed logs are preserved; tests retain all limits.
+
+Files created: `server/test/online-game-simulation.ts`, `online-full-games.test.ts`,
+`online-workflow-fixtures.ts`, `online-workflows.test.ts`, `online-privacy-audit.test.ts` and
+`run-online-simulations.ts`; `tests/e2e/online-workflows.spec.ts`; ADR-V2-0009 and the
+[automated coverage report](V2_GOAL_B_ACCEPTANCE.md). Files updated: the network helper's seed
+injection, separate browser test-server composition, root simulation/E2E scripts, README,
+testing, known limitations, V2 architecture and this progress report. No production source
+changed for V2-08. Dependencies added or changed: none.
+
+Tests added: three complete-game cases, each executing two identical seeded games over real
+Socket.IO; 17 network workflow cases with all 20 accepted command types; three privacy/source/
+logging audit cases; 11 online browser journeys. Final server verification passed 11 files /
+85 tests, including six complete legal games. Each complete game checks immutable transitions,
+all core invariants, exact RNG advancement, synchronized public views and legal final lifecycle.
+
+Final V2-08 gates (all on the final implementation; the last aggregate includes every package):
+
+| Command | Result |
+| --- | --- |
+| Focused network workflow and privacy tests | Exit 0; 2 files / 20 tests, all 20 command types accepted on the wire |
+| Complete-game focused tests | Exit 0; 3 cases / 6 legal winners, repeated summaries identical |
+| `npm run typecheck` | Exit 0 |
+| `npm run lint` | Exit 0; zero warnings |
+| `npm run test` | Exit 0; frontend 22 / 85, core 35 / 261, AI 15 / 36 = 72 files / 382 tests |
+| `npm run build` | Exit 0; 810.88 kB entry chunk, existing size advisory only |
+| `npm run check` | Exit 0 |
+| `npm run check:server` | Exit 0; contracts 6 / 62 and server 11 / 85 |
+| `npm run check:all` | Exit 0; 89 files / 529 tests and all source builds; final server run 134.37 seconds |
+| `npm run simulate` | Exit 0; 100/100 legal winners, 65,341 commands, hash `1adc49e8` |
+| `npm run simulate:online` | Exit 0; 6/6 legal winners, repeated seeds match in all three modes |
+| `npm run e2e:online` | Exit 0; 13/13 passed (2.9 minutes) |
+| `npm run e2e:lobby` | Exit 0; all 6/6 accepted journeys passed (1.0 minute) |
+| `npm run e2e` | Exit 0; 27/27 passed (3.8 minutes), including all eight V1 journeys |
+| `git diff --check` | Exit 0; repeated after this final report update |
+
+Full online game seed `GOAL-B-ONLINE-001` reaches EAST's legal 10-point win in every mode.
+Each run ends at version 749 after 749 commands, 134 turns and 383 RNG draws, with canonical
+public scores `5 / 10 / 4 / 2`. Human/server-AI command counts are `389 / 360` (2H+2AI),
+`562 / 187` (3H+1AI), and `749 / 0` (4H). Every repeated summary matches; the final script's
+complete output also equals the pre-retention-fix diagnostic output. Public trace SHA-256:
+`ead66aa5cb05a2b907c1ea9f7e40078389d9cf34c32e1bf132e40b03123652a3`.
+Final online-process memory was sampled at 311 MB, versus nearly 2 GB before releasing unused
+history. The temporary Windows execution request was released after all gates completed.
+
+Audits passed for session-derived actors, spoof rejection, stale/duplicate commands, per-Human
+wire views and events, safe acknowledgements/Room snapshots, gateway and React boundaries,
+projection-store isolation, DOM/accessibility, server/browser errors and public test diagnostics.
+Active refresh resumes the same seat/game within grace; a replaced tab loses authority. All
+three target viewports (1440×900, 1024×768, 480×800) retain no horizontal page overflow.
+No accepted test was skipped, removed or weakened. The existing Vite chunk advisory and Node
+color-environment notice are non-failing tool output; lint and browser error assertions pass.
+
+All V2-08 gates passed. This completed report is included in the required task commit:
+`feat: complete mixed human and AI online gameplay`.
 
 ## Scope and remaining risks
 
-No V2-09+ implementation, external writes, push, deployment, or history rewrite authorized.
-Exactly one passing commit per task; continue automatically after each passing task gate.
-V2-05 and V2-06 committed as `456ddfa` and `0b78c26`, with clean task boundaries. V2-07 gates passed;
-its passing commit is the next operation. V2-08 remains to be implemented.
+All four Goal B tasks are complete. V2-05, V2-06 and V2-07 are `456ddfa`, `0b78c26` and `0161220`;
+the fourth required task commit contains this completed V2-08 record. Exactly one passing commit
+per task follows the accepted baseline, with clean task boundaries.
+
+No V2-09 or later feature, unrelated future feature, external dependency/version update,
+push, merge, tag, deployment or history rewrite is included. Goal C still owns retries/delivery/
+concurrency hardening, extended disconnect pause/replacement, durable Room/Game repositories,
+restart recovery and deployment hardening. Online state remains process-local, started seats
+remain fixed, and active resume stays within the accepted grace. Human multiplayer UAT is pending.

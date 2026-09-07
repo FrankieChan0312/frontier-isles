@@ -30,4 +30,7 @@
   responsive/browser smoke coverage rather than a dedicated automated project.
 - The 100-game invariant corpus is deliberately separate from ordinary tests and can take several
   minutes on a CPU-constrained machine.
+- Goal B's complete online-game tests use bounded Node Human drivers over real Socket.IO, with
+  representative browser paths for every command family. Multi-browser Human UAT remains pending;
+  passing Goal B does not complete Goal C delivery/recovery/deployment acceptance.
 - Static deployment configuration is present, but no live site was published during Stage 17.

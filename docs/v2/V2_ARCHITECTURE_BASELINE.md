@@ -260,6 +260,11 @@ Publication/version ordering and viewer identity are checked before adoption; re
 rejections refresh the current view. Online controls show and respect connection/resync/submission
 state, and Host start uses authoritative readiness.
 
+V2-08 qualifies 2H+2AI, 3H+1AI and 4H with full repeated-seed Socket.IO games and all command
+families through the browser. The accepted core and server gateway behavior require no additional
+multiplayer rule implementation. Test-only Node fixtures cover rare workflows without a production
+state-installation interface; see ADR-V2-0009 and the Goal B acceptance matrix.
+
 ## 14. Deferred decisions
 
 - final public server host

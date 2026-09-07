@@ -1,5 +1,9 @@
 # Testing
 
+Long-running AI and online-game checks require uninterrupted execution. Host sleep/Modern
+Standby can pause Node and exhaust the existing test, heartbeat and acknowledgement deadlines.
+Keep the verification host awake for the run; do not increase test timeouts to hide a host pause.
+
 ## Quality layers
 
 | Command | Purpose |
@@ -69,6 +73,15 @@ plays setup through Human commands and server AI, synchronizes a normal roll, an
 spoof/stale/duplicate rejection plus newest-tab authority and viewer-specific private events.
 Its fixtures and dependency injection are confined to Node tests; no production fixture route exists.
 
+V2-08 adds `online-full-games.test.ts`, `online-workflows.test.ts` and `online-privacy-audit.test.ts`.
+They repeat complete 2H+2AI, 3H+1AI and 4H games through real Socket.IO/GameSession commands,
+freeze prior state and validate all core invariants and exact RNG transitions after each command.
+Each game is bounded by 5,000 commands and 1,000 turns. `npm run simulate:online` runs the same
+six-game qualification and prints public summaries. Failure reports omit private command payloads,
+hands, hidden cards, tokens and RNG cursors. Workflow cases explicitly cover all 20 command types,
+production/shortage, awards, cards, every trade direction, second-counter rejection and shared victory.
+See the [complete online coverage matrix](v2/V2_GOAL_B_ACCEPTANCE.md).
+
 Install the pinned Playwright Chromium build once on a machine:
 
 ```sh
@@ -95,6 +108,11 @@ turns, check private hands and public boards, refresh/resume and replace a tab. 
 proxy changes one outgoing expected version to exercise real stale rejection and snapshot resync.
 All three target viewport widths, accessibility/DOM privacy, no offline online-save writes and
 console/React errors are checked. No online authoritative state is injected into the browser.
+The online workflow journeys also exercise all development-card effects, dead-end free-road
+completion, controlled seven, paid building, maritime and domestic negotiation, both awards and
+victory/finished resume. Their invariant-valid fixtures are selected solely by the separate Node
+test executable's explicit whitelist. Production cannot install them through a name, environment
+variable or endpoint. Normal Lobby/setup browser journeys still use real seeded game creation.
 `socket-game-gateway.test.ts` additionally verifies shared socket ownership, actor omission, stable
 injected command IDs, no optimistic state advance, pending submission locks, wrong-viewer rejection,
 missed/out-of-order publications, stale resync, replacement and listener disposal.
