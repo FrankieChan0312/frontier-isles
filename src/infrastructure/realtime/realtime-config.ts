@@ -31,7 +31,8 @@ export function parseRealtimeUrl(value: unknown): string {
 }
 
 export function readRealtimeClientConfig(
-  environmentValue: unknown = import.meta.env.VITE_REALTIME_URL ?? DEFAULT_REALTIME_URL,
+  environmentValue: unknown = import.meta.env.VITE_REALTIME_URL ?? (import.meta.env.PROD ? 'same-origin' : DEFAULT_REALTIME_URL),
+  browserOrigin: string = window.location.origin,
 ): RealtimeClientConfig {
-  return Object.freeze({ url: parseRealtimeUrl(environmentValue) })
+  return Object.freeze({ url: parseRealtimeUrl(environmentValue === 'same-origin' ? browserOrigin : environmentValue) })
 }

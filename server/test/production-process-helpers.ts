@@ -8,14 +8,16 @@ export interface TestServerProcess {
   readonly output: () => string
   readonly crash: () => Promise<void>
 }
-export async function startProductionProcess(database: string): Promise<TestServerProcess> {
+export async function startProductionProcess(database: string, options: { readonly port?: number; readonly staticRoot?: string } = {}): Promise<TestServerProcess> {
   const reservation = createServer()
   await new Promise<void>((resolve) => reservation.listen(0, '127.0.0.1', resolve))
-  const port = (reservation.address() as AddressInfo).port
+  const port = options.port ?? (reservation.address() as AddressInfo).port
   await new Promise<void>((resolve, reject) => reservation.close((error) => error === undefined ? resolve() : reject(error)))
   const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('../src/server.ts', import.meta.url))], {
     env: { ...process.env, NODE_ENV: 'test', PORT: String(port), CLIENT_ORIGIN: 'http://127.0.0.1:5173',
-      PERSISTENCE_FILE: database, RESTART_RECOVERY_GRACE_MS: '120000' },
+      PERSISTENCE_FILE: database, RESTART_RECOVERY_GRACE_MS: '120000',
+      ...(options.staticRoot === undefined ? {} : { NODE_ENV: 'production', STATIC_ROOT: options.staticRoot,
+        CLIENT_ORIGINS: `http://127.0.0.1:${port}`, DEBUG: '', NODE_DEBUG: '', NODE_DEBUG_NATIVE: '' }) },
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   })
   let output = ''
@@ -25,7 +27,15 @@ export async function startProductionProcess(database: string): Promise<TestServ
   try {
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => { finish(new Error('Production test process did not become ready.')) }, 15_000)
-      const listen = (): void => { if (output.includes(`listening on port ${port}`)) finish() }
+      const listen = (): void => {
+        if (output.split(/\r?\n/u).some((line) => {
+          try {
+            const entry: unknown = JSON.parse(line)
+            return typeof entry === 'object' && entry !== null && 'code' in entry && entry.code === 'SERVER_LISTENING'
+              && 'port' in entry && entry.port === port
+          } catch { return false }
+        })) finish()
+      }
       const exited = (): void => { finish(new Error('Production test process exited during startup.')) }
       const failed = (): void => { finish(new Error('Production test process failed to start.')) }
       function finish(error?: Error): void {

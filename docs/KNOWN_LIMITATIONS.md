@@ -1,5 +1,15 @@
 # Known Limitations
 
+- V2 `2.0.0-alpha.1` is prepared for separate Human deployment UAT. Local automated container
+  qualification does not validate public TLS/DNS/firewalls, remote browser networks or production
+  capacity. The supported reference is one Node process and one private local SQLite volume.
+- Room/transport safety caps are 64/320. Global and per-session/transport rate limits can reject
+  bursts with safe `RATE_LIMITED`/`SERVER_BUSY` messages. The measured local load is deliberately
+  smaller; it is not an internet capacity or denial-of-service protection claim.
+- Resume credentials are anonymous tab-scoped bearer secrets, not accounts or transferable seats.
+  SQLite/backup access exposes private game data and requires operator protection; there is no
+  encryption-at-rest service or automatic remote backup. Production debug logging is prohibited.
+
 - Single Player remains a single-device, four-player game with exactly one Human and three local AI
   players. Online Multiplayer uses the server's four-seat game with at least two Humans and
   explicitly assigned AI seats. There is no login, cloud save, spectator mode, or cross-device credential sync.
@@ -36,14 +46,14 @@
   optimal play; one-for-one offers and one minimal counter keep domestic negotiation finite.
 - The mobile/tablet board fits its full topology and stacks controls vertically; V1 has no board
   pan/zoom gesture.
-- The optimized entry chunk is approximately 811 kB before transport compression because the full
+- The optimized entry chunk is approximately 822 kB before transport compression because the full
   offline engine, MUI application, realtime validators, and Socket.IO client load together. Vite
   reports this as an advisory, not a failure.
-- Release E2E targets the pinned Playwright Chromium build. Other evergreen browsers receive normal
-  responsive/browser smoke coverage rather than a dedicated automated project.
+- Release E2E targets the pinned Playwright Chromium build with separate Human contexts and
+  desktop/tablet/mobile viewports. Other browser engines and physical devices remain Human UAT.
 - The 100-game invariant corpus is deliberately separate from ordinary tests and can take several
   minutes on a CPU-constrained machine.
-- Goal B's complete online-game tests use bounded Node Human drivers over real Socket.IO, with
-  representative browser paths for every command family. Multi-browser Human UAT remains pending;
-  passing Goal B does not complete Goal C delivery/recovery/deployment acceptance.
+- Complete online-game tests use bounded Node Human drivers over real Socket.IO, with representative
+  browser paths for every command family. Goal C adds delivery, presence, restart and three/four-Human
+  browser journeys. Independent real-device/browser and external deployment Human UAT remains pending.
 - Static deployment configuration is present, but no live site was published during Stage 17.

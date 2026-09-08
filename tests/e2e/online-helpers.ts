@@ -3,6 +3,12 @@ import { gameCommandRequestSchema, gameUpdateSchema, type GameUpdate } from '@fr
 import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
 
 export const ONLINE_CREDENTIAL_KEY = 'frontier-isles:realtime-session:v1'
+/** Native opener cloning avoids credential export through Playwright action arguments. */
+export async function duplicateBlankTab(page: Page): Promise<Page> {
+  const opened = page.waitForEvent('popup')
+  await page.evaluate(() => { window.open('about:blank', '_blank') })
+  return opened
+}
 export interface OnlineObserver {
   readonly page: Page
   readonly errors: string[]
@@ -18,7 +24,7 @@ export interface OnlineBrowsers {
   readonly close: () => Promise<void>
 }
 
-/** Observe only game messages. Never record raw credential/session frames in test traces. */
+/** Collect validated game messages; the trace reporter separately redacts transport credentials. */
 export function observeOnline(page: Page): OnlineObserver {
   const errors: string[] = []
   const updates: GameUpdate[] = []
@@ -117,6 +123,8 @@ export async function finishOnlineSetup(observers: readonly OnlineObserver[]): P
     await actor.page.getByRole('button', { name: settlement ? /^Build on vertex:/ : /^Build road on edge:/ }).first().press('Enter')
     await expectSharedPublicState(observers, view.stateVersion + 1)
   }
+  await expectSharedPublicState(observers, 16)
+  if (observers.every((observer) => observer.current().view.stateVersion >= 16)) return
   throw new Error('Initial setup exceeded its sixteen-command bound.')
 }
 
@@ -133,6 +141,13 @@ export async function expectOnlinePrivacy(observer: OnlineObserver, roomCode: st
   const forbidden = /resumeToken|tokenDigest|developmentDeckOrder|rngState|commandCache|actualVictoryPoints/u
   expect(forbidden.test(await page.locator('body').innerText())).toBe(false)
   expect(forbidden.test(await page.locator('body').ariaSnapshot())).toBe(false)
+  expect(await page.evaluate((key) => {
+    const html = document.body.outerHTML
+    if (/resumeToken|tokenDigest|developmentDeckOrder|rngState|commandCache|actualVictoryPoints/u.test(html)) return false
+    const credential: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null')
+    return typeof credential === 'object' && credential !== null && 'resumeToken' in credential
+      && typeof credential.resumeToken === 'string' && !html.includes(credential.resumeToken)
+  }, ONLINE_CREDENTIAL_KEY)).toBe(true)
   expect(await page.evaluate(() => localStorage.getItem('frontier-isles:v1:latest-save') === null)).toBe(true)
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0)
   expect(observer.errors).toEqual([])

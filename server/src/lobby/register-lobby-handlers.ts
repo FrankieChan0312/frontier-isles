@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io'
 import {
   REALTIME_PROTOCOL_VERSION,
+  CLIENT_EVENT_NAMES,
   REALTIME_SERVICE_NAME,
   createSafeErrorAcknowledgement,
   roomClosedNoticeSchema,
@@ -48,6 +49,8 @@ import type {
   RoomLifecycleEvent,
 } from './room-service.js'
 import type { GameSession } from '../game/game-session.js'
+import { isBoundedJson } from '../security/network-limits.js'
+import type { RequestLimiter } from '../security/request-limiter.js'
 
 type LobbySocket = Socket<
   ClientToServerEvents,
@@ -153,11 +156,22 @@ function internalFailure(): ReturnType<typeof createSafeErrorAcknowledgement> {
   return createSafeErrorAcknowledgement('INTERNAL_ERROR', 'The server could not complete the request.')
 }
 
-function publishPrivateGameUpdate(socket: LobbySocket, update: Parameters<ServerToClientEvents['game:update']>[0]): void {
+const pendingReceipts = new WeakMap<LobbySocket, number>()
+const serverReceipts = new WeakMap<RealtimeServer, number>()
+export function pendingGameReceipts(server: RealtimeServer): number { return serverReceipts.get(server) ?? 0 }
+function publishPrivateGameUpdate(server: RealtimeServer, socket: LobbySocket, update: Parameters<ServerToClientEvents['game:update']>[0]): void {
   // Receipt-bearing packets are excluded from Socket.IO's connection-recovery backlog.
   // Normal emission still queues behind an in-flight packet. The receipt only releases the
   // bounded callback; it does not drive execution, retry a command, or reconstruct state.
-  socket.timeout(5_000).emit('game:update', update, () => {})
+  const pending = pendingReceipts.get(socket) ?? 0
+  if (pending >= 64) { socket.disconnect(true); return }
+  pendingReceipts.set(socket, pending + 1)
+  serverReceipts.set(server, pendingGameReceipts(server) + 1)
+  socket.timeout(5_000).emit('game:update', update, (error: Error | null) => {
+    pendingReceipts.set(socket, Math.max(0, (pendingReceipts.get(socket) ?? 1) - 1))
+    serverReceipts.set(server, Math.max(0, pendingGameReceipts(server) - 1))
+    if (error !== null) socket.disconnect(true)
+  })
 }
 
 function publishAndAdvanceGame(game: GameSession | null, requester: LobbySocket): void {
@@ -173,13 +187,15 @@ function publishAndAdvanceGame(game: GameSession | null, requester: LobbySocket)
 export function registerLobbyHandlers(
   server: RealtimeServer,
   roomService: InMemoryRoomService,
+  limiter: RequestLimiter,
+  reportFailure: () => void = () => {},
 ): void {
   const activeSockets = new Map<SessionId, LobbySocket>()
   roomService.subscribeToLifecycle((event) => publishLifecycleEvent(server, event))
   roomService.subscribeToGames(({ sessionId, update }) => {
     const recipient = activeSockets.get(sessionId)
     if (recipient?.connected && recipient.data.sessionId === sessionId) {
-      publishPrivateGameUpdate(recipient, update)
+      publishPrivateGameUpdate(server, recipient, update)
     }
   })
 
@@ -200,6 +216,40 @@ export function registerLobbyHandlers(
 
   server.on('connection', (socket) => {
     delete socket.data.sessionId
+    socket.use((packet, next) => {
+      const values: readonly unknown[] = packet
+      const event = values[0]
+      const acknowledge = values.at(-1)
+      try {
+        if (!limiter.allow(socket.id, socket.data.sessionId, typeof event === 'string' ? event : 'invalid')) {
+          if (typeof acknowledge === 'function') acknowledge(createSafeErrorAcknowledgement('RATE_LIMITED', 'Too many requests. Wait briefly and try again.'))
+          else socket.disconnect(true)
+          return
+        }
+        if (typeof acknowledge !== 'function') return
+        if (typeof event !== 'string' || values.length !== 3 || !CLIENT_EVENT_NAMES.some((name) => name === event)) {
+          acknowledge(createSafeErrorAcknowledgement('INVALID_REQUEST', 'The request is invalid.')); return
+        }
+        if (!isBoundedJson(values[1])) {
+          acknowledge(createSafeErrorAcknowledgement('INVALID_REQUEST', 'The request is invalid.')); return
+        }
+        next()
+      } catch { reportFailure(); socket.disconnect(true) }
+    })
+    function onRequest<Event extends keyof ClientToServerEvents>(event: Event, handler: ClientToServerEvents[Event]): void {
+      socket.on<keyof ClientToServerEvents>(event, (...args: unknown[]): void => {
+        const callback = args[1]
+        if (typeof callback !== 'function') return
+        let replied = false
+        const acknowledge = (result: unknown): void => {
+          if (replied || !socket.connected) return
+          replied = true
+          try { Reflect.apply(callback, undefined, [result]) } catch { reportFailure(); socket.disconnect(true) }
+        }
+        const failed = (): void => { reportFailure(); acknowledge(internalFailure()) }
+        try { void Promise.resolve(Reflect.apply(handler, socket, [args[0], acknowledge])).catch(failed) } catch { failed() }
+      })
+    }
     socket.emit('server:hello', serverHelloSchema.parse({
       protocolVersion: REALTIME_PROTOCOL_VERSION,
       service: REALTIME_SERVICE_NAME,
@@ -213,7 +263,7 @@ export function registerLobbyHandlers(
       return null
     }
 
-    socket.on('game:command', (payload: unknown, acknowledge) => {
+    onRequest('game:command', (payload: unknown, acknowledge) => {
       if (typeof acknowledge !== 'function') return
       const parsed = gameCommandRequestSchema.safeParse(payload)
       if (!parsed.success) {
@@ -234,7 +284,7 @@ export function registerLobbyHandlers(
       })
     })
 
-    socket.on('room:replace-human', (payload: unknown, acknowledge) => {
+    onRequest('room:replace-human', (payload: unknown, acknowledge) => {
       if (typeof acknowledge !== 'function') return
       const parsed = roomReplaceHumanRequestSchema.safeParse(payload)
       if (!parsed.success) { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(validationFailure(payload, parsed.error))); return }
@@ -247,7 +297,7 @@ export function registerLobbyHandlers(
         .catch(() => { acknowledge(roomReplaceHumanAcknowledgementSchema.parse(internalFailure())) })
     })
 
-    socket.on('room:close-game', (payload: unknown, acknowledge) => {
+    onRequest('room:close-game', (payload: unknown, acknowledge) => {
       if (typeof acknowledge !== 'function') return
       const parsed = roomCloseGameRequestSchema.safeParse(payload)
       if (!parsed.success) { acknowledge(roomCloseGameAcknowledgementSchema.parse(validationFailure(payload, parsed.error))); return }
@@ -261,7 +311,7 @@ export function registerLobbyHandlers(
       } catch { acknowledge(roomCloseGameAcknowledgementSchema.parse(internalFailure())) }
     })
 
-    socket.on('game:request-snapshot', (payload: unknown, acknowledge) => {
+    onRequest('game:request-snapshot', (payload: unknown, acknowledge) => {
       if (typeof acknowledge !== 'function') return
       const parsed = gameRequestSnapshotRequestSchema.safeParse(payload)
       if (!parsed.success) {
@@ -281,7 +331,7 @@ export function registerLobbyHandlers(
       }
     })
 
-    socket.on('room:create', (payload: unknown, acknowledge) => {
+    onRequest('room:create', (payload: unknown, acknowledge) => {
       const unattachedFailure = unattachedSocketRequired(socket)
       if (unattachedFailure !== null) {
         acknowledge(roomCreateAcknowledgementSchema.parse(unattachedFailure))
@@ -297,18 +347,22 @@ export function registerLobbyHandlers(
         acknowledge(roomCreateAcknowledgementSchema.parse(result))
         return
       }
-      void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
-        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      void Promise.resolve().then(() => socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
+        if (!socket.connected || activeSockets.get(result.data.credential.sessionId) !== socket) return
         acknowledge(roomCreateAcknowledgementSchema.parse(result))
         server.to(roomChannel(result.data.credential.roomCode)).emit('room:snapshot', result.data.snapshot)
       }).catch(() => {
+        if (activeSockets.get(result.data.credential.sessionId) !== socket) return
+        activeSockets.delete(result.data.credential.sessionId)
+        delete socket.data.sessionId
         const leaveResult = roomService.leaveRoom(result.data.credential.sessionId)
         if (leaveResult.ok) publishLeaveResult(server, leaveResult.data)
         acknowledge(roomCreateAcknowledgementSchema.parse(internalFailure()))
       })
     })
 
-    socket.on('room:join', (payload: unknown, acknowledge) => {
+    onRequest('room:join', (payload: unknown, acknowledge) => {
       const unattachedFailure = unattachedSocketRequired(socket)
       if (unattachedFailure !== null) {
         acknowledge(roomJoinAcknowledgementSchema.parse(unattachedFailure))
@@ -324,18 +378,22 @@ export function registerLobbyHandlers(
         acknowledge(roomJoinAcknowledgementSchema.parse(result))
         return
       }
-      void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
-        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      void Promise.resolve().then(() => socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
+        if (!socket.connected || activeSockets.get(result.data.credential.sessionId) !== socket) return
         acknowledge(roomJoinAcknowledgementSchema.parse(result))
         server.to(roomChannel(result.data.credential.roomCode)).emit('room:snapshot', result.data.snapshot)
       }).catch(() => {
+        if (activeSockets.get(result.data.credential.sessionId) !== socket) return
+        activeSockets.delete(result.data.credential.sessionId)
+        delete socket.data.sessionId
         const leaveResult = roomService.leaveRoom(result.data.credential.sessionId)
         if (leaveResult.ok) publishLeaveResult(server, leaveResult.data)
         acknowledge(roomJoinAcknowledgementSchema.parse(internalFailure()))
       })
     })
 
-    socket.on('room:set-ready', (payload: unknown, acknowledge) => {
+    onRequest('room:set-ready', (payload: unknown, acknowledge) => {
       const membershipFailure = membershipRequired(socket)
       if (membershipFailure !== null) {
         acknowledge(roomSetReadyAcknowledgementSchema.parse(membershipFailure))
@@ -365,7 +423,7 @@ export function registerLobbyHandlers(
       }
     })
 
-    socket.on('room:set-ai-seat', (payload: unknown, acknowledge) => {
+    onRequest('room:set-ai-seat', (payload: unknown, acknowledge) => {
       const membershipFailure = membershipRequired(socket)
       if (membershipFailure !== null) {
         acknowledge(roomSetAiSeatAcknowledgementSchema.parse(membershipFailure))
@@ -400,7 +458,7 @@ export function registerLobbyHandlers(
       }
     })
 
-    socket.on('room:request-snapshot', (payload: unknown, acknowledge) => {
+    onRequest('room:request-snapshot', (payload: unknown, acknowledge) => {
       const membershipFailure = membershipRequired(socket)
       if (membershipFailure !== null) {
         acknowledge(roomRequestSnapshotAcknowledgementSchema.parse(membershipFailure))
@@ -416,7 +474,7 @@ export function registerLobbyHandlers(
       acknowledge(roomRequestSnapshotAcknowledgementSchema.parse(result))
     })
 
-    socket.on('room:start', (payload: unknown, acknowledge) => {
+    onRequest('room:start', (payload: unknown, acknowledge) => {
       const membershipFailure = membershipRequired(socket)
       if (membershipFailure !== null) {
         acknowledge(roomStartAcknowledgementSchema.parse(membershipFailure))
@@ -439,7 +497,7 @@ export function registerLobbyHandlers(
       }
     })
 
-    socket.on('session:resume', (payload: unknown, acknowledge) => {
+    onRequest('session:resume', (payload: unknown, acknowledge) => {
       const unattachedFailure = unattachedSocketRequired(socket)
       if (unattachedFailure !== null) {
         acknowledge(sessionResumeAcknowledgementSchema.parse(unattachedFailure))
@@ -455,8 +513,9 @@ export function registerLobbyHandlers(
         acknowledge(sessionResumeAcknowledgementSchema.parse(result))
         return
       }
-      void Promise.resolve(socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
-        attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      attachSession(socket, result.data.credential.sessionId, result.data.credential.roomCode)
+      void Promise.resolve().then(() => socket.join(roomChannel(result.data.credential.roomCode))).then(() => {
+        if (!socket.connected || activeSockets.get(result.data.credential.sessionId) !== socket) return
         acknowledge(sessionResumeAcknowledgementSchema.parse({
           ok: true,
           data: {
@@ -466,7 +525,7 @@ export function registerLobbyHandlers(
         }))
         const game = roomService.getGameSession(result.data.credential.roomCode)
         if (game !== null) {
-          publishPrivateGameUpdate(socket, game.snapshot(result.data.credential.sessionId))
+          publishPrivateGameUpdate(server, socket, game.snapshot(result.data.credential.sessionId))
           void game.advanceAi().catch(() => { socket.emit('server:error', internalFailure().error) })
         }
         if (result.data.changed) {
@@ -476,6 +535,9 @@ export function registerLobbyHandlers(
           )
         }
       }).catch(() => {
+        if (activeSockets.get(result.data.credential.sessionId) !== socket) return
+        activeSockets.delete(result.data.credential.sessionId)
+        delete socket.data.sessionId
         const disconnected = roomService.markDisconnected(result.data.credential.sessionId)
         if (disconnected.ok && disconnected.data.changed) {
           server.to(roomChannel(disconnected.data.snapshot.roomCode)).emit(
@@ -487,7 +549,7 @@ export function registerLobbyHandlers(
       })
     })
 
-    socket.on('room:leave', (payload: unknown, acknowledge) => {
+    onRequest('room:leave', (payload: unknown, acknowledge) => {
       const membershipFailure = membershipRequired(socket)
       if (membershipFailure !== null) {
         acknowledge(roomLeaveAcknowledgementSchema.parse(membershipFailure))

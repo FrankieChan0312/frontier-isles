@@ -1,10 +1,18 @@
-# Frontier Isles
+# Frontier Isles V2 Online Multiplayer Alpha
 
 Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
 browser-only experience for one Human and three heuristic AI players, with a deterministic
 TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
 V2 adds a Node.js/Socket.IO server, authoritative four-seat Rooms and games, and a synchronized
 browser Lobby and online Game screen alongside unchanged Single Player.
+
+Version `2.0.0-alpha.1` prepares reliable command retries, serialized Human/AI mutations, explicit
+disconnect pause and Host-approved AI replacement, exact restart recovery and a bounded production
+network boundary. See [security](docs/v2/V2_SECURITY.md), [deployment](docs/v2/V2_DEPLOYMENT.md),
+[recovery](docs/v2/V2_PERSISTENCE_RECOVERY.md) and the [alpha release checklist](docs/v2/V2_ALPHA_RELEASE_CHECKLIST.md).
+The [Goal C acceptance report](docs/v2/V2_GOAL_C_ACCEPTANCE.md) records test totals and operational limits.
+The production reference serves the frontend and realtime server from one origin with one private
+SQLite volume. Human deployment UAT remains required; no public deployment is part of this work.
 
 ## V1 features
 
@@ -68,10 +76,15 @@ npm run check
 npm run simulate
 npm run simulate:online
 npm run test:recovery
+npm run test:security
+npm run test:load
+npm run smoke:container
 npx playwright install chromium
 npm run e2e
 npm run e2e:lobby
 npm run e2e:online
+npm run e2e:audit
+npm run audit:artifacts
 ```
 
 `npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
@@ -89,7 +102,7 @@ npm run dev:web
 npm run dev:server
 ```
 
-The server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
+During development, the server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
 Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
 the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
 durable four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
@@ -98,6 +111,12 @@ leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle sett
 AI executes on the server. Copy the
 non-secret `.env.example` values into your process environment when overrides are needed; no
 `.env` file is committed.
+
+Production additionally exposes `/ready`, requires an explicit `CLIENT_ORIGINS` allowlist and
+private/public absolute paths, and rejects debug library logging. The production frontend defaults
+to its own origin. `.env.production.example` and `compose.yaml` provide the non-secret local
+reference. `npm run smoke:container` builds and exercises a local image, including crash/restart,
+without creating a tag or publishing/deploying it. Read the deployment runbook before operating it.
 
 ```sh
 npm run check:server

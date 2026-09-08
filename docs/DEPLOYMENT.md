@@ -1,5 +1,9 @@
 # Deployment
 
+The V2 alpha single-image Node/Socket.IO/SQLite reference, environment, local smoke, reverse proxy,
+private volume, backup/restore and rollback procedures are in [V2 Deployment](v2/V2_DEPLOYMENT.md).
+The static V1 instructions below remain valid for a Single Player-only artifact.
+
 ## Release artifact
 
 The accepted Single Player path remains a static Vite application and requires no backend,

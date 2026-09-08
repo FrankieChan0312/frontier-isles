@@ -1,6 +1,13 @@
 # Frontier Isles V2 — Multiplayer Architecture Baseline
 
-Status: Proposed and ready for implementation  
+V2-12 adds a production composition that serves the built static frontend and realtime server
+from one origin, with one private SQLite volume. Network admission, rate limits, public file
+confinement, safe structured diagnostics and readiness remain Node infrastructure. The pure core,
+AI redaction and gateway boundaries are unchanged. See [ADR-V2-0013](ADR-V2-0013-alpha-security-and-deployment.md)
+and [deployment](V2_DEPLOYMENT.md). One process is supported; multiple replicas are not.
+
+Status: Implemented through V2-12; automated alpha acceptance passed; Human deployment UAT pending
+
 Architecture ID: `V2_SOCKET_IO_SINGLE_PROCESS_V1`
 
 ## 1. Technology decisions

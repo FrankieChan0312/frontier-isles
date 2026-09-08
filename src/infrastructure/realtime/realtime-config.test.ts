@@ -5,6 +5,10 @@ import {
 } from './realtime-config.ts'
 
 describe('realtime client configuration', () => {
+  it('resolves the production same-origin setting from the current browser origin', () => {
+    expect(readRealtimeClientConfig('same-origin', 'https://isles.example.test')).toEqual({ url: 'https://isles.example.test' })
+    expect(() => readRealtimeClientConfig('same-origin', 'null')).toThrow(/VITE_REALTIME_URL/u)
+  })
   it('accepts HTTP(S) origins and returns their canonical origin', () => {
     expect(parseRealtimeUrl('https://rooms.example.test:8443')).toBe(
       'https://rooms.example.test:8443',

@@ -44,6 +44,7 @@ import { digestResumeToken, resumeTokenMatches } from './resume-token-digest.js'
 import { InMemoryMultiplayerRepository, PersistenceError, type MultiplayerRepository, type PersistenceDiagnostic } from '../persistence/multiplayer-repository.js'
 import { MULTIPLAYER_PERSISTENCE_VERSION, type MultiplayerRecord } from '../persistence/multiplayer-record.js'
 import { canonicalJson } from '../persistence/canonical-json.js'
+import { MAX_ROOMS } from '../security/network-limits.js'
 
 interface EmptyRoomSeat {
   readonly seatId: SeatId
@@ -258,6 +259,7 @@ export class InMemoryRoomService {
 
   #createRoom(displayName: string): RoomServiceResult<RoomSessionData> {
     if (this.#disposed) return serviceFailure('ROOM_CLOSED', 'The multiplayer service is closing.')
+    if (this.#rooms.size >= MAX_ROOMS) return serviceFailure('SERVER_BUSY', 'The server has reached its Room limit. Try again later.')
     const parsedName = displayNameSchema.safeParse(displayName)
     if (!parsedName.success) {
       return serviceFailure('INVALID_DISPLAY_NAME', 'Enter a valid display name.')
@@ -690,6 +692,15 @@ export class InMemoryRoomService {
     return this.#rooms.size
   }
 
+  public get isReady(): boolean { return !this.#stopping && !this.#disposed }
+  /** No identity, payload or path is exposed; used only by local verification. */
+  public resources(): Readonly<Record<'rooms' | 'sessions' | 'listeners' | 'timers' | 'records', number>> {
+    return { rooms: this.#rooms.size, sessions: this.#sessions.size, listeners: this.#listeners.size + this.#gameListeners.size,
+      records: this.#committedRecords.size, timers: [...this.#rooms.values()].reduce((sum, room) => sum
+        + (room.idleTask === null ? 0 : 1) + (room.abandonedTask === null ? 0 : 1), 0)
+        + [...this.#sessions.values()].filter((session) => session.reconnectTask !== null).length }
+  }
+
   public hasSession(sessionId: SessionId): boolean {
     return this.#sessions.has(sessionId)
   }
@@ -776,6 +787,7 @@ export class InMemoryRoomService {
   }
 
   #recover(records: readonly MultiplayerRecord[]): void {
+    if (records.length > MAX_ROOMS) throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
     const now = this.#runtime.now()
     for (const record of records) {
       if ((record.game === null && record.idleDeadlineMs <= now)

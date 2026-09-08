@@ -1,39 +1,52 @@
-import { REALTIME_SERVICE_NAME } from '@frontier-isles/realtime-contracts'
 import { parseServerConfig } from './config.js'
 import { createFrontierHttpServer } from './create-http-server.js'
 import { createRealtimeServer } from './create-realtime-server.js'
 import { createGracefulShutdown } from './graceful-shutdown.js'
 import { InMemoryRoomService } from './lobby/room-service.js'
 import { SqliteMultiplayerRepository } from './persistence/sqlite-multiplayer-repository.js'
-import type { PersistenceDiagnostic } from './persistence/multiplayer-repository.js'
+import { safeLogRecord } from './security/safe-log.js'
 
-function reportPersistence(diagnostic: PersistenceDiagnostic): void { console.log(JSON.stringify(diagnostic)) }
+function reportDiagnostic(diagnostic: unknown): void { console.log(safeLogRecord(diagnostic)) }
 
 function start(): void {
   const config = parseServerConfig(process.env)
-  const repository = new SqliteMultiplayerRepository(config.persistenceFile ?? 'data/frontier-isles.sqlite', { onDiagnostic: reportPersistence })
+  const repository = new SqliteMultiplayerRepository(config.persistenceFile ?? 'data/frontier-isles.sqlite', { onDiagnostic: reportDiagnostic })
   let roomService: InMemoryRoomService
   try {
     roomService = new InMemoryRoomService({ repository, reconnectGraceMs: config.reconnectGraceMs,
       roomIdleTtlMs: config.roomIdleTtlMs, gameAbandonedTtlMs: config.gameAbandonedTtlMs ?? 1_800_000,
-      restartRecoveryGraceMs: config.restartRecoveryGraceMs ?? 120_000, onPersistenceDiagnostic: reportPersistence })
+      restartRecoveryGraceMs: config.restartRecoveryGraceMs ?? 120_000, onPersistenceDiagnostic: reportDiagnostic })
   } catch { repository.close(); throw new Error('Multiplayer recovery failed.') }
-  const httpServer = createFrontierHttpServer()
-  const realtimeServer = createRealtimeServer(httpServer, config, { roomService })
+  let httpServer: ReturnType<typeof createFrontierHttpServer>
+  try {
+    httpServer = createFrontierHttpServer({ allowedOrigins: config.clientOrigins ?? [config.clientOrigin],
+      privateDataFile: config.persistenceFile ?? 'data/frontier-isles.sqlite',
+      isReady: () => roomService.isReady, ...(config.staticRoot === undefined ? {} : { staticRoot: config.staticRoot }) })
+  } catch { roomService.dispose(); repository.close(); throw new Error('Public frontend startup failed.') }
+  const realtimeServer = createRealtimeServer(httpServer, config, { roomService, onDiagnostic: reportDiagnostic })
   const shutdown = createGracefulShutdown({ httpServer, realtimeServer })
+  let stopping = false
   function handleShutdownSignal(): void {
-    void shutdown().catch(() => {
-      console.error(JSON.stringify({ code: 'SHUTDOWN_FAILED', message: 'Check the private recovery runbook before restarting.' }))
+    if (stopping) return
+    stopping = true
+    reportDiagnostic({ code: 'SHUTDOWN_STARTED' })
+    void shutdown().then(() => reportDiagnostic({ code: 'SHUTDOWN_COMPLETE' })).catch(() => {
+      console.error(safeLogRecord({ code: 'SHUTDOWN_FAILED' }))
       process.exitCode = 1
     })
   }
   process.once('SIGINT', handleShutdownSignal)
   process.once('SIGTERM', handleShutdownSignal)
+  httpServer.once('error', () => {
+    console.error(safeLogRecord({ code: 'SERVER_LISTEN_FAILED' }))
+    process.exitCode = 1
+    handleShutdownSignal()
+  })
   httpServer.listen(config.port, () => {
-    console.log(`${REALTIME_SERVICE_NAME} listening on port ${config.port}`)
+    reportDiagnostic({ code: 'SERVER_LISTENING', port: config.port })
   })
 }
 try { start() } catch {
-  console.error(JSON.stringify({ code: 'STARTUP_FAILED', message: 'Check server configuration, data-volume access and the private recovery runbook. Existing data was not reset.' }))
+  console.error(safeLogRecord({ code: 'STARTUP_FAILED' }))
   process.exitCode = 1
 }

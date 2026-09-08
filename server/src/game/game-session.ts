@@ -197,6 +197,12 @@ export class GameSession {
   /** Shutdown preserves the durable lifecycle; it does not close a recoverable game. */
   public stop(): void { this.#stopping = true; this.#presenceEpoch += 1; this.#stopChoice?.() }
   public drain(): Promise<void> { return this.#queue.idle() }
+  /** Node-only aggregate counts for bounded resource verification; never a network contract. */
+  public resources(): Readonly<Record<'queue' | 'cache' | 'views' | 'listeners' | 'aiTasks' | 'aiWaiters', number>> {
+    return { queue: this.#queue.size, cache: [...this.#cache.values()].reduce((sum, entries) => sum + entries.size, 0),
+      views: this.#playerViews.size, listeners: this.#listeners.size, aiTasks: this.#aiTask === null ? 0 : 1,
+      aiWaiters: this.#stopChoice === null ? 0 : 1 }
+  }
 
   public get lifecycleStatus(): GameUpdate['lifecycleStatus'] {
     return this.#closed ? 'CLOSED' : this.#state.winnerId !== null ? 'FINISHED' : this.#failed ? 'ERROR'

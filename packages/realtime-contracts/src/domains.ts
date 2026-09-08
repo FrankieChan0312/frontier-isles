@@ -40,6 +40,8 @@ export const SAFE_ERROR_CODES = Object.freeze([
   'GAME_BUSY',
   'GAME_PAUSED',
   'REPLACEMENT_NOT_AVAILABLE',
+  'RATE_LIMITED',
+  'SERVER_BUSY',
   'INTERNAL_ERROR',
 ] as const)
 

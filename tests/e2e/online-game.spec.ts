@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { gameCommandRequestSchema } from '@frontier-isles/realtime-contracts'
 import {
-  ONLINE_CREDENTIAL_KEY, expectOnlinePrivacy, expectOnlineViewport, expectSharedPublicState,
+  duplicateBlankTab, expectOnlinePrivacy, expectOnlineViewport, expectSharedPublicState,
   finishOnlineSetup, observeOnline, openOnlineBrowsers,
 } from './online-helpers.ts'
 
@@ -86,15 +86,8 @@ test('two Humans share server setup and normal turns, private hands, responsive 
     await joiner.page.getByRole('button', { name: 'Resync game' }).click()
     await expect(joiner.page.getByRole('button', { name: 'End turn' })).toBeEnabled()
 
-    // Copy only the accepted sessionStorage credential to reproduce a duplicated tab.
-    const credential = await joiner.page.evaluate((key) => sessionStorage.getItem(key), ONLINE_CREDENTIAL_KEY)
-    if (credential === null) throw new Error('Missing active Room session credential.')
-    const context = game.contexts[1]
-    if (context === undefined) throw new Error('Missing second browser context.')
-    const replacement = observeOnline(await context.newPage())
+    const replacement = observeOnline(await duplicateBlankTab(joiner.page))
     await replacement.page.goto('/')
-    await replacement.page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: ONLINE_CREDENTIAL_KEY, value: credential })
-    await replacement.page.reload()
     await expect(replacement.page.getByText(/Online Multiplayer · Room/)).toBeVisible()
     await expect(joiner.page.getByRole('alert').filter({ hasText: 'continued in a newer tab' })).toBeVisible()
     await expect(joiner.page.getByRole('button', { name: 'End turn' })).toBeDisabled()

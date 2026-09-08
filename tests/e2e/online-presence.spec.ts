@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { ONLINE_CREDENTIAL_KEY, expectOnlinePrivacy, expectSharedPublicState, observeOnline, openOnlineBrowsers } from './online-helpers.ts'
+import { ONLINE_CREDENTIAL_KEY, duplicateBlankTab, expectOnlinePrivacy, expectSharedPublicState, observeOnline, openOnlineBrowsers } from './online-helpers.ts'
 
 /** Test-owned transport interruption; no production debug API or browser game state. */
 async function interruptible(page: Page): Promise<() => void> {
@@ -79,12 +79,8 @@ test('a newer Host tab stays paused until another Human resumes, and the old tab
     disconnect()
     await expect(game.host.page.getByRole('status', { name: 'Game presence' })).toContainText('Game paused')
     const before = game.host.current().view
-    const credential = await game.host.page.evaluate((key) => sessionStorage.getItem(key), ONLINE_CREDENTIAL_KEY)
-    if (credential === null) throw new Error('Expected the current Host tab credential.')
-    const replacement = observeOnline(await game.host.page.context().newPage())
+    const replacement = observeOnline(await duplicateBlankTab(game.host.page))
     await replacement.page.goto('/')
-    await replacement.page.evaluate(({ key, value }) => sessionStorage.setItem(key, value), { key: ONLINE_CREDENTIAL_KEY, value: credential })
-    await replacement.page.reload()
     await expect(replacement.page.getByRole('status', { name: 'Game presence' })).toContainText('Game paused')
     await expect(game.host.page.getByRole('alert').filter({ hasText: 'continued in a newer tab' })).toBeVisible()
     expect(replacement.current().view).toEqual(before)

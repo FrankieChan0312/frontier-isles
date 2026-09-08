@@ -1,7 +1,7 @@
 {
   "name": "frontier-isles",
   "private": true,
-  "version": "1.0.0-rc.1",
+  "version": "2.0.0-alpha.1",
   "type": "module",
   "engines": {
     "node": ">=24.19.0 <25"
@@ -21,6 +21,11 @@
     "test": "npm run build:game && npm run build:contracts && vitest run && npm run test --workspace @frontier-isles/game-core && npm run test --workspace @frontier-isles/game-ai",
     "test:server": "npm run build:game && npm run build:contracts && npm run test --workspace @frontier-isles/realtime-contracts && npm run test --workspace @frontier-isles/server",
     "test:recovery": "npm run build:game && npm run build:contracts && npm exec --workspace @frontier-isles/server -- vitest run test/multiplayer-repository.test.ts test/multiplayer-recovery.test.ts test/multiplayer-restart.integration.test.ts",
+    "test:security": "npm run build:game && npm run build:contracts && npm exec --workspace @frontier-isles/server -- vitest run test/security-limits.test.ts test/security-http.test.ts test/security-wire.integration.test.ts test/security-storage.test.ts test/security-artifacts.test.ts",
+    "test:load": "npm run build:game && npm run build:contracts && npm exec --workspace @frontier-isles/server -- vitest run test/alpha-load.test.ts",
+    "smoke:container": "tsx server/test/run-container-smoke.ts",
+    "audit:artifacts": "tsx server/test/run-artifact-audit.ts",
+    "redact:artifacts": "tsx server/test/run-trace-redaction.ts",
     "test:watch": "vitest",
     "build": "npm run build:game && npm run build:contracts && tsc -b && vite build",
     "build:contracts": "npm run build --workspace @frontier-isles/realtime-contracts",
@@ -32,7 +37,8 @@
     "simulate:online": "npm run build:server && node server/dist/test/run-online-simulations.js",
     "e2e": "playwright test",
     "e2e:lobby": "playwright test tests/e2e/lobby.spec.ts",
-    "e2e:online": "playwright test tests/e2e/online-game.spec.ts tests/e2e/online-workflows.spec.ts tests/e2e/online-delivery.spec.ts tests/e2e/online-presence.spec.ts",
+    "e2e:audit": "playwright test tests/e2e/lobby.spec.ts tests/e2e/online-delivery.spec.ts tests/e2e/online-game.spec.ts tests/e2e/online-workflows.spec.ts tests/e2e/online-presence.spec.ts tests/e2e/online-seating.spec.ts tests/e2e/online-restart.spec.ts --trace on",
+    "e2e:online": "playwright test tests/e2e/online-game.spec.ts tests/e2e/online-workflows.spec.ts tests/e2e/online-delivery.spec.ts tests/e2e/online-presence.spec.ts tests/e2e/online-seating.spec.ts tests/e2e/online-restart.spec.ts",
     "e2e:server": "npm run build:game && npm run build:contracts && tsx tests/e2e/realtime-test-server.ts",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build",
     "check:server": "npm run typecheck:server && npm run lint:server && npm run test:server && npm run build:server",
@@ -74,5 +80,8 @@
     "typescript-eslint": "^8.69.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

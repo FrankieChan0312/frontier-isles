@@ -1,5 +1,8 @@
 # Testing
 
+The current online prerelease gate, added security/load/browser/container suites and artifact
+boundaries are documented in [V2 Alpha Testing](v2/V2_ALPHA_TESTING.md).
+
 Long-running AI and online-game checks require uninterrupted execution. Host sleep/Modern
 Standby can pause Node and exhaust the existing test, heartbeat and acknowledgement deadlines.
 Keep the verification host awake for the run; do not increase test timeouts to hide a host pause.

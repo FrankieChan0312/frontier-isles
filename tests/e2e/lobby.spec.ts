@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { duplicateBlankTab } from './online-helpers.ts'
 
 const CREDENTIAL_STORAGE_KEY = 'frontier-isles:realtime-session:v1'
 
@@ -137,24 +138,26 @@ test('a refreshed tab resumes the same Ready SessionId and EAST seat', async ({ 
   try {
     await lobby.joiner.getByRole('switch', { name: 'I am Ready' }).click()
     await expect(lobby.host.getByTestId('seat-EAST')).toContainText('Ready')
-    const before = await lobby.joiner.evaluate((key) => sessionStorage.getItem(key), CREDENTIAL_STORAGE_KEY)
-    if (before === null) throw new Error('Joiner credential was not stored in sessionStorage.')
-    const beforeCredential = JSON.parse(before) as { readonly sessionId?: unknown; readonly seatId?: unknown }
-    const privateToken = (JSON.parse(before) as { readonly resumeToken?: unknown }).resumeToken
-    if (typeof privateToken !== 'string') throw new Error('Stored credential omitted ResumeToken.')
-    await expect(lobby.joiner.locator('body')).not.toContainText(privateToken)
+    const reference = await duplicateBlankTab(lobby.joiner)
+    expect(await reference.evaluate((key) => {
+      const value: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null')
+      return typeof value === 'object' && value !== null && 'resumeToken' in value && typeof value.resumeToken === 'string'
+        && !window.opener.document.body.textContent.includes(value.resumeToken)
+    }, CREDENTIAL_STORAGE_KEY)).toBe(true)
 
     await lobby.joiner.reload()
     await expect(lobby.joiner.getByText('Online Multiplayer Lobby')).toBeVisible()
     await expect(lobby.joiner.getByTestId('seat-EAST')).toContainText('Grace Joiner')
     await expect(lobby.joiner.getByTestId('seat-EAST')).toContainText('Ready')
     await expect(lobby.joiner.getByTestId('seat-EAST')).toContainText('connected')
-    const after = await lobby.joiner.evaluate((key) => sessionStorage.getItem(key), CREDENTIAL_STORAGE_KEY)
-    if (after === null) throw new Error('Resumed credential was not retained in sessionStorage.')
-    const afterCredential = JSON.parse(after) as { readonly sessionId?: unknown; readonly seatId?: unknown }
-
-    expect(afterCredential.sessionId).toBe(beforeCredential.sessionId)
-    expect(afterCredential.seatId).toBe('EAST')
+    expect(await reference.evaluate((key) => {
+      const before: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null')
+      const after: unknown = JSON.parse(window.opener.sessionStorage.getItem(key) ?? 'null')
+      return typeof before === 'object' && before !== null && 'sessionId' in before
+        && typeof after === 'object' && after !== null && 'sessionId' in after && 'seatId' in after
+        && after.sessionId === before.sessionId && after.seatId === 'EAST'
+    }, CREDENTIAL_STORAGE_KEY)).toBe(true)
+    await reference.close()
     expect(errors).toEqual([])
   } finally {
     await closeTwoPlayerLobby(lobby)
@@ -166,19 +169,9 @@ test('a copied duplicate tab wins and leaves the original read-only with a safe 
   const originalErrors = captureBrowserErrors(lobby.joiner)
   let duplicate: Page | null = null
   try {
-    const credential = await lobby.joiner.evaluate(
-      (key) => sessionStorage.getItem(key),
-      CREDENTIAL_STORAGE_KEY,
-    )
-    if (credential === null) throw new Error('Joiner credential was not stored in sessionStorage.')
-    duplicate = await lobby.joinerContext.newPage()
+    duplicate = await duplicateBlankTab(lobby.joiner)
     const duplicateErrors = captureBrowserErrors(duplicate)
     await duplicate.goto('/')
-    await duplicate.evaluate(
-      ({ key, value }) => sessionStorage.setItem(key, value),
-      { key: CREDENTIAL_STORAGE_KEY, value: credential },
-    )
-    await duplicate.reload()
 
     await expect(duplicate.getByText('Online Multiplayer Lobby')).toBeVisible()
     await expect(duplicate.getByTestId('seat-EAST')).toContainText('Grace Joiner')
@@ -186,7 +179,7 @@ test('a copied duplicate tab wins and leaves the original read-only with a safe 
     await expect(lobby.joiner.getByText('Disconnected', { exact: true })).toBeVisible()
     await expect(lobby.joiner.getByRole('switch', { name: 'I am Ready' })).toBeDisabled()
     await expect(duplicate.getByRole('switch', { name: 'I am Ready' })).toBeEnabled()
-    expect(await lobby.joiner.evaluate((key) => sessionStorage.getItem(key), CREDENTIAL_STORAGE_KEY)).toBeNull()
+    expect(await lobby.joiner.evaluate((key) => sessionStorage.getItem(key) === null, CREDENTIAL_STORAGE_KEY)).toBe(true)
     expect(originalErrors).toEqual([])
     expect(duplicateErrors).toEqual([])
   } finally {

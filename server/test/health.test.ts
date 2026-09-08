@@ -27,6 +27,7 @@ describe('server configuration', () => {
     expect(parseServerConfig({})).toEqual({
       port: 3001,
       clientOrigin: 'http://127.0.0.1:5173',
+      clientOrigins: ['http://127.0.0.1:5173'],
       nodeEnv: 'development',
       reconnectGraceMs: 30_000,
       roomIdleTtlMs: 1_800_000,

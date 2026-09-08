@@ -169,7 +169,8 @@ Full gate results (all exit 0):
 
 Status: COMPLETE
 
-Full task gate passed. Commit subject: `feat: add recoverable multiplayer room persistence`.
+Full task gate passed. Commit: `d79aaa2286dc76bc13193adda732a5be806ad8e2`
+(`feat: add recoverable multiplayer room persistence`). Working tree verified clean after commit.
 
 Implemented one SQLite aggregate repository using the installed Node 24.19.0 / SQLite 3.53.3
 runtime. MultiplayerRepository has in-memory and exactly one durable adapter. Transactions use
@@ -275,9 +276,114 @@ Logs: `logs/goal-c-11-gate-5-*.log`; command exit statuses are preserved in its 
 
 ## V2-12 — Security, deployment and alpha qualification
 
-Status: NOT_STARTED
+Status: COMPLETE
+
+Full task gate passed. Commit subject: `chore: harden and prepare online multiplayer alpha`.
+Its full SHA and clean-tree verification are recorded in the consolidated post-commit delivery report.
+The entries below preserve qualification history, including failures and their fixes. Final results
+appear at the end of this section and in [Goal C acceptance](V2_GOAL_C_ACCEPTANCE.md).
+
+Implemented production Origin admission for HTTP/polling/WebSocket, strict environment/path validation,
+16 KiB/depth/node packet guards, bounded global/transport/valid-session token buckets, 64-Room/320-
+transport ceilings, safe acknowledgement/error/log boundaries, public asset confinement and readiness.
+Added a single-image non-root read-only Docker/Compose reference with a private SQLite volume,
+healthcheck, graceful stop and bounded logs/resources, plus security/deployment/testing/protocol/UAT
+documentation and ADR-V2-0013. Root version is now `2.0.0-alpha.1`; private package versions stay fixed.
+
+V2-12 repairs the prior asynchronous lobby attachment race, accepts a completed sixteen-Human-action
+setup in the browser test helper, avoids raw credentials in tab-duplication test arguments, bounds
+oversized database recovery allocation and slow-client publication receipts, and closes storage even
+after checkpoint failure. No accepted test assertion or deterministic result was removed.
+
+Intermediate qualification: server typecheck and lint exit 0; production frontend build exit 0;
+security exit 0; load exit 0. The load observed two cycles, peak eight Rooms/four active games/24
+sockets, 56 total connections, eight resumes, 1,168 commands, 64 snapshots and 600 private publications;
+all tracked resources returned to zero. First measured duration 19,262 ms, RSS 89,145,344 to peak
+366,518,272 bytes, heap 31,068,296 to peak 146,969,480 bytes. This is not production capacity.
+Initial source type errors were fixed. The first container built/served successfully but failed in
+recovery verification; it remains recorded as a failed intermediate run pending diagnosis/requalification.
+Final clean-install gates, browser/artifact audit and container acceptance remain outstanding.
+
+Subsequent qualification passed the real Linux container smoke: Node v24.19.0, SQLite 3.53.3,
+UID 1000, read-only image, no runtime fixtures, five private routes denied, four Humans, one legal
+mutation and one exact replay across SIGKILL/restart, identical state/RNG and graceful flush. The
+test was repaired to select the actual seeded initial actor and compare canonical object values.
+Image ID from that intermediate run: `sha256:c82ef0f20bf9e2d6d401cd7ada710da9bfa134d67e031b7fc2e9d94d8d949663`.
+The smoke container was removed; nothing was tagged, pushed or deployed.
+
+The first forced-trace browser run passed 12/15, including both added three/four-Human full setup
+journeys. Three new restart cases needed exact Knight-button and modal-aware presence locators;
+the restored decisions were present. A raw trace audit found Playwright's retained authentication
+frames. Added a bounded, checksum-verified trace redactor that preserves steps, screenshots and
+original pass/fail results, plus independent secret scanning. All 15 initial traces and three error
+reports were retained under ignored `logs/goal-c-12-initial-artifacts` after redacting 74 distinct
+token/session values. Independent re-audit found zero tokens/session identities/digests/fingerprints/
+authoritative RNG payloads. This changes only local evidence, never gameplay packets or assertions.
+Additional targeted security tests pass, including slow-consumer cleanup and aliased private-path
+rejection. A reporter return-type mismatch was corrected before continuing browser qualification.
+
+The corrected focused browser qualification passes all 15 journeys in 3.4 minutes, including
+production-process SEVEN, KNIGHT and BUILD_TRADE pending-decision crash/recovery/continuation and
+the complete 3H+1AI and 4H setup/normal turn paths. Its 15 deliberately retained traces were redacted
+automatically and independently audited: zero remaining tokens, session identities, digests,
+fingerprints or authoritative RNG payloads. Server/root typecheck, zero-warning lint and the
+security suite pass. Final qualification now begins from `npm ci`, repeats every requested command,
+expands forced trace capture to all online/Lobby journeys and ends with the aggregate `check`.
+
+The final clean install initially exited 0 with zero vulnerabilities but npm 11.17 reported the
+existing esbuild installer as unreviewed. Reviewed its platform selection, version check, npm-only
+fallback and binary hash validation, then recorded only `esbuild@0.28.2` with npm's pinned
+`allowScripts` policy. No dependency version or global configuration changed. A further clean install
+and aggregate check were scheduled to verify that final installation policy before completion.
+
+### Final V2-12 qualification
+
+All 21 commands in `logs/goal-c-12-final-1-results.log` exit 0. The acceptance report records every
+exact command and duration. `check:all` passes 104 files / 669 unique tests: frontend 23 / 102,
+core 35 / 261, AI 15 / 36, contracts 7 / 66, server 24 / 204. Named integration suites account
+for six files / 29 tests within that total. Focused delivery 13, presence 20, recovery 26,
+security 52 and load one all pass. Goal C adds 140 tests over Goal B, plus eleven browser tests.
+No accepted test is removed, weakened, skipped, quarantined or ignored.
+
+Both simulation JSON reports exactly match the baseline: V1 100 legal winners / 65,341 commands /
+hash `1adc49e8`; online six legal winners across repeated 2H+2AI, 3H+1AI and 4H, each version 749 /
+134 turns / 383 draws and public hash
+`ead66aa5cb05a2b907c1ea9f7e40078389d9cf34c32e1bf132e40b03123652a3`.
+
+Browser gates pass Lobby 6/6, online 24/24 and full 38/38, retaining all eight dedicated Single
+Player and all thirteen Goal B online journeys. Forced capture passes 30/30 Lobby/online journeys.
+All 30 traces are retained after redacting 134 token/session values; the independent audit finds
+zero remaining tokens, session identities, digests, cache fingerprints or authoritative RNG.
+
+The final bounded load passes two cycles, 16 total / eight peak Rooms (four active), 24 peak sockets,
+56 connections, eight reconnects, 1,168 commands, 64 snapshot requests and 600 publications in
+20,275 ms. RSS starts at 91,246,592 bytes with sampled maximum 369,528,832; heap starts at
+31,069,664 with sampled maximum 154,576,768. Memory has three observations, not a continuous peak.
+Every tracked owned resource returns to zero. This is a local smoke, not a capacity claim.
+
+Final container smoke passes in 134.9 seconds with image
+`sha256:894729ad8099978d0327f8eb01fd107a2a00cabba2f62f5fd6edc842655039a5`:
+Node v24.19.0, SQLite 3.53.3, UID 1000, read-only root, no repository runtime fixtures/maps, four Humans,
+one accepted command / one exact replay, two process starts, exact state/RNG crash recovery,
+graceful flush and five denied private routes. Its container and temporary data are removed.
+Compose configuration passes; no image is tagged, pushed or externally deployed.
+
+The additional clean install exits 0 in 17.5 seconds (328 installed / 333 audited packages,
+zero vulnerabilities, no npm warning or unreviewed-script notice). The following aggregate
+`npm run check` exits 0 in 270.3 seconds with all 399 frontend/core/AI tests and the build passing.
+Logs: `logs/goal-c-12-final-install-policy-*.log`. `npm audit`, complete simulation comparisons,
+documentation links, exact changed-file manifest and `git diff --check` pass. Only the existing
+Vite entry-size advisory and Node color-environment notice remain; lint has zero warnings.
+
+No new external dependency version was introduced: existing Zod 4.5.4 is declared directly for
+server validation, SQLite is built into the tested Node runtime, and the esbuild approval is
+version-pinned project metadata. Root prerelease is `2.0.0-alpha.1`; private packages remain 0.1.0.
+The 110-file manifest and accepted ADRs 0010–0013 document the final changes. There are no unresolved
+required behavior questions. Single process/local disk, anonymous credentials, Chromium automation
+and bounded local load remain alpha limits. External deployment, other devices/browser engines,
+TLS/network checks and operator backup/restore remain separate Human UAT.
 
 ## Scope
 
-Exactly four normal task commits are authorized, in the requested order. Nothing will
-be pushed, merged, tagged, published or deployed. No post-V2-12 feature is in scope.
+Exactly four normal task commits are authorized, in the requested order. Nothing is
+pushed, merged, tagged, published or deployed. No post-V2-12 feature was implemented.

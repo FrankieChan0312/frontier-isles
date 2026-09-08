@@ -1,0 +1,30 @@
+services:
+  frontier-isles:
+    build: .
+    init: true
+    environment:
+      CLIENT_ORIGINS: ${CLIENT_ORIGINS:?Set the exact public HTTP or HTTPS origin}
+    ports:
+      - "127.0.0.1:${FRONTIER_PORT:-3001}:3001"
+    volumes:
+      - frontier-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    restart: "on-failure:3"
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  frontier-data:

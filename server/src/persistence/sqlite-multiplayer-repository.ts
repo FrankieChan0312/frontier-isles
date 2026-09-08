@@ -1,6 +1,8 @@
 import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { MAX_ROOMS } from '../security/network-limits.js'
+import { MAX_MULTIPLAYER_RECORD_BYTES } from './multiplayer-record.js'
 import type { RoomCode } from '@frontier-isles/realtime-contracts'
 import type { MultiplayerRecord } from './multiplayer-record.js'
 import { decodeMultiplayerRecord, encodeMultiplayerRecord, PersistenceError,
@@ -65,8 +67,22 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
     const sessionIds = new Set<string>()
     let quarantined = 0
     try {
-      const rows = this.#database.prepare('SELECT room_code, payload, checksum FROM rooms ORDER BY room_code').all()
-      for (const row of rows) {
+      const count = this.#database.prepare('SELECT count(*) AS count FROM rooms').get()?.count
+      if (typeof count !== 'number' || count > MAX_ROOMS) throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
+      // Bound allocations before bringing private payloads into JavaScript. Oversized records
+      // remain available to an operator in quarantine without copying them through the logger.
+      const oversized = 'length(CAST(payload AS BLOB)) > ? OR length(checksum) != 64 OR length(room_code) != 6'
+      this.#transaction(() => {
+        const moved = this.#database.prepare(`INSERT INTO quarantine (room_code,payload,checksum,reason)
+          SELECT room_code,payload,checksum,'INVALID_RECORD' FROM rooms WHERE ${oversized}`).run(MAX_MULTIPLAYER_RECORD_BYTES)
+        quarantined += Number(moved.changes)
+        this.#database.prepare(`DELETE FROM rooms WHERE ${oversized}`).run(MAX_MULTIPLAYER_RECORD_BYTES)
+      }, false)
+      const keys = this.#database.prepare('SELECT room_code FROM rooms ORDER BY room_code').all()
+      for (const key of keys) {
+        if (typeof key.room_code !== 'string') throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
+        const row = this.#database.prepare('SELECT room_code,payload,checksum FROM rooms WHERE room_code=?').get(key.room_code)
+        if (row === undefined) throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
         if (typeof row.room_code !== 'string' || typeof row.payload !== 'string' || typeof row.checksum !== 'string') {
           throw new PersistenceError('PERSISTENCE_OPEN_FAILED')
         }
@@ -78,11 +94,7 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
           for (const session of record.sessions) sessionIds.add(session.sessionId)
           records.push(record)
         } catch {
-          this.#transaction(() => {
-            this.#database.prepare('INSERT INTO quarantine (room_code,payload,checksum,reason) VALUES (?,?,?,?)')
-              .run(roomCode, payload, checksum, 'INVALID_RECORD')
-            this.#database.prepare('DELETE FROM rooms WHERE room_code=?').run(roomCode)
-          }, false)
+          this.#quarantine(roomCode)
           quarantined += 1
         }
       }
@@ -95,6 +107,9 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
   public save(record: MultiplayerRecord): void {
     const encoded = encodeMultiplayerRecord(record)
     this.#transaction(() => {
+      const exists = this.#database.prepare('SELECT 1 AS found FROM rooms WHERE room_code=?').get(record.roomCode)
+      const count = this.#database.prepare('SELECT count(*) AS count FROM rooms').get()?.count
+      if (exists === undefined && (typeof count !== 'number' || count >= MAX_ROOMS)) throw new PersistenceError('PERSISTENCE_WRITE_FAILED')
       this.#database.prepare(`INSERT INTO rooms (room_code,payload,checksum) VALUES (?,?,?)
         ON CONFLICT(room_code) DO UPDATE SET payload=excluded.payload,checksum=excluded.checksum`)
         .run(encoded.record.roomCode, encoded.payload, encoded.checksum)
@@ -109,11 +124,20 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
   }
   public close(): void {
     if (this.#closed) return
-    this.flush()
-    this.#database.close()
+    let failed = false
+    try { this.flush() } catch { failed = true }
+    try { this.#database.close() } catch { failed = true }
     this.#closed = true
+    if (failed) throw new PersistenceError('PERSISTENCE_WRITE_FAILED')
   }
   #requireOpen(): void { if (this.#closed) throw new PersistenceError('PERSISTENCE_WRITE_FAILED') }
+  #quarantine(roomCode: string): void {
+    this.#transaction(() => {
+      this.#database.prepare(`INSERT INTO quarantine (room_code,payload,checksum,reason)
+        SELECT room_code,payload,checksum,'INVALID_RECORD' FROM rooms WHERE room_code=?`).run(roomCode)
+      this.#database.prepare('DELETE FROM rooms WHERE room_code=?').run(roomCode)
+    }, false)
+  }
   #transaction(operation: () => void, injectFault = true): void {
     this.#requireOpen()
     try {

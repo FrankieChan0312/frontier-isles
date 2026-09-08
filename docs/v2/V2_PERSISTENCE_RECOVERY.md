@@ -1,5 +1,10 @@
 # Multiplayer Persistence and Recovery Runbook
 
+For the production image, private volume, readiness, stop/backup/restore and compatible-image
+rollback procedures, see [V2 Deployment](V2_DEPLOYMENT.md). Production requires explicit absolute
+private/public paths and an Origin allowlist. Startup over the 64-Room cap fails without resetting
+records; oversized records are quarantined in SQL before allocating private payloads in JavaScript.
+
 ## Supported storage
 
 Run exactly one Node 24.19+ process within the Node 24 line. Production uses its bundled SQLite

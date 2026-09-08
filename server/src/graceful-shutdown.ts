@@ -1,6 +1,7 @@
 import type { Server as HttpServer } from 'node:http'
 import type { RealtimeServer } from './create-realtime-server.js'
-import { realtimeRoomService } from './create-realtime-server.js'
+import { realtimeRoomService, disposeRealtimeBoundary } from './create-realtime-server.js'
+import { closeFrontierConnections } from './create-http-server.js'
 
 export interface GracefulShutdownDependencies {
   readonly httpServer: HttpServer
@@ -12,26 +13,25 @@ async function closeServers({
   realtimeServer,
 }: GracefulShutdownDependencies): Promise<void> {
   const roomService = realtimeRoomService(realtimeServer)
-  let persistenceFailed = false
-  try { await roomService?.shutdown() } catch { persistenceFailed = true }
-  await new Promise<void>((resolve, reject) => {
-    realtimeServer.close((error) => {
-      if (error === undefined) resolve()
-      else reject(error)
-    })
-  })
-
-  if (httpServer.listening) {
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error === undefined) resolve()
-        else reject(error)
-      })
-    })
+  let failed = false
+  let deadline: ReturnType<typeof setTimeout> | undefined
+  try {
+    try { await roomService?.shutdown() } catch { failed = true }
+    await Promise.race([
+      new Promise<void>((resolve, reject) => realtimeServer.close((error) => error === undefined ? resolve() : reject(error))),
+      new Promise<void>((resolve) => { deadline = setTimeout(() => { failed = true; closeFrontierConnections(httpServer); resolve() }, 10_000) }),
+    ])
+  } catch { failed = true } finally {
+    clearTimeout(deadline)
+    closeFrontierConnections(httpServer)
+    if (httpServer.listening) {
+      await new Promise<void>((resolve) => httpServer.close((error) => { if (error !== undefined) failed = true; resolve() }))
+    }
+    roomService?.dispose()
+    disposeRealtimeBoundary(realtimeServer)
+    try { roomService?.closeRepository() } catch { failed = true }
   }
-  roomService?.dispose()
-  try { roomService?.closeRepository() } catch { persistenceFailed = true }
-  if (persistenceFailed) throw new Error('Persistence shutdown failed. Check the private recovery runbook before restarting.')
+  if (failed) throw new Error('Server shutdown failed. Check the private recovery runbook before restarting.')
 }
 
 export function createGracefulShutdown(
