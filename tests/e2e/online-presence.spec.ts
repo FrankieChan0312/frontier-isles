@@ -14,7 +14,7 @@ async function noOverflow(page: Page): Promise<void> {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 }
 
-test('network loss pauses the current Human, then resumes the same pending setup within grace', async ({ browser }) => {
+test('network loss pauses the current Human, then resumes the same pending setup within grace', async ({ browser }, testInfo) => {
   let disconnect: () => void = () => {}
   const game = await openOnlineBrowsers(browser, 'Ada Host', async (page) => { disconnect = await interruptible(page) })
   try {
@@ -22,13 +22,19 @@ test('network loss pauses the current Human, then resumes the same pending setup
     await game.host.page.context().setOffline(true)
     disconnect()
     await expect(game.joiner.page.getByRole('status', { name: 'Game presence' })).toContainText('Game paused')
+    await expect(game.joiner.page.getByRole('status', { name: 'Action guidance' })).toContainText('Game paused.')
+    await expect(game.joiner.page.getByText(/Choose a highlighted/)).toHaveCount(0)
     await expect(game.joiner.page.getByText(/Reconnect within \d+s/)).toBeVisible()
     expect(game.joiner.current().view.stateVersion).toBe(before.stateVersion)
     expect(game.joiner.current().aiThinking).toBe(false)
     await expect(game.joiner.page.getByRole('button', { name: /Replace .* with AI/ })).toHaveCount(0)
+    await game.joiner.page.setViewportSize({ width: 480, height: 800 })
+    await game.joiner.page.screenshot({ path: testInfo.outputPath('paused-480.png'), fullPage: true })
     await game.host.page.context().setOffline(false)
     await expect(game.host.page.getByRole('status', { name: 'Game presence' })).toContainText('Game active', { timeout: 10_000 })
     await expect(game.joiner.page.getByRole('status', { name: 'Game presence' })).toContainText('Game active')
+    await expect(game.host.page.getByRole('status', { name: 'Action guidance' })).toContainText('Choose a highlighted vertex')
+    await expect(game.joiner.page.getByRole('status', { name: 'Action guidance' })).toHaveText('Waiting for another player’s decision.')
     expect(game.host.current().view).toEqual(before)
     await game.host.page.getByRole('button', { name: /^Build on vertex:/ }).first().press('Enter')
     await expectSharedPublicState([game.host, game.joiner], 1)

@@ -93,6 +93,12 @@ export function GamePage({
   const lastRoll = view.publicGame.turn.lastRoll
   const legalVertexIds = legalVerticesForMode(view, buildMode)
   const legalEdgeIds = legalEdgesForMode(view, buildMode)
+  const unavailableReason = online?.status === 'Resynchronizing' || online?.status === 'Resync required'
+    ? `${online.status}. Waiting for the current game view.`
+    : online?.paused ? online.status === 'Connected'
+      ? 'Game paused. Waiting for reconnection or a Host decision.'
+      : `${online.status}. Waiting to resume your game connection.`
+    : busy ? online === undefined ? 'Updating the game. Please wait.' : `${online.status}. Please wait.` : null
 
   const sendBoardCommand = (command: GameCommand | null): void => {
     if (!busy && command !== null) onCommand(command)
@@ -141,19 +147,26 @@ export function GamePage({
       <Container maxWidth={false}>
         {online?.presence}
         {error === null ? null : <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {online !== undefined && view.publicGame.winnerId === null && (view.legalActions.permittedCommandTypes?.length ?? 0) === 0
-          ? <Alert severity="info" sx={{ mb: 2 }}>Waiting for another player’s decision.</Alert> : null}
+        <Box sx={{ mb: 2 }}>
+          <ActionPanel
+            buildMode={buildMode}
+            busy={busy}
+            unavailableReason={unavailableReason}
+            onBuildModeChange={onBuildModeChange}
+            onCommand={onCommand}
+            onOpenDomesticTrade={() => setDomesticTradeId(createTradeId())}
+            onOpenMaritimeTrade={() => setMaritimeOpen(true)}
+            view={view}
+          />
+        </Box>
         <Box
           sx={{
             display: 'grid',
             gap: 2,
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: '250px minmax(0, 1fr) 310px' },
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 250px 310px' },
           }}
         >
-          <Box sx={{ minWidth: 0, order: { xs: 2, lg: 1 } }}>
-            <PlayerPanels view={view} />
-          </Box>
-          <Stack spacing={2} sx={{ minWidth: 0, order: { xs: 1, lg: 2 } }}>
+          <Stack spacing={2} sx={{ minWidth: 0 }}>
             <Paper component="section" elevation={4} sx={{ overflow: 'hidden', p: { xs: 0.5, sm: 1.5 } }}>
               <PlayableGameBoard
                 legalEdgeIds={busy ? [] : legalEdgeIds}
@@ -172,17 +185,11 @@ export function GamePage({
               view={view}
             />
           </Stack>
-          <Stack spacing={2} sx={{ minWidth: 0, order: 3 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <PlayerPanels view={view} />
+          </Box>
+          <Stack spacing={2} sx={{ minWidth: 0 }}>
             <BankSupplyPanel view={view} />
-            <ActionPanel
-              buildMode={buildMode}
-              busy={busy}
-              onBuildModeChange={onBuildModeChange}
-              onCommand={onCommand}
-              onOpenDomesticTrade={() => setDomesticTradeId(createTradeId())}
-              onOpenMaritimeTrade={() => setMaritimeOpen(true)}
-              view={view}
-            />
             <Paper aria-label="Game log" component="section" elevation={0} sx={{ maxHeight: 280, overflowY: 'auto', p: 2 }}>
               <Typography component="h2" gutterBottom sx={{ fontWeight: 800 }} variant="h6">Game log</Typography>
               {events.length === 0 ? (

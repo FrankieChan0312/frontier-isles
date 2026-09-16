@@ -50,11 +50,28 @@ describe('LobbyPage', () => {
       error={null} onCopyRoomCode={vi.fn()} onLeave={vi.fn()} onStart={onStart} onReadyChange={vi.fn()}
       onSetAiSeat={vi.fn()} selfSeatId={selfSeatId} snapshot={snapshot} /></ThemeProvider>)
     const button = screen.getByRole('button', { name: 'Start Game' })
+    expect(screen.getByRole('status', { name: 'Lobby guidance' })).toHaveTextContent(selfSeatId === 'NORTH'
+      ? 'All start conditions are met.' : 'Waiting for the Host to start.')
     if (selfSeatId === 'NORTH') {
       expect(button).toBeEnabled()
       await userEvent.setup().click(button)
       expect(onStart).toHaveBeenCalledOnce()
     } else expect(button).toBeDisabled()
+  })
+
+  it.each(['CONNECTING', 'RECONNECTING', 'DISCONNECTED', 'BUSY'] as const)('does not invite a ready viewer to start while %s', (state) => {
+    const snapshot = roomSnapshotSchema.parse({ ...SNAPSHOT, seats: [
+      { ...SNAPSHOT.seats[0], ready: true }, SNAPSHOT.seats[1],
+      { seatId: 'SOUTH', occupancy: 'AI', profileId: 'BUILDER', ready: true, connectionStatus: 'CONNECTED' },
+      { seatId: 'WEST', occupancy: 'AI', profileId: 'MERCHANT', ready: true, connectionStatus: 'CONNECTED' },
+    ], startReadiness: { ready: true, blockers: [] } })
+    render(<ThemeProvider theme={frontierTheme}><LobbyPage busy={state === 'BUSY'} connectionState={state === 'BUSY' ? 'CONNECTED' : state}
+      error={null} onCopyRoomCode={vi.fn()} onLeave={vi.fn()} onStart={vi.fn()} onReadyChange={vi.fn()}
+      onSetAiSeat={vi.fn()} selfSeatId="NORTH" snapshot={snapshot} /></ThemeProvider>)
+    expect(screen.getByRole('status', { name: 'Lobby guidance' })).toHaveTextContent(state === 'BUSY'
+      ? 'Updating the Room. Please wait.' : 'Waiting for the current Room state.')
+    expect(screen.queryByText('All start conditions are met.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start Game' })).toBeDisabled()
   })
 
   it('renders four canonical seats, connection/readiness, and an ineligible start boundary', () => {
@@ -85,6 +102,8 @@ describe('LobbyPage', () => {
     ])
     expect(within(screen.getByTestId('seat-NORTH')).getByText('Host')).toBeVisible()
     expect(screen.getByText('Fill all four seats with Humans or AI.')).toBeVisible()
+    expect(screen.getByText('Every Human player must be Ready.')).toBeVisible()
+    expect(screen.getByRole('status', { name: 'Lobby guidance' })).toHaveTextContent('Waiting for the start conditions below.')
     expect(screen.getByRole('button', { name: 'Start Game' })).toBeDisabled()
   })
 

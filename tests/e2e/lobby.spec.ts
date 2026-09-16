@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
 import { duplicateBlankTab } from './online-helpers.ts'
 
 const CREDENTIAL_STORAGE_KEY = 'frontier-isles:realtime-session:v1'
@@ -61,7 +62,7 @@ async function closeTwoPlayerLobby(lobby: TwoPlayerLobby): Promise<void> {
   await lobby.joinerContext.close()
 }
 
-test('two browser contexts synchronize seats, Ready, and Host AI at all target widths', async ({ browser }) => {
+test('two browser contexts synchronize seats, Ready, and Host AI at all target widths', async ({ browser }, testInfo) => {
   const hostContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const joinerContext = await browser.newContext({ viewport: { width: 1024, height: 768 } })
   const host = await hostContext.newPage()
@@ -72,6 +73,38 @@ test('two browser contexts synchronize seats, Ready, and Host AI at all target w
   try {
     const roomCode = await createOnlineRoom(host, 'Ada Host')
     await joinOnlineRoom(joiner, 'Grace Joiner', roomCode)
+
+    const ready = host.getByRole('switch', { name: 'I am Ready' })
+    const focusMeasurements = []
+    for (const checked of [false, true]) {
+      await ready.setChecked(checked)
+      await expect(ready).toBeEnabled()
+      await ready.focus()
+      await host.keyboard.press('Tab')
+      await host.keyboard.press('Shift+Tab')
+      await expect(ready).toBeFocused()
+      const focus = await ready.evaluate((input) => {
+        const base = input.closest('.MuiButtonBase-root')
+        if (base === null || base.parentElement === null) throw new Error('Missing switch focus surface.')
+        const style = getComputedStyle(base), box = base.getBoundingClientRect(), parent = base.parentElement.getBoundingClientRect()
+        return { keyboardFocus: input.matches(':focus-visible'), outline: style.outlineColor, shadow: style.boxShadow,
+          inset: -(parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)),
+          contained: box.left >= parent.left && box.right <= parent.right && box.top >= parent.top && box.bottom <= parent.bottom }
+      })
+      expect(focus.keyboardFocus).toBe(true)
+      expect(focus.outline).toBe('rgb(32, 49, 45)')
+      expect(focus.shadow).toContain('rgb(255, 253, 248)')
+      expect(focus.shadow).toContain('inset')
+      expect(focus.inset).toBeGreaterThanOrEqual(0)
+      expect(focus.contained).toBe(true)
+      focusMeasurements.push({ checked, ...focus })
+      await host.screenshot({ path: testInfo.outputPath(`ready-focus-${checked}.png`) })
+    }
+    const focusPath = testInfo.outputPath('ready-focus.json')
+    await writeFile(focusPath, JSON.stringify(focusMeasurements, null, 2))
+    await testInfo.attach('ready-focus', { path: focusPath, contentType: 'application/json' })
+    await ready.uncheck()
+    await expect(ready).toBeEnabled()
 
     for (const page of [host, joiner]) {
       await expect(page.getByTestId('seat-NORTH')).toContainText('Ada Host')
@@ -105,6 +138,15 @@ test('two browser contexts synchronize seats, Ready, and Host AI at all target w
       }))
     ))
     expect(await readPublicSeats(joiner)).toEqual(await readPublicSeats(host))
+
+    await host.getByLabel('AI profile for WEST').click()
+    await host.getByRole('option', { name: 'MERCHANT' }).click()
+    await host.getByRole('switch', { name: 'I am Ready' }).click()
+    await expect(host.getByRole('status', { name: 'Lobby guidance' })).toHaveText('All start conditions are met.')
+    await expect(joiner.getByRole('status', { name: 'Lobby guidance' })).toHaveText('Waiting for the Host to start.')
+    await expect(host.getByRole('button', { name: 'Start Game' })).toBeEnabled()
+    await expect(joiner.getByRole('button', { name: 'Start Game' })).toBeDisabled()
+    await joiner.screenshot({ path: testInfo.outputPath('lobby-ready-guest-1024.png'), fullPage: true })
 
     await expectNoHorizontalOverflow(host)
     await expectNoHorizontalOverflow(joiner)

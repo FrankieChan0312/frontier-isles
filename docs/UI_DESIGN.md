@@ -38,6 +38,8 @@ and option lists. `LocalGameGateway` and `GameEngine` remain the final legality 
 - Bank / Supply: a responsive public panel always shows all five resource counts, including zero,
   plus only the number of Development Cards remaining. Values come directly from the latest
   `PlayerView.publicGame.bank` and update after accepted gateway commands and save reloads.
+  Its definition list contains six groups, each with one `dt` followed by its associated `dd`.
+  Separators are CSS borders on groups; each value retains its resource/count accessible label.
 - Maritime trade: choose one projected give/receive/ratio option.
 - Domestic trade: choose projected AI counterparty and explicit resource bundles; accept, reject, or
   submit a one-depth counter to incoming offers. A counter replaces both complete bundles under the
@@ -63,11 +65,38 @@ and Enter/Space activation. MUI dialogs provide focus containment and restoratio
 
 ## Responsive and motion behavior
 
-The layout is a three-column desktop grid, collapses to a single column below the large breakpoint,
-and keeps every column at `minmax(0, 1fr)` to prevent intrinsic SVG overflow. Header controls wrap.
+One Actions section precedes the board and secondary panels in both DOM and visual order. Its
+live guidance follows the viewer's projected legal actions and private pending decision, never the
+public phase alone. Non-current discard and trade responders retain their required actions. Waiting,
+submission, resynchronization, reconnect/pause and completed-game messages replace actionable
+instructions when appropriate; obsolete build selections do not produce placement guidance.
+The GamePage does not add a second generic waiting message.
+
+The board/hand/cards, players and Bank/log follow in a three-column desktop grid, collapsing to a
+single column below the large breakpoint. Flexible columns use `minmax(0, 1fr)` to prevent
+intrinsic SVG overflow. Header controls wrap.
 The document and root forbid horizontal page overflow; at 480px the board remains fluid. A global
 `prefers-reduced-motion` rule removes nonessential animation and transition duration.
 
-Browser verification covered 1440×900, 1024×768, and 480×800. At every breakpoint, measured
-document scroll width equalled client width, the SVG stayed inside the content column, header
-buttons stayed in bounds, and the console contained no warnings or errors.
+The UI-polish browser gate checks 1440×900, 1024×768 and 480×800. In the standard online
+`ROLL_REQUIRED` state, it resets scroll to zero and measures guidance and Roll dice bounds before
+any focus/click can scroll them into view. Both must fit the initial viewport, and hit testing must
+find the unobscured control. There is one action-control instance, no positive tabindex, and no
+sticky overlay. SVG geometry/keyboard semantics remain unchanged; the board retains useful size.
+
+MUI keyboard focus uses two opaque three-pixel bands: cream (`#fffdf8`) next to the control and
+dark green (`#20312d`) outside it. Browser checks read rendered colors, require at least 3:1 for
+the distinguishable band against cream panels, page background and the sampled dark-header
+gradient, and check ancestor clipping. Tab/Shift+Tab follows DOM order; dialog containment and
+restoration and SVG Enter activation remain regression checks. This limited gate is not a claim
+of full WCAG conformance or verified screen-reader support.
+The Ready switch uses the same two bands inset within its moving base to avoid its container's
+clipping. Checked and unchecked keyboard focus are verified without enlarging the switch hit area.
+Focus bands appear immediately rather than fading through partially transparent button shadows.
+
+## Online Lobby guidance
+
+Connected, ready Guests see “Waiting for the Host to start.” Only the Host can start through the
+existing authoritative readiness checks. Blockers remain visible when conditions are unmet.
+Busy and disconnected/reconnecting states explain the pending Room update instead of inviting
+the viewer to start from a stale snapshot. Home retains its existing mode separation and design.

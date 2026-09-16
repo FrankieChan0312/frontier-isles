@@ -215,9 +215,14 @@ export function LobbyPage({
             <Stack spacing={2}>
               <Box>
                 <Typography component="h2" variant="h6">Start readiness</Typography>
-                {snapshot.startReadiness.ready ? (
-                  <Typography color="success.main">All start conditions are met.</Typography>
-                ) : (
+                <Typography aria-live="polite" role="status" aria-label="Lobby guidance"
+                  color={connectionState === 'CONNECTED' && !busy && snapshot.startReadiness.ready ? 'success.main' : 'text.secondary'}>
+                  {connectionState !== 'CONNECTED' ? `${connectionLabel(connectionState)}. Waiting for the current Room state.`
+                    : busy ? 'Updating the Room. Please wait.'
+                      : snapshot.startReadiness.ready ? isHost ? 'All start conditions are met.' : 'Waiting for the Host to start.'
+                        : 'Waiting for the start conditions below.'}
+                </Typography>
+                {snapshot.startReadiness.ready ? null : (
                   <Stack component="ul" spacing={0.5} sx={{ mb: 0, mt: 1, pl: 2.5 }}>
                     {snapshot.startReadiness.blockers.map((blocker) => (
                       <Typography component="li" key={blocker} variant="body2">

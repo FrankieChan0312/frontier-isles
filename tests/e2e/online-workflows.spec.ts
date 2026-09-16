@@ -52,6 +52,8 @@ async function humanOffer(game: OnlineBrowsers): Promise<void> {
   await enterBag(game.host, 'You give / Player receives', { ...empty, LUMBER: 1 })
   await clickCommand(game, game.host, 'Send offer')
   await expect(game.joiner.page.getByRole('dialog', { name: /Trade offer from/ })).toBeVisible()
+  expect(game.joiner.current().view.self.id).not.toBe(game.joiner.current().view.publicGame.turn.currentPlayerId)
+  await expect(game.joiner.page.locator('[aria-label="Action guidance"]')).toHaveText('Respond to the proposed trade.')
 }
 
 test('online paid builds, private purchase, maritime and Human/Human plus Human/AI negotiations', async ({ browser }) => {
@@ -107,6 +109,8 @@ test('online controlled seven gives each Human only their discard, then robber a
   await scenario(browser, 'SEVEN', async (game) => {
     await clickCommand(game, game.host, 'Roll dice')
     for (const observer of [game.host, game.joiner]) await expect(observer.page.getByRole('dialog', { name: 'Discard 4 resources' })).toBeVisible()
+    expect(game.joiner.current().view.self.id).not.toBe(game.joiner.current().view.publicGame.turn.currentPlayerId)
+    await expect(game.joiner.page.locator('[aria-label="Action guidance"]')).toHaveText('Choose exactly 4 cards to discard.')
     await enterBag(game.host, 'Resources to discard', { ...empty, LUMBER: 4 })
     await clickCommand(game, game.host, 'Discard selected')
     await expect(game.host.page.getByRole('dialog')).toHaveCount(0)
