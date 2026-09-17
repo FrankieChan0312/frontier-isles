@@ -11,6 +11,10 @@
     "packages/*"
   ],
   "scripts": {
+    "mysql:schema": "node server/dist/src/persistence/mysql-schema-command.js",
+    "check:deployment": "npm run build:server && tsx server/test/run-deployment-config-check.ts",
+    "smoke:mysql-production": "npm run build:server && tsx server/test/run-mysql-container-smoke.ts",
+    "check:boot": "tsx server/test/run-boot-config-check.ts",
     "test:mysql": "npm run build:server && tsx server/test/run-mysql-tests.ts",
     "dev": "npm run build:game && npm run build:contracts && vite",
     "dev:web": "npm run build:game && npm run build:contracts && vite",

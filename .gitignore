@@ -18,6 +18,7 @@ data
 .env.*
 !.env.example
 !.env.production.example
+!.env.mysql-production.example
 
 # Editor directories and files
 .vscode/*

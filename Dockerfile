@@ -29,7 +29,6 @@ RUN find packages server -type f \( -name '*.test.*' -o -name '*.test-helper.*' 
     && rm -rf packages/game-ai/dist/src/simulation \
     && mkdir -p /data && chown node:node /data
 USER node
-VOLUME ["/data"]
 EXPOSE 3001
 HEALTHCHECK --interval=15s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/ready').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"

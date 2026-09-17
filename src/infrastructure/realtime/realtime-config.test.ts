@@ -5,6 +5,9 @@ import {
 } from './realtime-config.ts'
 
 describe('realtime client configuration', () => {
+  it('accepts the exact split-origin production target without changing same-origin support', () => {
+    expect(readRealtimeClientConfig('https://game-api.frankiesgroceryhk.shop').url).toBe('https://game-api.frankiesgroceryhk.shop')
+  })
   it('resolves the production same-origin setting from the current browser origin', () => {
     expect(readRealtimeClientConfig('same-origin', 'https://isles.example.test')).toEqual({ url: 'https://isles.example.test' })
     expect(() => readRealtimeClientConfig('same-origin', 'null')).toThrow(/VITE_REALTIME_URL/u)

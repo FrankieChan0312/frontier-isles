@@ -41,7 +41,7 @@ function files(root: string): readonly string[] {
 const counts = { traces: 0, reports: 0, tokens: 0, sessionIdentities: 0, digests: 0, fingerprints: 0, authoritativeRng: 0 }
 try {
   const root = resolve(process.argv[2] ?? 'test-results')
-  for (const file of files(root).filter((path) => /online|lobby|mysql|async/iu.test(path))) {
+  for (const file of files(root).filter((path) => /online|lobby|mysql|async|preflight/iu.test(path))) {
     if (!/\.(zip|md|json|txt|log)$/u.test(file)) continue
     if (statSync(file).size > 128 * 1024 * 1024) throw new Error('Artifact exceeds audit limit.')
     const archive = file.endsWith('.zip')
