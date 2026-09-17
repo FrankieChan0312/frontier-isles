@@ -8,6 +8,7 @@ import { redactTraceEntries } from './trace-artifact-safety.js'
 // Only this harness creates/selects test credentials, ports and database ownership.
 const name = `frontier-isles-mysql-${randomUUID()}`
 const env = { ...process.env, MYSQL_ROOT_PASSWORD: randomBytes(24).toString('hex'),
+  MYSQL_ROOT_HOST: '%', FRONTIER_MYSQL_RUNTIME_PASSWORD: randomBytes(24).toString('hex'),
   MYSQL_PASSWORD: randomBytes(24).toString('hex'), MYSQL_USER: 'frontier_test', MYSQL_DATABASE: 'frontier_isles_mysql_test' }
 function docker(args: readonly string[]): string {
   const result = spawnSync('docker', [...args], { env, encoding: 'utf8', windowsHide: true, timeout: 180_000 })
@@ -35,7 +36,7 @@ try {
   const endpoint = docker(['context', 'inspect', context, '--format', '{{.Endpoints.docker.Host}}'])
   if (!localEndpoint.test(endpoint)) throw new Error('MySQL qualification requires a local Docker context.')
   docker(['create', '--name', name, '--label', `frontier-isles.mysql-test=${name}`,
-    '--publish', '127.0.0.1::3306', '--env', 'MYSQL_ROOT_PASSWORD', '--env', 'MYSQL_PASSWORD',
+    '--publish', '127.0.0.1::3306', '--env', 'MYSQL_ROOT_PASSWORD', '--env', 'MYSQL_ROOT_HOST', '--env', 'MYSQL_PASSWORD',
     '--env', 'MYSQL_USER', '--env', 'MYSQL_DATABASE', '--memory', '768m', '--cpus', '2',
     '--pids-limit', '256', '--tmpfs', '/var/lib/mysql:rw,noexec,nosuid,size=512m',
     'mysql:8.4@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a',
@@ -73,8 +74,9 @@ try {
     child.stderr.on('data', append)
     child.once('error', () => reject(new Error('MySQL test runner did not start.')))
     child.once('close', (code) => {
-      const leaked = output.includes(env.MYSQL_PASSWORD) || output.includes(env.MYSQL_ROOT_PASSWORD)
-      const safe = output.replaceAll(env.MYSQL_PASSWORD, '[REDACTED_TEST_CREDENTIAL]').replaceAll(env.MYSQL_ROOT_PASSWORD, '[REDACTED_TEST_CREDENTIAL]')
+      const secrets = [env.MYSQL_PASSWORD, env.MYSQL_ROOT_PASSWORD, env.FRONTIER_MYSQL_RUNTIME_PASSWORD]
+      const leaked = secrets.some((secret) => output.includes(secret))
+      const safe = secrets.reduce((value, secret) => value.replaceAll(secret, '[REDACTED_TEST_CREDENTIAL]'), output)
       const redacted = redactTraceEntries([{ name: 'mysql-tests.log', data: Buffer.from(safe) }])
       process.stdout.write(redacted.entries[0]?.data ?? Buffer.alloc(0))
       resolveExit(leaked || overflow || redacted.secrets > 0 ? 1 : code ?? 1)

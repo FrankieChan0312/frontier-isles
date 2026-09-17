@@ -54,6 +54,34 @@ export class MysqlStore implements MultiplayerRepository {
     }
   }
 
+  /** One-shot deployment authority. Never loads Rooms or starts network listeners. */
+  public static async prepareSchema(config: MysqlConfig): Promise<void> {
+    const store = new MysqlStore(config, {})
+    try {
+      await store.#withConnection(async (connection) => {
+        // Metadata is privilege-filtered. Refuse an audit that cannot see every object.
+        // Direct database grants are intentional; role-derived authority is not inferred.
+        const privileges = await store.#rows(connection, `SELECT PRIVILEGE_TYPE AS privilege
+          FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA=DATABASE()
+          AND GRANTEE=CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',1)),'@',QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',-1)))
+          UNION SELECT PRIVILEGE_TYPE AS privilege FROM information_schema.USER_PRIVILEGES
+          WHERE GRANTEE=CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',1)),'@',QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',-1)))`)
+        const granted = new Set(privileges.map((row) => row.privilege))
+        for (const privilege of ['SELECT', 'TRIGGER', 'EVENT', 'ALTER ROUTINE']) {
+          if (!granted.has(privilege)) throw new Error('Deployment metadata authority required.')
+        }
+        // Check programmable objects before bootstrap as an empty table list is insufficient.
+        for (const sql of [
+          'SELECT COUNT(*) AS total FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()',
+          'SELECT COUNT(*) AS total FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE()',
+          'SELECT COUNT(*) AS total FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()',
+        ]) if (rowCount((await store.#rows(connection, sql))[0]) !== 0) throw new Error('Unexpected programmable objects.')
+        await store.#schema(connection, config.initialize)
+      }, 30_000)
+    } catch { throw new PersistenceError('PERSISTENCE_OPEN_FAILED') }
+    finally { await store.close() }
+  }
+
   async #schema(connection: PoolConnection, initialize: boolean): Promise<void> {
     const durability = await this.#rows(connection,
       'SELECT @@innodb_flush_log_at_trx_commit AS durable, @@sync_binlog AS binlog')
@@ -74,6 +102,8 @@ export class MysqlStore implements MultiplayerRepository {
       !== MYSQL_COLUMNS.join('|')) throw new Error('Unsupported columns.')
     const versions = await this.#rows(connection, 'SELECT id,version FROM persistence_schema')
     if (versions.length !== 1 || versions[0]?.id !== 1 || versions[0]?.version !== 1) throw new Error('Unsupported version.')
+    // Defense in depth for visible triggers only. Full absence is proved by prepareSchema
+    // with deployment authority; runtime deliberately has no TRIGGER privilege.
     const triggers = await this.#rows(connection, 'SELECT COUNT(*) AS total FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE()')
     if (rowCount(triggers[0]) !== 0) throw new Error('Unsupported triggers.')
   }
