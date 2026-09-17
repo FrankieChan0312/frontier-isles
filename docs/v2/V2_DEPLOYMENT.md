@@ -118,7 +118,7 @@ AWS RDS, EC2 deployment, Vercel split-origin hosting, GoDaddy DNS, public TLS/We
 and RDS backup/restore remain **not verified**. Existing historical Goal C reports describe SQLite
 and must not be read as historical MySQL evidence.
 
-Before any RDS deployment: approve ADR-V2-0014's synchronous network-wait tradeoff; measure latency,
+Before any RDS deployment: review ADR-V2-0015's asynchronous authority boundary; measure real network latency,
 tail stalls and capacity; configure trusted CA/hostname verification, least-privilege accounts,
 private networking, encryption, durable flush/binlog settings, secrets delivery and tested backups.
 Only one authoritative server process is supported. Optimistic row guards do not coordinate two

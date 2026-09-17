@@ -94,8 +94,9 @@ The MySQL provider has the same private aggregate contents as SQLite. Protect da
 quarantine and backups accordingly; only digests of resume tokens are stored. Production requires
 trusted CA and hostname verification (both explicitly enabled in mysql2), TLS 1.2+, a DNS endpoint,
 backend-only environment credentials and a dedicated least-privilege account. Plaintext is limited
-to nonproduction loopback tests. The driver has no debug logging; worker stdout/stderr is discarded
-and only fixed codes/counts are forwarded. Unknown schema or failed/uncertain writes fail closed.
+to nonproduction loopback tests. The driver runs through its Promise API without a worker bridge
+or debug logging. Driver exceptions are sanitized; only fixed codes/counts enter diagnostics.
+Candidate snapshots remain private until commit. Unknown schema or failed/uncertain writes fail closed.
 The local harness generates disposable credentials, checks output for those values, and reuses
 the existing trace redactor before retaining output. Run `npm run audit:artifacts -- server/logs`
 in addition to the browser artifact audit. No RDS, AWS, Vercel, GoDaddy or VPS access is part of it.

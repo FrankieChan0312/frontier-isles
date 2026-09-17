@@ -96,9 +96,17 @@ of server storage, downtime, recovery, credentials and this schema.
 
 ## MySQL provider (local qualification; future RDS)
 
-`PERSISTENCE_PROVIDER=mysql` selects the same aggregate repository through a bounded worker.
-Room/GameSession orchestration and strict record format remain unchanged. See
-[ADR-V2-0014](ADR-V2-0014-mysql-aggregate-persistence.md) for its synchronous latency tradeoff.
+`PERSISTENCE_PROVIDER=mysql` selects a Promise-based aggregate repository using mysql2/promise
+directly. [ADR-V2-0015](ADR-V2-0015-asynchronous-authoritative-persistence.md) replaces the
+historical synchronous worker bridge. SQLite implements the same asynchronous contract while
+retaining its synchronous local transactions. The strict aggregate format is unchanged.
+
+Room/GameSession/lifecycle operations share one bounded FIFO per Room. The candidate aggregate,
+including retained result and publication revision, is committed before new public views/events
+or success acknowledgement. Snapshot reads retain the prior committed generation during I/O.
+An unrelated Room, HTTP and Socket.IO timers can progress while one Room awaits MySQL.
+Immediate disconnect/resume transport cancellation is distinct from queued durable presence;
+database delay does not extend the reconnect deadline. Recovery completes before readiness.
 
 Backend environment variables (never `VITE_`):
 
@@ -135,9 +143,10 @@ then use the original command retry and a fresh snapshot. Never blindly resubmit
 
 MySQL transactions require durable InnoDB flush and binlog settings of 1. Quarantine is private;
 malformed/future/checksum-invalid and oversized records are moved atomically without private logs.
-Stop/shutdown closes the pool and worker after accepted commits. There are no background writes
-to flush later. Startup/recovery has a 30-second bridge bound; mutations/close eight seconds;
-connection and query operations two seconds. A timeout requires investigation/restart.
+Stop/shutdown drains Room queues and awaits pool closure after accepted commits. There are no
+fire-and-forget persistence writes. Each schema/load operation has a 30-second bound;
+mutations/close eight seconds; acquisition, handshake and query operations two seconds.
+The pool has two connections and a bounded acquisition queue. A timeout requires investigation/restart.
 
 Run `npm run test:mysql` from the root. The harness starts only a uniquely named, labeled,
 digest-pinned MySQL 8.4 container, uses a random loopback port and generated test credentials,

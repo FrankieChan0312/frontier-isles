@@ -1,5 +1,9 @@
 # ADR-V2-0014: MySQL aggregate persistence
 
+Historical decision: its synchronous worker boundary is superseded by
+[ADR-V2-0015](ADR-V2-0015-asynchronous-authoritative-persistence.md). The original
+implementation evidence and storage/security decisions below are preserved.
+
 - Status: Implemented for local qualification; pending Human architecture review
 - Date: 2026-09-17
 - Scope: authorized MySQL persistence goal; no deployment

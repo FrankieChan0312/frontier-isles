@@ -317,7 +317,7 @@ now describes live in-process authority, with an injected repository for durable
 
 Game commits include authoritative state, AI bookkeeping and command results before publication
 or acknowledgement. Room mutation responses commit changed Room/session metadata before exposure;
-read-only lookups project public state directly. Any write failure stops in-process authority and exposes only
+read-only lookups now project the last committed generation under ADR-V2-0015. Any write failure stops in-process authority and exposes only
 a safe refusal. Recovery uses persisted digests, exact GameState/RNG, original seat mappings,
 controller replacements and bounded cached results. Restart presence pauses active games and
 retains prior disconnection deadlines, while previously connected Humans receive a 120-second
@@ -333,13 +333,25 @@ transactionally. See the private [recovery runbook](V2_PERSISTENCE_RECOVERY.md).
 
 ## 17. MySQL persistence boundary
 
-The MySQL persistence goal adds an explicitly selectable adapter while preserving the aggregate
-and synchronous commit boundary described above. SQLite remains the default. A dedicated worker
-owns MySQL's driver/pool; authoritative code waits for committed results with hard bounds.
-Canonical payload bytes, transactional quarantine and optimistic storage revision/incarnation
-checks preserve recovery and refuse stale writes. No Room/GameSession, rules, AI, UI or protocol
-rewrite is involved. See [ADR-V2-0014](ADR-V2-0014-mysql-aggregate-persistence.md), pending Human
-architecture review, for details and the event-loop latency limitation before future RDS use.
+The original MySQL goal used a synchronous worker bridge, recorded in historical
+[ADR-V2-0014](ADR-V2-0014-mysql-aggregate-persistence.md). The async follow-up replaces it under
+[ADR-V2-0015](ADR-V2-0015-asynchronous-authoritative-persistence.md), pending Human review.
+All MultiplayerRepository operations return Promises. Production awaits mysql2/promise directly;
+there is no worker, shared-memory wait or synchronous network facade. SQLite remains the default
+and keeps its local synchronous WAL/FULL internals behind that same Promise contract.
+
+Each Room owns the bounded queue shared by lobby mutations, GameSession commands/AI, presence,
+replacement and expiry. Candidate state/results/publication revision commit in one transaction
+before their projections or acknowledgement are exposed. Snapshot reads use committed generations
+while a candidate awaits I/O. Disconnect and validated resume use immediate transport latches and
+cancellation, followed by queued durable presence; deadlines retain the original disconnect time.
+Startup awaits recovery before admission; shutdown awaits in-flight commits and pool closure.
+
+Canonical bytes, quarantine, schema checks and optimistic revision/incarnation guards are
+unchanged. The two-connection pool and independent Room queues permit unrelated Room progress
+during MySQL latency. Controlled local timer/HTTP/Socket.IO evidence is recorded in
+[MySQL progress](V2_MYSQL_PROGRESS.md). It does not qualify RDS tail latency, capacity or failover.
+No core rules, AI strategy, UI, public protocol or distributed authority changes are introduced.
 
 ## 18. Deferred decisions
 

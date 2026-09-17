@@ -85,7 +85,7 @@ failure status or gameplay packet is changed by redaction.
 `npm run test:mysql` builds the server and starts its own digest-pinned MySQL service on an
 ephemeral loopback port. It runs `vitest.mysql.config.ts`, separately from the database-free default
 suite. Missing Docker or failed setup makes this gate fail; MySQL tests are never silently skipped.
-The 13 recovery contract scenarios run unchanged against SQLite and MySQL. MySQL-specific tests
+The 13 recovery contract scenarios retain their assertions and await the shared Promise API against SQLite and MySQL. MySQL-specific tests
 cover schema/record corruption, bounds, rollback/uncertain commit, stale writers/deletes and
 delete/recreate ownership. Real Node server processes create/start a Room through Socket.IO,
 commit a command, die, recover and replay without advancing twice, including discarded ACKs.
@@ -98,3 +98,13 @@ command arguments or reports. Output uses existing artifact redaction; a detecte
 leak or cleanup failure fails the gate. Record exact results in [MySQL progress](V2_MYSQL_PROGRESS.md).
 Run `npm run audit:artifacts -- server/logs` to audit MySQL logs as well as the ordinary browser
 artifact audit. Existing SQLite tests and their historical acceptance evidence remain intact.
+
+The async follow-up also holds a real MySQL transaction before COMMIT using a Node test-only
+hook. It measures an 800 ms minimum hold against a 20 ms timer (under 400 ms observed), HTTP
+health and two ordered Room B commands (each workload under 600 ms), plus real Socket.IO ping
+traffic. Room A's snapshot stays at its prior committed generation, publications/ACK wait, and
+its queued exact retry does not advance twice. Reports contain timings/counters only. This is
+controlled scheduling/ordering evidence, not EC2/RDS latency or capacity qualification.
+Pool tests inspect and await closure of both owned connections. Additional database-free
+authority tests cover Room revisions, initial-game visibility, failure, disconnect/deadline,
+full admission and shutdown while a durable operation is pending.

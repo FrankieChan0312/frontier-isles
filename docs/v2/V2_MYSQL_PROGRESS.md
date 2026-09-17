@@ -1,5 +1,9 @@
 # MySQL persistence implementation and local acceptance
 
+The sections below record the original MySQL implementation at `ee6546c`. Its synchronous
+bridge is superseded by the **asynchronous persistence follow-up** appended to this file.
+Historical passing results are not counted as qualification of the follow-up source.
+
 ## Authorized scope and baseline
 
 Starting branch: `feat/v2-online-multiplayer`. Starting HEAD:
@@ -206,3 +210,219 @@ the accepted SQLite regression suites are run instead; no container-image result
 No AWS, Vercel, GoDaddy, Docker Hub account or VPS was accessed. No real/production database
 was accessed or modified. No cloud resource, DNS entry, secret resource, image publication,
 push, merge, tag or deployment was performed. Only task-owned local MySQL containers were used.
+
+## Asynchronous persistence follow-up — 2026-09-17
+
+### Baseline and authorized scope
+
+Starting branch `feat/v2-mysql-persistence`; exact starting HEAD
+`ee6546c469c5389afd4b7f868764843e02b4709d`; worktree clean. The attached async `/goal`
+supersedes the earlier synchronous-bridge architecture. Mandatory repository documents,
+this entire historical progress report, persistence adapters, authority queues, transport
+publication/ACK paths and relevant ADRs were inspected before implementation.
+
+The active task is [V2_ASYNC_PERSISTENCE](../../tasks/V2_ASYNC_PERSISTENCE.md). Architecture
+is recorded in [ADR-V2-0015](ADR-V2-0015-asynchronous-authoritative-persistence.md).
+Local commits are authorized. No deployment, push, merge, tag, production/cloud database,
+AWS, Vercel, GoDaddy, Docker Hub account or VPS access is authorized or performed.
+
+### Implemented architecture
+
+**Before:** synchronous `load(): readonly MultiplayerRecord[]` and
+`save/remove/flush/close(): void`; worker-owned MySQL I/O with `Atomics.wait` in the
+authority. Network delay blocked every Room, HTTP and Socket.IO timers.
+
+**After:** `load(): Promise<readonly MultiplayerRecord[]>` and
+`save/remove/flush/close(): Promise<void>`. `MysqlMultiplayerRepository.open()` uses
+mysql2/promise directly in the Node authority. The worker and worker protocol are deleted.
+The two-connection pool has bounded acquisition, query/lock and operation deadlines.
+No synchronous network bridge, new package dependency or production sleep remains.
+
+Each Room owns one FIFO shared by lobby, GameSession, AI, replacement and expiry.
+The queue remains held while a candidate aggregate, retained result and publication
+revision commit. Committed snapshots stay isolated while awaiting I/O; even a newly
+constructed game is unavailable until its initial aggregate commits. Publication and
+successful command ACK follow commit. Same-Room requests revalidate at dequeue;
+unrelated Rooms have independent queues. Bounded reserved FIFO control admission lets
+disconnect/expiry proceed even when ordinary client admission is full.
+
+Disconnect latches/cancels pending AI immediately, captures the original grace deadline,
+then persists presence through the Room queue. A validated resume immediately invalidates
+queued old-transport authority and cancels a held choice before its durable resume waits.
+No presence-only mutation consumes core RNG. One pending attachment per socket prevents
+duplicate creation while storage is awaited. Lost attachment sockets use normal cleanup.
+
+Startup awaits recovery before admission; shutdown stops admission immediately, cancels
+AI choices, drains pending commits/control work, awaits flush and pool closure. Disposal
+retains a drain promise for late shutdown. Persistence failure disables authority without
+publishing a candidate or acknowledging its success. Unknown COMMIT outcomes require
+restart and original-request retry, never a blind new write.
+
+SQLite retains DatabaseSync, exclusive ownership, schema/record format, WAL/FULL,
+quarantine, checkpoints and rollback semantics behind the same Promise contract. Existing
+tests were migrated to await those operations, including offline browser restart fixtures.
+The shared 13-scenario recovery contract retains its assertions for both providers.
+Game core, AI strategy, UI/gateway behavior and public realtime contracts are unchanged.
+
+### Additional tests and development evidence
+
+Seven focused async authority cases cover lobby candidate visibility/revision conflicts,
+initial-game visibility, disconnect during a pending command and original deadline,
+delayed-write rejection, shutdown draining, full client admission/control FIFO, and
+closure-versus-replacement admission order. Two real-MySQL cases cover controlled
+latency/multi-Room progress and Promise/pool connection cleanup. Existing MySQL fault,
+CAS, quarantine, TLS rejection, recovery and process restart/replay tests remain present.
+
+The initial real-MySQL follow-up run passed 32 tests (before the extra pool case). Its
+800 ms minimum injected pre-COMMIT hold measured 810 ms; the 20 ms timer fired at 34 ms,
+HTTP at 47 ms and Room B's ordered commands at 89 ms, with 23 real Socket.IO pings.
+Room A had no pre-commit publication/ACK and one state transition for its exact retry.
+These are intermediate measurements; the final gate record below supersedes them.
+
+Development failures were inspected rather than counted as passes: mechanical async
+call-site/type/ASI migration errors, an incorrect focused-test working directory, an AI
+path calling queued public publication from inside its own queue, and a held-choice
+test's continuation assumption. The latter now explicitly restarts AI after resume,
+matching transport behavior, while retaining stale-choice/state/RNG assertions. The
+full server run then exposed the queued-resume authority race; its focused Socket.IO
+and security rerun passed all 15 cases after the immediate epoch/cancellation fix.
+Two aggregate attempts stopped at missed async browser fixture calls and a new test's
+TypeScript closure narrowing, respectively; neither is passing acceptance evidence.
+Final focused authority tests pass 7/7. No assertion was skipped or weakened, and no
+architectural contradiction was bypassed.
+
+### Final gate record
+
+All final gates below completed successfully on 2026-09-17 using Node 24.19.0 and
+npm 11.17.0. No skipped, interrupted or unrun test is counted as passing.
+
+| Exact command | Exit | Final evidence |
+| --- | --- | --- |
+| `npm run check:all` | 0 | Frontend 24 files/112 tests; core 35/261; AI 15/36; contracts 7/66; server 26/213: 107 files, 688 tests. Typecheck, zero-warning lint and frontend/server builds passed. |
+| `npm run test:mysql` | 0 | 4 files, 33 tests; original 31 plus the two new async cases. Real local MySQL adapter faults/CAS, shared recovery and compiled-process restart/lost-ACK replay passed. |
+| `npm run simulate` | 0 | 100/100 legal winners, 65,341 commands; deterministic V1 hash `1adc49e8`. |
+| `npm run simulate:online` | 0 | 6 games, 6 legal winners; repeated seeds match for 2/3/4-Human configurations. |
+| `npm run e2e -- --trace on` | 0 | All 39 Chromium tests passed, including 31 lobby/online and 8 V1 cases; zero retries/skips. |
+| `npm run audit:artifacts` | 0 | 31 traces, 10 reports; zero tokens, session identities, digests, fingerprints or authoritative RNG exposures. |
+| `npm run check` | 0 | Final aggregate rerun: typecheck, zero-warning lint, 409 frontend/core/AI tests and production build; completed at 15:18:05 +08:00. |
+| `npm run audit:artifacts -- server/logs` | 0 | Final scan including the final check log: 52 reports; all five exposure counters zero. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+`check:all` invokes `check` and `check:server`; these execute the required
+`npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` and their server
+counterparts. The server suite includes the complete SQLite recovery, security/privacy
+and load suites. Distinct ordinary/MySQL coverage totals **111 files and 721 tests**;
+the repeated final aggregate is not added again. Browser tests and simulation runs are
+reported separately. Existing Vite chunk-size advice is described under limitations.
+
+Final controlled pre-COMMIT latency was **807 ms**. A requested 20 ms timer fired at
+**31 ms** (11 ms late), lightweight HTTP completed at **42 ms**, and Room B's ordered
+accepted/stale commands completed at **84 ms**, while Room A was still awaiting its
+transaction. **22 Socket.IO heartbeats** progressed and both clients remained connected.
+Assertions enforced a minimum 790 ms hold, timer below 400 ms, HTTP/Room B below 600 ms,
+and live heartbeat progress, with deliberately generous local/CI margin.
+
+Room A's ordering was **commit → publication → ACK**, with one commit for its command
+and serialized exact retry. Room B independently serialized its second command and
+rejected its stale revision. Committed snapshots remained unchanged during the hold.
+The rejected-write unit case proved neither publication nor success ACK exposes its
+candidate. Pool cleanup observed two MySQL connections before awaited close and zero
+after it. Existing restart/recovery assertions retain exact state, RNG, retained results,
+publication revisions, conflicting-ID rejection and lost-ACK replay without a second
+state/RNG advance. The load gate completed two cycles/16 Rooms/1,168 commands with zero
+retained resources. These results qualify local scheduling and correctness only.
+
+Reproducible local evidence is in ignored `server/logs/async-final-*.log`,
+`async-final-gates.jsonl`, `mysql-async-latency-summary.json` and
+`goal-c-12-load-summary.json`. Historical evidence above is preserved unchanged apart
+from its explicit superseded-architecture notice.
+
+### Follow-up file inventory
+
+49 files created, changed or removed relative to the accepted starting HEAD.
+
+Production source:
+
+- `server/src/game/game-execution-queue.ts`
+- `server/src/game/game-session.ts`
+- `server/src/graceful-shutdown.ts`
+- `server/src/lobby/lifecycle-runtime.ts`
+- `server/src/lobby/register-lobby-handlers.ts`
+- `server/src/lobby/room-service.ts`
+- `server/src/persistence/multiplayer-repository.ts`
+- `server/src/persistence/mysql-multiplayer-repository.ts`
+- `server/src/persistence/mysql-store.ts`
+- `server/src/persistence/mysql-worker-protocol.ts` (removed)
+- `server/src/persistence/mysql-worker.ts` (removed)
+- `server/src/persistence/sqlite-multiplayer-repository.ts`
+- `server/src/server.ts`
+
+Tests and existing verification helpers:
+
+- `server/test/alpha-load.test.ts`
+- `server/test/async-authority.test.ts`
+- `server/test/fake-lifecycle-runtime.ts`
+- `server/test/game-network-helpers.ts`
+- `server/test/game-presence.integration.test.ts`
+- `server/test/game-presence.test.ts`
+- `server/test/game-room-start.test.ts`
+- `server/test/game-session.test.ts`
+- `server/test/lobby.integration.test.ts`
+- `server/test/multiplayer-recovery.test.ts`
+- `server/test/multiplayer-repository.test.ts`
+- `server/test/multiplayer-restart.integration.test.ts`
+- `server/test/mysql-adapter.mysql.ts`
+- `server/test/mysql-async.mysql.ts`
+- `server/test/mysql-recovery.mysql.ts`
+- `server/test/mysql-restart.mysql.ts`
+- `server/test/persistence-test-helpers.ts`
+- `server/test/recovery-contract.ts`
+- `server/test/room-lifecycle.test.ts`
+- `server/test/room-service.test.ts`
+- `server/test/run-artifact-audit.ts`
+- `server/test/run-container-smoke.ts`
+- `server/test/security-http.test.ts`
+- `server/test/security-storage.test.ts`
+- `server/test/security-wire.integration.test.ts`
+- `tests/e2e/online-restart.spec.ts`
+- `tests/e2e/realtime-test-server.ts`
+
+Documentation and task record:
+
+- `docs/v2/ADR-V2-0014-mysql-aggregate-persistence.md`
+- `docs/v2/ADR-V2-0015-asynchronous-authoritative-persistence.md`
+- `docs/v2/V2_ALPHA_TESTING.md`
+- `docs/v2/V2_ARCHITECTURE_BASELINE.md`
+- `docs/v2/V2_DEPLOYMENT.md`
+- `docs/v2/V2_MYSQL_PROGRESS.md`
+- `docs/v2/V2_PERSISTENCE_RECOVERY.md`
+- `docs/v2/V2_SECURITY.md`
+- `tasks/V2_ASYNC_PERSISTENCE.md`
+
+Dependencies added: **none**. The existing pinned mysql2 dependency is reused.
+
+### Local commits and limits of qualification
+
+1. `0790e895af9d514b6a158ea427576a297d91b07b` — await authoritative persistence per Room;
+   direct MySQL, shared Promise API, queue/observation/presence boundaries, existing test migration.
+2. `bc53907b0dcc09389ef31f97a39adcccd1c25b1c` — seven async authority tests and two real-MySQL
+   latency/connection-cleanup tests.
+
+A final documentation commit records the completed acceptance results; its full HEAD and the
+post-commit clean status are provided in the completion response. No history was rewritten.
+
+The final MySQL harness used only its labeled loopback container
+`frontier-isles-mysql-c8df616a-b1de-4974-b20c-51a0820c94fa`, generated credentials and tmpfs.
+It stopped/removed that container; the subsequent label-filtered inventory found none remaining.
+No unrelated container, volume, database or file was reset. Obsolete generated worker output was
+removed only from this repository's server build directory; no source worker is emitted again.
+
+There is one Node authority. RDS and real network tail latency/capacity/failover, EC2, Vercel,
+public TLS/WebSocket, GoDaddy DNS and production backup/PITR/restore remain unverified. Negative
+TLS/configuration tests do not imply positive RDS certificate-chain qualification. The local
+delay test proves scheduling and durable ordering, not a production latency SLO. SQLite still
+performs synchronous local disk I/O. The existing Vite large-chunk build advisory remains;
+frontend source/bundling is unchanged, and lint has zero warnings.
+
+No engine rules, AI strategy, UI, gateway, public protocol, account system, distributed service,
+new dependency, unrelated future feature, cloud resource, deployment, push, merge or tag was added.
