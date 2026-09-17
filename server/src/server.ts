@@ -23,7 +23,7 @@ async function start(): Promise<void> {
   let httpServer: ReturnType<typeof createFrontierHttpServer>
   try {
     httpServer = createFrontierHttpServer({ allowedOrigins: config.clientOrigins ?? [config.clientOrigin],
-      privateDataFile: config.persistenceFile ?? 'data/frontier-isles.sqlite',
+      ...(config.persistenceProvider === 'mysql' ? {} : { privateDataFile: config.persistenceFile ?? 'data/frontier-isles.sqlite' }),
       isReady: () => roomService.isReady, ...(config.staticRoot === undefined ? {} : { staticRoot: config.staticRoot }) })
   } catch { roomService.dispose(); await repository.close(); throw new Error('Public frontend startup failed.') }
   const realtimeServer = createRealtimeServer(httpServer, config, { roomService, onDiagnostic: reportDiagnostic })

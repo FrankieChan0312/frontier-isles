@@ -86,6 +86,9 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
   if (persistenceProvider !== 'sqlite' && persistenceProvider !== 'mysql') throw new Error('PERSISTENCE_PROVIDER must be sqlite or mysql.')
   const mysql = persistenceProvider === 'mysql' ? parseMysqlConfig(environment) : undefined
   const nodeEnv = parseNodeEnvironment(environment.NODE_ENV ?? DEFAULT_NODE_ENV)
+  if (nodeEnv === 'production' && mysql?.initialize === true) {
+    throw new Error('Production runtime requires MYSQL_SCHEMA_MODE=verify; use the one-shot schema command to initialize.')
+  }
   const clientOrigin = parseClientOrigin(environment.CLIENT_ORIGIN ?? DEFAULT_CLIENT_ORIGIN)
   let clientOrigins = [clientOrigin]
   if (environment.CLIENT_ORIGINS !== undefined) {
@@ -98,10 +101,10 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
   if (nodeEnv === 'production' && ['DEBUG', 'NODE_DEBUG', 'NODE_DEBUG_NATIVE'].some((key) => (environment[key] ?? '').trim().length > 0)) {
     throw new Error('Verbose library debug logging must be disabled in production.')
   }
-  const persistenceFile = environment.PERSISTENCE_FILE ?? 'data/frontier-isles.sqlite'
-  if (persistenceFile.trim() !== persistenceFile || persistenceFile.length === 0 || persistenceFile.length > 4096
+  const persistenceFile = persistenceProvider === 'sqlite' ? environment.PERSISTENCE_FILE ?? 'data/frontier-isles.sqlite' : undefined
+  if (persistenceFile !== undefined && (persistenceFile.trim() !== persistenceFile || persistenceFile.length === 0 || persistenceFile.length > 4096
     || persistenceFile.includes('\0') || /^[\\/]{2}|^[a-z][a-z0-9+.-]*:\/\//iu.test(persistenceFile)
-    || persistenceFile.slice(/^[a-z]:[\\/]/iu.test(persistenceFile) ? 2 : 0).includes(':') || !persistenceFile.endsWith('.sqlite')) {
+    || persistenceFile.slice(/^[a-z]:[\\/]/iu.test(persistenceFile) ? 2 : 0).includes(':') || !persistenceFile.endsWith('.sqlite'))) {
     throw new Error('PERSISTENCE_FILE must name a local SQLite file ending in .sqlite.')
   }
   const staticRoot = environment.STATIC_ROOT
@@ -109,11 +112,11 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
     || staticRoot.includes('\0') || !isAbsolute(staticRoot) || /^[\\/]{2}/u.test(staticRoot))) {
     throw new Error('STATIC_ROOT must be an absolute local build directory.')
   }
-  if (persistenceProvider === 'sqlite' && nodeEnv === 'production' && (environment.PERSISTENCE_FILE === undefined || !isAbsolute(persistenceFile))) {
+  if (persistenceFile !== undefined && nodeEnv === 'production' && (environment.PERSISTENCE_FILE === undefined || !isAbsolute(persistenceFile))) {
     throw new Error('PERSISTENCE_FILE must be an explicit absolute private data path in production.')
   }
   if (nodeEnv === 'production' && staticRoot === undefined) throw new Error('STATIC_ROOT is required in production.')
-  if (staticRoot !== undefined) {
+  if (staticRoot !== undefined && persistenceFile !== undefined) {
     const path = relative(staticRoot, persistenceFile)
     if (!isAbsolute(path) && path !== '..' && !path.startsWith(`..${sep}`)) throw new Error('PERSISTENCE_FILE must be outside STATIC_ROOT.')
   }
@@ -134,7 +137,7 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
       'ROOM_IDLE_TTL_MS',
     ),
     gameAbandonedTtlMs: parseTimerDelay(environment.GAME_ABANDONED_TTL_MS ?? DEFAULT_ROOM_IDLE_TTL_MS, 'GAME_ABANDONED_TTL_MS'),
-    persistenceFile,
+    ...(persistenceFile === undefined ? {} : { persistenceFile }),
     restartRecoveryGraceMs: parseTimerDelay(environment.RESTART_RECOVERY_GRACE_MS ?? '120000', 'RESTART_RECOVERY_GRACE_MS'),
   }
 }
