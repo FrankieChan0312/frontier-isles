@@ -52,6 +52,8 @@ server as a substitute bootstrap command.
 
 The audit requires direct SELECT, TRIGGER, EVENT and ALTER ROUTINE grants at database
 or global scope to establish complete object visibility before examining metadata.
+When partial_revokes is enabled, use direct literal database grants: global authority
+can have database-specific restrictions and is not accepted as visibility evidence.
 Initialize additionally needs CREATE and INSERT on the dedicated database. Role-only
 metadata authority is deliberately not inferred. These privileges belong only to the
 deployment account. It verifies the expected tables/columns/version/engines/durability
@@ -63,9 +65,14 @@ The runtime grants for schema 1 are:
 
 | Object | Runtime privileges |
 | --- | --- |
-| persistence_schema | SELECT (including schema admission row locking on MySQL 8.4) |
+| persistence_schema | SELECT and column-scoped UPDATE(id) for the admission row lock |
 | rooms | SELECT, INSERT, UPDATE, DELETE |
 | quarantine | SELECT, INSERT |
+
+MySQL 8.4 requires a write privilege for SELECT ... FOR UPDATE. Granting UPDATE(id)
+preserves the existing exclusive admission lock without granting schema-version
+updates, DELETE or LOCK TABLES. The restricted-account tests exercise admission and
+reject UPDATE(version). See [MySQL locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html).
 
 Runtime receives no CREATE, ALTER, DROP, TRIGGER, EVENT, CREATE/ALTER ROUTINE, EXECUTE,
 FILE, GRANT OPTION, account-management or global administrative rights. Require TLS
@@ -133,6 +140,12 @@ the one-shot audit, then runs production with restricted credentials and no SQLi
 file/volume. It checks static failures, HTTP/Socket.IO, durable gameplay, crash and
 graceful restart, exact state/RNG/cache/replay, shutdown and private output. Resources
 are labeled and removed by exact ownership; images/build cache remain local.
+TLS qualification accepts the explicitly supplied test CA and intended synthetic
+hostname, rejects an independent CA and mismatched hostname, and rejects a usable
+plaintext fixture under MYSQL_TLS=required. The public CA file follows the production
+read-only mount path; private keys stay in the owned temporary certificate directory.
+The harness removes all certificate material and containers, and checks captured
+output for generated passwords, private keys and session credentials before retention.
 
 Local test certificates require the task's explicit local-only authorization. They
 are not public certificates or RDS-chain evidence. AWS EC2/RDS, real network latency,

@@ -140,7 +140,9 @@ Provision an empty dedicated database separately; this application never creates
 account. With temporary deployment privileges, run the one-shot `mysql:schema` command with
 `MYSQL_SCHEMA_MODE=initialize` once. It creates three InnoDB tables and schema version 1 only if
 the database is empty of tables and programmable objects. Then use `verify` with runtime SELECT
-on persistence_schema, SELECT/INSERT/UPDATE/DELETE on rooms, and SELECT/INSERT on quarantine.
+and column-scoped UPDATE(id) on persistence_schema for exclusive admission locking,
+SELECT/INSERT/UPDATE/DELETE on rooms, and SELECT/INSERT on quarantine. The schema
+version column remains non-writable by the runtime account.
 Full metadata visibility belongs to the deployment audit, not the runtime account. Do not grant
 normal runtime DDL/admin access. Partial DDL, unknown versions,
 unrelated tables, changed structures or unsupported durability settings fail closed; investigate

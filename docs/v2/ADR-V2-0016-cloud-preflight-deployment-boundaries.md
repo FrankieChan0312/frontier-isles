@@ -1,6 +1,6 @@
 # ADR-V2-0016: Local cloud-preflight deployment boundaries
 
-- Status: Implemented locally; MySQL/TLS acceptance awaits clarification of test-certificate authorization
+- Status: Accepted; required local remediation gates passed (cloud validation remains separate)
 - Date: 2026-09-17
 - Extends: ADR-V2-0013/0014/0015
 - Scope: local preparation only; no cloud deployment or public TLS provisioning
@@ -27,7 +27,10 @@ proves that visibility, rejects programmable objects and validates the schema. B
 requires additional CREATE/INSERT rights, only for an empty database. No HTTP, Socket.IO,
 Room recovery or payload logging runs in this process. Production HTTP refuses initialize.
 
-Runtime has SELECT on persistence_schema, DML on rooms and SELECT/INSERT on quarantine.
+Runtime has SELECT and column-scoped UPDATE(id) on persistence_schema for the existing
+exclusive admission lock, DML on rooms and SELECT/INSERT on quarantine. It cannot update
+the schema version. With partial_revokes enabled, deployment auditing requires direct
+literal database grants and does not infer visibility from global grants.
 It has no schema, programmable-object, FILE, GRANT or user-administration rights. Runtime
 continues checking visible structure/durability and rejecting visible triggers as defense
 in depth; it does not claim a full privileged audit. Audit before each deployment and
@@ -50,11 +53,16 @@ Local systemd-analyze uses a Docker dependency stub solely for syntax. It does n
 EC2 reboot, service installation, DNS/TLS, RDS connectivity, backup or PITR behavior.
 Real local production MySQL/TLS/restricted-account evidence is recorded separately in
 V2_MYSQL_PROGRESS; cloud boundaries remain unverified.
-At this revision those new MySQL gates have not run: the request's certificate-creation
-prohibition needs clarification before disposable local test certificates can be made.
-The implementation and syntax checks alone are not deployment acceptance.
+The human clarification authorizes disposable synthetic local CA/server material only,
+resuming HEAD 91542fcd599ed18283766ba9c6403649a0fdaf6b without resets. Generated material
+must remain in owned temporary storage, never enter Git or a global trust store, and
+be removed with all task containers after qualification. This does not authorize public
+CA requests, RDS connections, AWS resources or cloud deployment. See the subsequent
+acceptance record in V2_MYSQL_PROGRESS for actual gate outcomes.
 
 Metadata visibility references:
 [MySQL triggers](https://dev.mysql.com/doc/refman/8.4/en/information-schema-triggers-table.html),
 [routine privileges](https://dev.mysql.com/doc/refman/8.4/en/stored-routines-privileges.html),
-[event privileges](https://dev.mysql.com/doc/refman/8.4/en/events-privileges.html).
+[event privileges](https://dev.mysql.com/doc/refman/8.4/en/events-privileges.html),
+[partial revokes](https://dev.mysql.com/doc/refman/8.4/en/partial-revokes.html),
+[locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html).

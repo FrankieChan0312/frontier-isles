@@ -109,3 +109,12 @@ Candidate snapshots remain private until commit. Unknown schema or failed/uncert
 The local harness generates disposable credentials, checks output for those values, and reuses
 the existing trace redactor before retaining output. Run `npm run audit:artifacts -- server/logs`
 in addition to the browser artifact audit. No RDS, AWS, Vercel, GoDaddy or VPS access is part of it.
+
+The separately authorized production MySQL smoke creates synthetic disposable CA/server
+material in a task-owned temporary directory and mounts only the CA public certificate
+read-only into the application. It tests trusted-host acceptance, wrong-CA and wrong-host
+rejection, and required-TLS refusal of a usable plaintext fixture. It never installs trust
+globally. Generated certificates/private keys and owned containers are removed after the
+run; output guards reject generated passwords, keys and session credentials before any
+retention. Artifact auditing additionally rejects private-key PEM markers. See the latest
+[local acceptance record](V2_MYSQL_PROGRESS.md) for actual results; none proves RDS TLS.

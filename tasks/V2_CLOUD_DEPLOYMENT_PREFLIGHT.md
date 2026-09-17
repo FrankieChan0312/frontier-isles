@@ -26,9 +26,15 @@ Run all requested repository/MySQL/browser/simulation/audit gates and final chec
 V1 hash remains `1adc49e8`. No skipped/unavailable gate counts as passing. At most
 three normal repairs per distinct failure class; never weaken a security boundary.
 
-No cloud/VPS account access, billable resource, TLS certificate creation, image publication,
+No cloud/VPS account access, billable resource, production/public TLS certificate creation, image publication,
 push, merge, tag or deployment. No new engine/AI/UI/protocol/distributed feature.
-Disposable local test certificate creation awaits clarification of the explicit
-certificate prohibition versus the requested isolated TLS qualification.
+The human clarification authorizes disposable local test CA/server certificates and
+trust material solely for this task's isolated MySQL qualification, resuming clean HEAD
+`91542fcd599ed18283766ba9c6403649a0fdaf6b` without resetting any work. Use only synthetic
+identities and task-owned temporary directories/containers; delete all generated key
+material and containers. Never commit generated keys/certificates, alter any system,
+browser or Docker trust store, contact a public CA/external database, or expose secrets.
+Prove trusted CA and intended hostname acceptance, untrusted CA/hostname mismatch
+rejection, no plaintext downgrade, read-only CA mounting and private-artifact hygiene.
 Cloud execution, RDS TLS/backup/PITR, public HTTPS/WSS, DNS and EC2 reboot remain
 unverified. Final worktree must be clean.

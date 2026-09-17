@@ -465,7 +465,7 @@ FIFO, durability, recovery, privacy and RNG boundaries remain unchanged.
   and unbranded RoomRevision return type. Both were minimally corrected; focused tsc
   rerun exited 0. The failed check is not counted as a pass.
 
-### Final local gates
+### Historical local gate checkpoint before certificate approval
 
 Qualification remains incomplete. No remediation acceptance is claimed until all
 required local gates pass. Current verified results:
@@ -562,7 +562,7 @@ Local implementation commits (no push, merge or tag):
 A final documentation commit records the observed acceptance boundary. Its HEAD and
 the post-commit worktree status are returned in the completion response.
 
-### Acceptance decision
+### Historical acceptance decision before certificate approval
 
 The code and templates are prepared, but the requested local acceptance is blocked.
 The sole outstanding decision is whether disposable, isolated local test CA/server
@@ -577,3 +577,195 @@ tagged or deployed. No billable resource was created. This is not cloud deployme
 acceptance or approval to rerun a cloud preflight against real accounts.
 
 `CLOUD_DEPLOYMENT_REMEDIATION_BLOCKED` / `PENDING_HUMAN_DECISION`
+
+## Authorized local TLS continuation — 2026-09-17
+
+The human explicitly approved disposable local test CA/server/trust material and
+instructed continuation from clean HEAD `91542fcd599ed18283766ba9c6403649a0fdaf6b`
+on `fix/v2-cloud-deployment-preflight`. No reset, discard, stash, branch recreation
+or history rewrite occurred. The preceding checkpoint remains historical evidence;
+the certificate decision has now been resolved. Public/production certificate creation,
+global trust changes, cloud/VPS access and external database connections remain forbidden.
+
+### MySQL findings and repairs
+
+Real MySQL exposed two narrowly scoped deployment issues:
+
+- SCHEMA_PRIVILEGES stores escaped underscores for database grants when partial_revokes
+  is off. The deployment audit now recognizes those exact names. When partial revokes
+  is on, names are literal and global grants cannot prove unrestricted visibility;
+  only direct database grants establish the required authority. Tests cover both
+  interpretations and a globally granted privilege revoked for the test database.
+- SELECT alone cannot acquire the existing SELECT ... FOR UPDATE admission lock.
+  The runtime receives column-scoped UPDATE(id) on persistence_schema in addition
+  to SELECT; it cannot update version. This preserves exclusive capacity admission
+  without DELETE, LOCK TABLES or schema/admin rights. Deployment and recovery
+  instructions now describe the tested grant set.
+
+See the primary MySQL references for [partial revokes](https://dev.mysql.com/doc/refman/8.4/en/partial-revokes.html)
+and [locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html).
+Runtime grants otherwise remain SELECT/INSERT/UPDATE/DELETE on rooms and SELECT/INSERT
+on quarantine. The one-shot deployment account requires SELECT, TRIGGER, EVENT and
+ALTER ROUTINE metadata authority, plus CREATE/INSERT for empty-schema bootstrap.
+The normal server still uses verify mode, never starts with bootstrap credentials,
+and has no CREATE, ALTER, DROP, TRIGGER, EVENT, FILE, GRANT or account-management rights.
+
+`npm run test:mysql` exited 0: six files / 57 tests, comprising the existing 33 tests,
+13 restricted-account recovery cases and 11 deployment/schema/privilege cases. The
+restricted account loads, persists, quarantines, recovers and performs lifecycle work;
+the negative operations and grant inspection reject prohibited authority, including
+schema-version updates. Unexpected triggers, routines, events and views fail the
+privileged deployment audit. The one-shot command initializes and exits with its
+fixed status code without starting HTTP or reflecting credentials. Evidence:
+`server/logs/preflight-authorized-mysql-final.log` and `mysql-harness-summary.json`.
+The owned loopback database container and its temporary data were removed.
+
+### Production image and TLS evidence
+
+`npm run smoke:mysql-production` exited 0. Image:
+`sha256:eb5d856e8d2a1c813310797eedbb234f275ab729bd1c79112ffabbc123f95a3a`.
+Evidence: `server/logs/preflight-authorized-production-repair-2.log` and
+`server/logs/preflight-mysql-production-summary.json`.
+
+| Required local case | Observed result |
+| --- | --- |
+| Explicit trusted test CA | Real built production server and one-shot command accept it |
+| Intended synthetic hostname | Verified TLS to frontier-mysql succeeds; server SAN also supports local harness checks |
+| Untrusted CA | Separate test CA rejected; startup exits 1, no SERVER_LISTENING |
+| Hostname mismatch | Correct CA with frontier-mysql-mismatch rejected; startup exits 1 |
+| No plaintext downgrade | Same runtime credentials and expected schema work in plaintext fixture; production MYSQL_TLS=required rejects it |
+| Intended CA delivery | /run/frontier/mysql-ca.pem is a read-only bind mount; TLS cipher is nonempty under explicit certificate/identity verification |
+| Private artifacts | Captured output checked against generated passwords, keys and session credentials; no sensitive output retained |
+
+The main application ran as UID 1000, with read-only root, no new privileges,
+capabilities dropped and bounded resources/logs. No SQLite file or /data mount was
+required. Health, readiness and public index returned 200; five private paths returned
+404. Missing and invalid STATIC_ROOT both failed closed. Four Humans connected over
+Socket.IO, created/started a Room and committed one legal command. Three starts
+covered initial startup, forced crash and graceful restart. Both recoveries preserved
+exact game state/RNG and command cache, restored the exact PlayerView and replayed the
+retained acknowledgement without another mutation. Final shutdown exited 0 with
+SHUTDOWN_COMPLETE and the saved state unchanged.
+
+All generated CA/server/private-key material stayed in the task's ignored temporary
+directory or disposable containers. Generation used synthetic identities in a
+network-disabled container. Application mounts contained only public CA material;
+database key mounts were read-only. Cleanup removed the certificate directory,
+all owned containers and the owned network, including after failed attempts. Images
+and build cache remain local and contain no generated certificates or keys. No system,
+browser or Docker trust store was changed; no public CA or external DB was contacted.
+
+The artifact scanner additionally rejects private-key PEM markers. A synthetic marker
+probe produced the expected audit exit 1 with privateKeys=1; its wrapper exited 0
+and removed the marker/directory. This is a negative test, not a passing artifact audit.
+
+### Bounded repair record
+
+Failed invocations are retained as failures; none is counted as acceptance. The initial
+MySQL suite had 33 passes / 22 failures from escaped-grant visibility. Diagnostic probes
+identified that metadata format and the admission-lock denial without retaining secrets.
+After the metadata fix, 40 passed / 16 failed; restricted-account lock grants resolved
+the 13 recovery failures. Additional fixture repairs used the owned root account to
+create a trigger under binary logging, explicitly selected the owned database, and
+granted literal database authority while testing partial_revokes. Negative operation
+checks recognize MySQL's specific SUPER-denial for binary-logged trigger creation and
+also inspect grants; durability and privilege boundaries were not relaxed. Subsequent
+runs progressed through 52/57 to 57/57. Temporary diagnostic source/generated outputs
+were removed. Each distinct failure class stayed within three normal repair loops.
+
+The first production smoke failed because MySQL 8.4 removed --skip-ssl; the plaintext
+fixture now uses an empty tls_version, per [MySQL TLS configuration](https://dev.mysql.com/doc/refman/8.4/en/encrypted-connection-protocols-ciphers.html).
+The second passed the TLS/static/gameplay cases but polled an obsolete ephemeral host
+port after crash restart. A separate labeled disposable-container probe confirmed
+Docker port reassignment. The harness now re-reads the loopback binding after each
+restart; no application recovery logic changed. The next complete smoke passed.
+These are two distinct fixture failure classes, one repair each.
+
+An aggregate lint check rejected a temporary diagnostic error wrapper; the wrapper was
+removed. The next aggregate run timed out one UI test while image builds and both
+simulations overlapped. Subsequent broad/browser acceptance runs are isolated from
+competing builds; no timeout or assertion was weakened.
+
+The browser run completed with exit 0, 39/39 tests passed, and 39 traces redacted
+(138 private identities removed). An audit invoked before the reporter had finished
+redaction exited 1 with 24 token/identity matches; no matched values were printed.
+After the browser command actually exited, the complete audit rerun exited 0 with
+zero matches. This was an audit-order correction, not a redaction bypass or ignored
+failure. The early count-only audit remains in the local evidence.
+
+### Continued regression evidence
+
+All rows below are completed invocations after the human authorization. Logs use the
+`server/logs/preflight-authorized-` prefix and are ignored local evidence, never public
+assets or committed private artifacts.
+
+| Exact command | Exit | Result / evidence suffix |
+| --- | --- | --- |
+| `npm run check:all` | 0 | 109 files / 697 tests (113 frontend, 261 core, 36 AI, 66 contracts, 221 server); typechecks, zero-warning lint and builds pass; `check-all-isolated.log` |
+| `npm run check` (final aggregate) | 0 | 74 files / 410 tests; typechecks, zero-warning lint and production build pass; `final-check.log` |
+| `npm run test:mysql` | 0 | Six files / 57 tests; distinct deployment/runtime accounts, restricted recovery and schema audit; `mysql-final.log` |
+| `npm run smoke:mysql-production` | 0 | All seven TLS requirements, no SQLite, 4 Humans / 1 command / 3 starts / 2 exact replays; `production-repair-2.log` |
+| `npm run simulate` | 0 | 100 games / 65,341 commands; deterministic hash `1adc49e8`; `simulate.log` |
+| `npm run simulate:online` | 0 | Six games / six legal winners, repeated seeds match; `simulate-online.log` |
+| `npm run check:deployment` | 0 | Explicit MySQL Compose and real split-origin build, no bundled backend secret; `deployment.log` |
+| `npm run check:boot` | 0 | systemd syntax in an owned disposable Linux container; cleanup passed; `boot.log` |
+| `npm run e2e -- --trace on` | 0 | 39/39 tests, all 39 traces redacted; `e2e.log` |
+| `npm run audit:artifacts` | 0 | 31 online/lobby traces + 10 reports; zero private matches including private-key markers; `artifact-browser-final.log` |
+| `npm run audit:artifacts -- server/logs` | 0 | Final scan: one retained failure trace + 101 reports; zero private matches; `artifact-logs-final.log` |
+| `npm audit --json` | 0 | Zero vulnerabilities in every severity; `npm-audit.json` |
+| `git diff --check` and `git diff 348d203054a0dceb85e2a1f464b4bd039e2a5399 --check` | 0 | No whitespace errors |
+
+The previously completed `npm run smoke:container` SQLite production qualification
+at the authorized resume HEAD remains recorded above (exit 0, 4 Humans / 1 command /
+2 starts / exact recovery). The continuation changed the MySQL deployment audit,
+MySQL qualification fixtures and documentation; it did not alter SQLite runtime or
+confinement. Current broad and browser regressions revalidated those boundaries.
+No skipped, unavailable, interrupted or failed invocation is counted as PASS.
+
+### Continuation files and scope
+
+Local implementation commit `56dbf53cbc42dfc1b122131c03970759d4c6f216` changes
+`server/src/persistence/mysql-store.ts`, `server/test/mysql-restricted-helpers.ts`,
+`server/test/mysql-schema.mysql.ts`, `server/test/run-mysql-container-smoke.ts` and
+`server/test/run-artifact-audit.ts`. Documentation updates cover `deploy/README.md`,
+`docs/v2/ADR-V2-0016-cloud-preflight-deployment-boundaries.md`,
+`docs/v2/V2_PERSISTENCE_RECOVERY.md`, `docs/v2/V2_SECURITY.md`, this progress record,
+and `tasks/V2_CLOUD_DEPLOYMENT_PREFLIGHT.md`. The full remediation inventory remains
+the 30 files listed in the historical file inventory above. The final documentation
+commit/HEAD and clean worktree result are returned in the completion response.
+
+No dependencies or lockfile changes were added. New coverage includes admission-lock
+permissions, partial revokes/literal grants, forbidden schema-version writes, all
+required TLS acceptance/rejection cases, read-only CA delivery, cleanup and key-artifact
+detection. Existing game, AI, protocol, UI, FIFO, commit-before-publication/ACK,
+lost-ACK replay and single-authority boundaries are unchanged. No Redis, scaling,
+second authority, ALB, RDS Proxy, cloud SDK or unrelated future feature was implemented.
+
+The split-origin Vercel/CSP configuration remains prepared for the exact requested
+frontend/backend HTTPS origins and backend WSS, with nosniff/referrer/framing controls;
+there is no wildcard or preview-origin authorization. The future boot policy remains
+one systemd oneshot after Docker/network readiness with bounded Compose readiness and
+graceful stop; Docker alone owns on-failure:3 restarts. Unhealthy/persistence failures
+require operator action, never automatic database deletion or a second authority.
+
+AWS EC2/RDS, the real RDS TLS chain, real network latency, public HTTPS/WSS, Vercel
+deployment, GoDaddy DNS, EC2 reboot and RDS automated backup/PITR/restore remain
+unverified. Boot evidence is syntax/configuration only. No cloud/VPS account was
+accessed, no billable resource/public certificate was created, no global trust changed,
+and nothing was published, pushed, merged, tagged or deployed. This is local remediation
+evidence; cloud preflight must be rerun under its own approved read-only scope.
+
+### Final local acceptance decision
+
+All required local remediation gates passed. The final aggregate check completed
+after browser qualification, followed by the final zero-match retained-log audit.
+The existing Vite large-chunk advisory remains; no lint warning or failing test was
+ignored and no limit was relaxed. Final ownership checks found no task MySQL,
+production-smoke or diagnostic containers/networks, no generated certificate/key
+files in the owned log roots or Git, and no test listeners on ports 3001/4173.
+The authorized resume HEAD remains an ancestor. Local implementation and documentation
+commits preserve the previous work; the final worktree is checked clean after commit.
+
+`CLOUD_DEPLOYMENT_REMEDIATION_PASSED`
+
+`PENDING_CLOUD_PREFLIGHT_RERUN`
