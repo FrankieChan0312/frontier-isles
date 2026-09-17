@@ -7,7 +7,7 @@ records; oversized records are quarantined in SQL before allocating private payl
 
 ## Supported storage
 
-Run exactly one Node 24.19+ process within the Node 24 line. Production uses its bundled SQLite
+Run exactly one Node 24.19+ process within the Node 24 line. The default `PERSISTENCE_PROVIDER=sqlite` uses the bundled SQLite
 adapter with WAL, FULL synchronous commits, exclusive process ownership and local persistent disk.
 `PERSISTENCE_FILE` defaults to `data/frontier-isles.sqlite`, relative to the server process working
 directory (`server/data/` when using the workspace development/start scripts). Set an explicit
@@ -93,3 +93,61 @@ private-state recovery, idempotent replay and cleanup. It uses temporary stores 
 repository and real Socket.IO clients. Run `npm run check:all`, both simulation scripts and all
 browser suites for regression acceptance. V1 localStorage saves and LocalGameGateway are independent
 of server storage, downtime, recovery, credentials and this schema.
+
+## MySQL provider (local qualification; future RDS)
+
+`PERSISTENCE_PROVIDER=mysql` selects the same aggregate repository through a bounded worker.
+Room/GameSession orchestration and strict record format remain unchanged. See
+[ADR-V2-0014](ADR-V2-0014-mysql-aggregate-persistence.md) for its synchronous latency tradeoff.
+
+Backend environment variables (never `VITE_`):
+
+| Variable | Meaning |
+| --- | --- |
+| `PERSISTENCE_PROVIDER` | `sqlite` (default) or `mysql` |
+| `MYSQL_HOST` | Required DNS hostname; no URL or embedded credential |
+| `MYSQL_PORT` | Integer 1–65535; default 3306 |
+| `MYSQL_DATABASE` | Dedicated existing database, required |
+| `MYSQL_USER`, `MYSQL_PASSWORD` | Service credentials supplied privately by the environment |
+| `MYSQL_TLS` | `required` by default; `disabled` only for nonproduction loopback tests |
+| `MYSQL_TLS_CA_FILE` | Required trusted PEM CA bundle for TLS; mount privately |
+| `MYSQL_SCHEMA_MODE` | `verify` default; `initialize` explicitly bootstraps an empty database |
+
+MySQL does not use `PERSISTENCE_FILE`. The SQLite Compose reference does not automatically forward
+MySQL configuration. Node reads environment variables directly, without loading dotenv files.
+Production still requires the existing public static-root and Origin configuration. Split-origin
+hosting is future deployment work, not an implied change to that deployment contract.
+
+Provision an empty dedicated database separately; this application never creates a database or
+account. With temporary bootstrap privileges, run `MYSQL_SCHEMA_MODE=initialize` once. It creates
+three InnoDB tables and schema version 1 only if no table exists. Then use `verify` and a service
+account limited to SELECT/INSERT/UPDATE/DELETE on those tables (plus the metadata visibility needed
+for startup checks). Do not grant normal runtime DDL/admin access. Partial DDL, unknown versions,
+unrelated tables, changed structures or unsupported durability settings fail closed; investigate
+privately rather than dropping or recreating existing data. No SQLite-to-MySQL copy tool is added.
+
+Each `rooms` row has canonical payload bytes/checksum, a storage revision and incarnation guard.
+The canonical private aggregate still carries the exact state/RNG, Room/publication revisions,
+Human/session digests, AI replacement, deadlines and retained results. Recovery retains the same
+pause/resume/deadline policy. A rejected stale write, timeout or lost COMMIT reply disables live
+authority. The database might have committed an uncertain command: repair access and restart,
+then use the original command retry and a fresh snapshot. Never blindly resubmit a new command ID.
+
+MySQL transactions require durable InnoDB flush and binlog settings of 1. Quarantine is private;
+malformed/future/checksum-invalid and oversized records are moved atomically without private logs.
+Stop/shutdown closes the pool and worker after accepted commits. There are no background writes
+to flush later. Startup/recovery has a 30-second bridge bound; mutations/close eight seconds;
+connection and query operations two seconds. A timeout requires investigation/restart.
+
+Run `npm run test:mysql` from the root. The harness starts only a uniquely named, labeled,
+digest-pinned MySQL 8.4 container, uses a random loopback port and generated test credentials,
+and keeps `frontier_isles_mysql_test` on temporary tmpfs. It never targets an existing database.
+Shared adapter recovery contracts, hostile storage cases and actual server kill/restart/replay
+run against that real service. The harness verifies ownership before removing only its own
+container; it creates no durable volume and records cleanup in `server/logs/mysql-harness-summary.json`.
+No database dumps are retained. A failed prerequisite/test is a failed gate, never a skip.
+
+For future RDS operation, separately rehearse encrypted snapshots/PITR, retention, access control,
+restore into an isolated instance, matching schema/application version and resumed-player recovery.
+Restoring an older backup loses later acknowledged commands. Define RPO/RTO and verify them before
+deployment. RDS TLS, backup/restore, failover and EC2 network behavior have not been qualified here.

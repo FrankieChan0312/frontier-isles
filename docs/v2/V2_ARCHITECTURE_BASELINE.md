@@ -331,7 +331,17 @@ Graceful shutdown blocks admission, cancels a pending AI choice, drains the queu
 closes transports/storage. It preserves durable games; explicit/expired closure deletes them
 transactionally. See the private [recovery runbook](V2_PERSISTENCE_RECOVERY.md).
 
-## 17. Deferred decisions
+## 17. MySQL persistence boundary
+
+The MySQL persistence goal adds an explicitly selectable adapter while preserving the aggregate
+and synchronous commit boundary described above. SQLite remains the default. A dedicated worker
+owns MySQL's driver/pool; authoritative code waits for committed results with hard bounds.
+Canonical payload bytes, transactional quarantine and optimistic storage revision/incarnation
+checks preserve recovery and refuse stale writes. No Room/GameSession, rules, AI, UI or protocol
+rewrite is involved. See [ADR-V2-0014](ADR-V2-0014-mysql-aggregate-persistence.md), pending Human
+architecture review, for details and the event-loop latency limitation before future RDS use.
+
+## 18. Deferred decisions
 
 - final public server host
 - multi-instance scaling

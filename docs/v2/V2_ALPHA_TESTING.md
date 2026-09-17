@@ -79,3 +79,22 @@ redaction tests check escaped/plain values, binary preservation and checksum cor
 independent artifact scanner rejects remaining identities, digests, fingerprints and authoritative
 RNG. `npm run redact:artifacts` also protects already-retained local traces. No test assertion,
 failure status or gameplay packet is changed by redaction.
+
+## MySQL persistence qualification
+
+`npm run test:mysql` builds the server and starts its own digest-pinned MySQL service on an
+ephemeral loopback port. It runs `vitest.mysql.config.ts`, separately from the database-free default
+suite. Missing Docker or failed setup makes this gate fail; MySQL tests are never silently skipped.
+The 13 recovery contract scenarios run unchanged against SQLite and MySQL. MySQL-specific tests
+cover schema/record corruption, bounds, rollback/uncertain commit, stale writers/deletes and
+delete/recreate ownership. Real Node server processes create/start a Room through Socket.IO,
+commit a command, die, recover and replay without advancing twice, including discarded ACKs.
+The test-only IPC signal bridge invokes the real graceful-shutdown handler on Windows; it is
+absent from production source/images. No runtime fixture or control endpoint is introduced.
+
+Local test data exists only inside the harness-owned MySQL container's tmpfs. Cleanup verifies
+the generated ownership label and removes only that container. Generated credentials never enter
+command arguments or reports. Output uses existing artifact redaction; a detected credential
+leak or cleanup failure fails the gate. Record exact results in [MySQL progress](V2_MYSQL_PROGRESS.md).
+Run `npm run audit:artifacts -- server/logs` to audit MySQL logs as well as the ordinary browser
+artifact audit. Existing SQLite tests and their historical acceptance evidence remain intact.

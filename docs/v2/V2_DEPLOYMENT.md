@@ -100,3 +100,27 @@ container memory. A Room cap of 64 and transport cap of 320 are safety bounds, n
 capacity. The local load smoke qualifies only its recorded eight concurrent Rooms / 24 sockets.
 Disk-full and permanent-volume-loss recovery require operator action; no availability guarantee,
 automatic remote backup, cross-machine session transfer or multiple replicas is provided.
+
+## MySQL migration boundary
+
+The additional provider is documented in the [recovery runbook](V2_PERSISTENCE_RECOVERY.md).
+SQLite remains supported and is still the default for the existing same-origin Compose reference.
+MySQL qualification uses Docker only for an isolated local test database (`npm run test:mysql`);
+it does not require a future player's or operator's laptop to run Docker in production.
+
+The intended future topology is Vercel static React/Vite frontend, one Dockerized Node/Socket.IO
+authority on EC2, and RDS MySQL, with the user's GoDaddy-managed public domains. This goal neither
+provisions nor deploys that topology. No real endpoint or credential is committed.
+
+Verified paths are the accepted local SQLite implementation and, only when recorded as passing in
+[MySQL acceptance](V2_MYSQL_PROGRESS.md), the isolated local MySQL integration/restart path.
+AWS RDS, EC2 deployment, Vercel split-origin hosting, GoDaddy DNS, public TLS/WebSocket operation
+and RDS backup/restore remain **not verified**. Existing historical Goal C reports describe SQLite
+and must not be read as historical MySQL evidence.
+
+Before any RDS deployment: approve ADR-V2-0014's synchronous network-wait tradeoff; measure latency,
+tail stalls and capacity; configure trusted CA/hostname verification, least-privilege accounts,
+private networking, encryption, durable flush/binlog settings, secrets delivery and tested backups.
+Only one authoritative server process is supported. Optimistic row guards do not coordinate two
+Socket.IO authorities. A future split frontend/backend release also needs explicit Origin/CSP,
+proxy, public DNS/TLS, readiness and recovery qualification. No such rollout is authorized here.
