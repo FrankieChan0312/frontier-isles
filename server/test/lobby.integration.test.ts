@@ -371,18 +371,18 @@ describe('realtime Lobby integration', () => {
 
   it('notifies and disconnects clients when fake-time idle cleanup closes a Room', async () => {
     const runtime = new FakeLifecycleRuntime()
-    const roomService = new InMemoryRoomService({
+    const roomService = (await InMemoryRoomService.open({
       reconnectGraceMs: 100,
       roomIdleTtlMs: 1_000,
       runtime,
-    })
+    }))
     const server = await startLobbyServer(roomService)
     const host = await connectClient(server.url)
     const created = successData(await createRoom(host, 'Ada'))
     const closedNotice = new Promise<unknown>((resolve) => host.once('room:closed', resolve))
     const disconnected = new Promise<void>((resolve) => host.once('disconnect', () => resolve()))
 
-    runtime.advanceBy(1_000)
+    await runtime.advanceBy(1_000)
 
     await expect(closedNotice).resolves.toMatchObject({
       roomCode: created.credential.roomCode,

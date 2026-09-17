@@ -27,11 +27,11 @@ for (const scenario of ['SEVEN', 'KNIGHT', 'BUILD_TRADE'] as const) test(`produc
     // Test-owned offline fixture installation. The production process accepts only its normal
     // private persistence format and has no fixture route, flag, or client-state injection.
     const repository = new SqliteMultiplayerRepository(directory.database)
-    const record = requireValue(repository.load()[0]); const saved = requireValue(record.game)
+    const record = requireValue((await repository.load())[0]); const saved = requireValue(record.game)
     const fixture = new GameSession(record.roomCode, gameIdSchema.parse(saved.state.gameId), saved.originalSeats, 'BROWSER_RECOVERY',
       { createState: (config) => workflowFixture(scenario, config) })
-    repository.save({ ...record, game: fixture.exportPersistence() })
-    fixture.close(); repository.close()
+    await repository.save({ ...record, game: fixture.exportPersistence() })
+    fixture.close(); await repository.close()
     process = await startProductionProcess(directory.database, options)
     for (const observer of game.observers) await observer.page.reload()
     await expectSharedPublicState(game.observers, 16)
@@ -51,8 +51,8 @@ for (const scenario of ['SEVEN', 'KNIGHT', 'BUILD_TRADE'] as const) test(`produc
     const before = game.observers.map((observer) => observer.current().view)
     await process.crash()
     const inspect = new SqliteMultiplayerRepository(directory.database)
-    const authoritative = requireValue(inspect.load()[0]).game?.state
-    inspect.close()
+    const authoritative = requireValue((await inspect.load())[0]).game?.state
+    await inspect.close()
     const corrupt = new DatabaseSync(directory.database)
     corrupt.prepare('INSERT INTO rooms VALUES (?,?,?)').run('BAD234', '{truncated', '0'.repeat(64)); corrupt.close()
     process = await startProductionProcess(directory.database, options)
@@ -67,8 +67,8 @@ for (const scenario of ['SEVEN', 'KNIGHT', 'BUILD_TRADE'] as const) test(`produc
     // Stop once more to compare exact private state/RNG without exposing either in reports.
     await process.crash()
     const verify = new SqliteMultiplayerRepository(directory.database)
-    expect(canonicalJson(requireValue(verify.load()[0]).game?.state) === canonicalJson(authoritative)).toBe(true)
-    expect(verify.load()).toHaveLength(1); verify.close()
+    expect(canonicalJson(requireValue((await verify.load())[0]).game?.state) === canonicalJson(authoritative)).toBe(true)
+    expect((await verify.load())).toHaveLength(1); await verify.close()
     process = await startProductionProcess(directory.database, options)
     for (const observer of game.observers) await observer.page.reload()
     for (const observer of game.observers) await expect(observer.page.getByRole('status', { name: 'Game presence', includeHidden: true })).toContainText('Game active')

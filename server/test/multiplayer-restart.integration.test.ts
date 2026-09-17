@@ -13,7 +13,7 @@ import { requireValue, successData } from './game-test-helpers.js'
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>
 const clients: Client[] = []
 const processes: TestServerProcess[] = []
-const cleanup: (() => void)[] = []
+const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => {
   for (const client of clients.splice(0)) client.disconnect()
   for (const process of processes.splice(0)) await process.crash()
@@ -101,8 +101,8 @@ describe('production process restart through real Socket.IO', () => {
     const before = successData(gameRequestSnapshotAcknowledgementSchema.parse(await actor.timeout(5000).emitWithAck('game:request-snapshot', identity)))
     await first.crash()
     const inspect = new SqliteMultiplayerRepository(directory.database)
-    const saved = requireValue(inspect.load()[0])
-    inspect.close()
+    const saved = requireValue((await inspect.load())[0])
+    await inspect.close()
     expect(saved.game?.state.stateVersion).toBe(before.view.stateVersion)
     const second = await processFor(directory.database)
     const restored: Client[] = []
@@ -121,7 +121,7 @@ describe('production process restart through real Socket.IO', () => {
     expect(after.publicationRevision).toBe(current.publicationRevision)
     await second.crash()
     const final = new SqliteMultiplayerRepository(directory.database)
-    expect(requireValue(final.load()[0]).game?.state).toEqual(saved.game?.state)
-    final.close()
+    expect(requireValue((await final.load())[0]).game?.state).toEqual(saved.game?.state)
+    await final.close()
   }, 30_000)
 })

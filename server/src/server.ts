@@ -9,23 +9,23 @@ import { safeLogRecord } from './security/safe-log.js'
 
 function reportDiagnostic(diagnostic: unknown): void { console.log(safeLogRecord(diagnostic)) }
 
-function start(): void {
+async function start(): Promise<void> {
   const config = parseServerConfig(process.env)
   const repository = config.persistenceProvider === 'mysql' && config.mysql !== undefined
-    ? new MysqlMultiplayerRepository(config.mysql, { onDiagnostic: reportDiagnostic })
+    ? await MysqlMultiplayerRepository.open(config.mysql, { onDiagnostic: reportDiagnostic })
     : new SqliteMultiplayerRepository(config.persistenceFile ?? 'data/frontier-isles.sqlite', { onDiagnostic: reportDiagnostic })
   let roomService: InMemoryRoomService
   try {
-    roomService = new InMemoryRoomService({ repository, reconnectGraceMs: config.reconnectGraceMs,
+    roomService = await InMemoryRoomService.open({ repository, reconnectGraceMs: config.reconnectGraceMs,
       roomIdleTtlMs: config.roomIdleTtlMs, gameAbandonedTtlMs: config.gameAbandonedTtlMs ?? 1_800_000,
       restartRecoveryGraceMs: config.restartRecoveryGraceMs ?? 120_000, onPersistenceDiagnostic: reportDiagnostic })
-  } catch { repository.close(); throw new Error('Multiplayer recovery failed.') }
+  } catch { await repository.close(); throw new Error('Multiplayer recovery failed.') }
   let httpServer: ReturnType<typeof createFrontierHttpServer>
   try {
     httpServer = createFrontierHttpServer({ allowedOrigins: config.clientOrigins ?? [config.clientOrigin],
       privateDataFile: config.persistenceFile ?? 'data/frontier-isles.sqlite',
       isReady: () => roomService.isReady, ...(config.staticRoot === undefined ? {} : { staticRoot: config.staticRoot }) })
-  } catch { roomService.dispose(); repository.close(); throw new Error('Public frontend startup failed.') }
+  } catch { roomService.dispose(); await repository.close(); throw new Error('Public frontend startup failed.') }
   const realtimeServer = createRealtimeServer(httpServer, config, { roomService, onDiagnostic: reportDiagnostic })
   const shutdown = createGracefulShutdown({ httpServer, realtimeServer })
   let stopping = false
@@ -49,7 +49,7 @@ function start(): void {
     reportDiagnostic({ code: 'SERVER_LISTENING', port: config.port })
   })
 }
-try { start() } catch {
+try { await start() } catch {
   console.error(safeLogRecord({ code: 'STARTUP_FAILED' }))
   process.exitCode = 1
 }

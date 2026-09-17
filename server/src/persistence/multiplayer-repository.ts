@@ -17,17 +17,17 @@ export interface PersistenceDiagnostic {
 }
 /**
  * One Room and its GameSession/session/cache data form a single atomic durable record.
- * Methods complete synchronously: save/remove return only after durable commit. Callers
+ * Methods return Promises: save/remove resolve only after durable commit. Callers
  * must stop authority on failure, including an uncertain commit; never retry a write
  * blindly. load validates/quarantines records before recovery, without rebuilding state.
  * Database concurrency tokens belong to the adapter, not gameplay or Room revisions.
  */
 export interface MultiplayerRepository {
-  load(): readonly MultiplayerRecord[]
-  save(record: MultiplayerRecord): void
-  remove(roomCode: RoomCode): void
-  flush(): void
-  close(): void
+  load(): Promise<readonly MultiplayerRecord[]>
+  save(record: MultiplayerRecord): Promise<void>
+  remove(roomCode: RoomCode): Promise<void>
+  flush(): Promise<void>
+  close(): Promise<void>
 }
 export interface EncodedMultiplayerRecord {
   readonly record: MultiplayerRecord
@@ -59,12 +59,12 @@ export function decodeMultiplayerRecord(payload: string, checksum: string): Mult
 }
 export class InMemoryMultiplayerRepository implements MultiplayerRepository {
   readonly #records = new Map<RoomCode, MultiplayerRecord>()
-  public load(): readonly MultiplayerRecord[] { return structuredClone([...this.#records.values()]) }
-  public save(record: MultiplayerRecord): void {
+  public async load(): Promise<readonly MultiplayerRecord[]> { return structuredClone([...this.#records.values()]) }
+  public async save(record: MultiplayerRecord): Promise<void> {
     const validated = encodeMultiplayerRecord(record).record
     this.#records.set(validated.roomCode, validated)
   }
-  public remove(roomCode: RoomCode): void { this.#records.delete(roomCode) }
-  public flush(): void {}
-  public close(): void {}
+  public async remove(roomCode: RoomCode): Promise<void> { this.#records.delete(roomCode) }
+  public async flush(): Promise<void> {}
+  public async close(): Promise<void> {}
 }

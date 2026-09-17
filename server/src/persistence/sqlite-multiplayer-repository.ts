@@ -61,7 +61,7 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
     }
   }
 
-  public load(): readonly MultiplayerRecord[] {
+  public async load(): Promise<readonly MultiplayerRecord[]> {
     this.#requireOpen()
     const records: MultiplayerRecord[] = []
     const sessionIds = new Set<string>()
@@ -104,7 +104,7 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
     } catch { throw new PersistenceError('PERSISTENCE_OPEN_FAILED') }
   }
 
-  public save(record: MultiplayerRecord): void {
+  public async save(record: MultiplayerRecord): Promise<void> {
     const encoded = encodeMultiplayerRecord(record)
     this.#transaction(() => {
       const exists = this.#database.prepare('SELECT 1 AS found FROM rooms WHERE room_code=?').get(record.roomCode)
@@ -115,17 +115,17 @@ export class SqliteMultiplayerRepository implements MultiplayerRepository {
         .run(encoded.record.roomCode, encoded.payload, encoded.checksum)
     })
   }
-  public remove(roomCode: RoomCode): void {
+  public async remove(roomCode: RoomCode): Promise<void> {
     this.#transaction(() => { this.#database.prepare('DELETE FROM rooms WHERE room_code=?').run(roomCode) })
   }
-  public flush(): void {
+  public async flush(): Promise<void> {
     this.#requireOpen()
     try { this.#database.exec('PRAGMA wal_checkpoint(TRUNCATE)') } catch { throw new PersistenceError('PERSISTENCE_WRITE_FAILED') }
   }
-  public close(): void {
+  public async close(): Promise<void> {
     if (this.#closed) return
     let failed = false
-    try { this.flush() } catch { failed = true }
+    try { await this.flush() } catch { failed = true }
     try { this.#database.close() } catch { failed = true }
     this.#closed = true
     if (failed) throw new PersistenceError('PERSISTENCE_WRITE_FAILED')

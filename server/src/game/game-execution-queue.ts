@@ -7,6 +7,7 @@ export class GameExecutionQueue {
   readonly #capacity: number
   #tail: Promise<void> = Promise.resolve()
   #size = 0
+  #controlSize = 0
 
   public constructor(capacity = 64) {
     if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 256) {
@@ -18,10 +19,12 @@ export class GameExecutionQueue {
   public get size(): number { return this.#size }
   public idle(): Promise<void> { return this.#tail }
 
-  public run<T>(operation: () => T | Promise<T>): Promise<T> {
-    if (this.#size >= this.#capacity) return Promise.reject(new GameQueueFullError())
+  public run<T>(operation: () => T | Promise<T>, control = false): Promise<T> {
+    // Reserve bounded FIFO positions for disconnect/expiry even when clients fill admission.
+    if (control ? this.#controlSize >= 16 : this.#size - this.#controlSize >= this.#capacity) return Promise.reject(new GameQueueFullError())
     this.#size += 1
-    const result = this.#tail.then(operation).finally(() => { this.#size -= 1 })
+    if (control) this.#controlSize += 1
+    const result = this.#tail.then(operation).finally(() => { this.#size -= 1; if (control) this.#controlSize -= 1 })
     // A failed operation must release its position without poisoning subsequent work.
     this.#tail = result.then(() => {}, () => {})
     return result

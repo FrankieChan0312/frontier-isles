@@ -24,33 +24,33 @@ export interface PersistentRoomFixture {
   readonly runtime: FakeLifecycleRuntime
   readonly members: readonly RoomSessionData[]
   readonly snapshot: () => RoomSnapshot
-  readonly start: () => GameSession
+  readonly start: () => Promise<GameSession>
 }
-export function persistentRoom(
+export async function persistentRoom(
   repository: MultiplayerRepository,
   runtime = new FakeLifecycleRuntime(),
   dependencies: GameSessionDependencies = { createState: actionFixture },
   humans = 4,
-): PersistentRoomFixture {
-  const service = new InMemoryRoomService({ repository, runtime, gameDependencies: dependencies,
-    reconnectGraceMs: 100, restartRecoveryGraceMs: 1200, roomIdleTtlMs: 5000, gameAbandonedTtlMs: 3000 })
-  const first = successData(service.createRoom('Host'))
+): Promise<PersistentRoomFixture> {
+  const service = (await InMemoryRoomService.open({ repository, runtime, gameDependencies: dependencies,
+    reconnectGraceMs: 100, restartRecoveryGraceMs: 1200, roomIdleTtlMs: 5000, gameAbandonedTtlMs: 3000 }))
+  const first = successData((await service.createRoom('Host')))
   const members = [first]
-  for (let index = 1; index < humans; index += 1) members.push(successData(service.joinRoom(first.credential.roomCode, `Human ${index}`)))
+  for (let index = 1; index < humans; index += 1) members.push(successData((await service.joinRoom(first.credential.roomCode, `Human ${index}`))))
   const snapshot = (): RoomSnapshot => requireValue(service.getSnapshot(first.credential.roomCode))
   for (const seat of snapshot().seats) if (seat.occupancy === 'EMPTY') {
-    successData(service.setAiSeat(first.credential.sessionId, snapshot().revision, seat.seatId, 'BUILDER'))
+    successData((await service.setAiSeat(first.credential.sessionId, snapshot().revision, seat.seatId, 'BUILDER')))
   }
-  for (const member of members) successData(service.setReady(member.credential.sessionId, snapshot().revision, true))
-  return { service, members, runtime, snapshot, start: () => {
-    successData(service.requestStart(first.credential.sessionId, snapshot().revision))
+  for (const member of members) successData((await service.setReady(member.credential.sessionId, snapshot().revision, true)))
+  return { service, members, runtime, snapshot, start: async () => {
+    successData((await service.requestStart(first.credential.sessionId, snapshot().revision)))
     return requireValue(service.getGameSession(first.credential.roomCode))
   } }
 }
-export function restoredService(repository: MultiplayerRepository, runtime: FakeLifecycleRuntime, dependencies: GameSessionDependencies = {}): InMemoryRoomService {
-  return new InMemoryRoomService({ repository, runtime, gameDependencies: dependencies,
-    reconnectGraceMs: 100, restartRecoveryGraceMs: 1200, roomIdleTtlMs: 5000, gameAbandonedTtlMs: 3000 })
+export async function restoredService(repository: MultiplayerRepository, runtime: FakeLifecycleRuntime, dependencies: GameSessionDependencies = {}): Promise<InMemoryRoomService> {
+  return (await InMemoryRoomService.open({ repository, runtime, gameDependencies: dependencies,
+    reconnectGraceMs: 100, restartRecoveryGraceMs: 1200, roomIdleTtlMs: 5000, gameAbandonedTtlMs: 3000 }))
 }
-export function resumeEveryHuman(service: InMemoryRoomService, members: readonly RoomSessionData[]): void {
-  for (const member of members) successData(service.resumeSession(member.credential))
+export async function resumeEveryHuman(service: InMemoryRoomService, members: readonly RoomSessionData[]): Promise<void> {
+  for (const member of members) successData((await service.resumeSession(member.credential)))
 }

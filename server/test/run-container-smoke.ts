@@ -116,7 +116,7 @@ try {
   await command(['kill', '--signal=KILL', container])
   step = 'crash-storage-inspection'
   const inspect = new SqliteMultiplayerRepository(directory.database)
-  const saved = requireValue(inspect.load()[0]); inspect.close()
+  const saved = requireValue((await inspect.load())[0]); await inspect.close()
   assert.equal(saved.game?.state.stateVersion, before.stateVersion)
   for (const member of members) assert.equal(readFileSync(directory.database).includes(member.credential.resumeToken), false)
   step = 'restart-readiness'
@@ -141,7 +141,7 @@ try {
     assert.equal(output.includes(member.credential.sessionId), false)
   }
   const final = new SqliteMultiplayerRepository(directory.database)
-  assert.equal(canonicalJson(requireValue(final.load()[0]).game?.state) === canonicalJson(saved.game?.state), true); final.close()
+  assert.equal(canonicalJson(requireValue((await final.load())[0]).game?.state) === canonicalJson(saved.game?.state), true); await final.close()
   console.log(JSON.stringify({ code: 'LOCAL_CONTAINER_SMOKE_PASSED', image, ...runtime, humans: 4, commands: 1, exactReplays: 1,
     processStarts: 2, crashRecovery: true, exactStateAndRng: true, gracefulFlush: true, privateRoutesDenied: 5, pushed: false, deployed: false }))
 } catch (error: unknown) {

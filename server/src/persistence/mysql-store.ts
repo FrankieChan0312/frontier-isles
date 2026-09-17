@@ -4,7 +4,7 @@ import type { RoomCode } from '@frontier-isles/realtime-contracts'
 import type { MysqlConfig } from './mysql-config.js'
 import type { MultiplayerRecord } from './multiplayer-record.js'
 import { MAX_MULTIPLAYER_RECORD_BYTES } from './multiplayer-record.js'
-import { decodeMultiplayerRecord, encodeMultiplayerRecord, PersistenceError, type PersistenceDiagnostic } from './multiplayer-repository.js'
+import { decodeMultiplayerRecord, encodeMultiplayerRecord, PersistenceError, type PersistenceDiagnostic, type MultiplayerRepository } from './multiplayer-repository.js'
 import { MYSQL_COLUMNS, MYSQL_SCHEMA_SQL } from './mysql-schema.js'
 import { MAX_ROOMS } from '../security/network-limits.js'
 
@@ -26,8 +26,8 @@ export interface MysqlStoreOptions {
   readonly afterCommit?: () => void
 }
 
-/** Private async driver implementation. The authority uses the synchronous worker adapter. */
-export class MysqlStore {
+/** Direct asynchronous production repository; no worker or blocking network bridge. */
+export class MysqlStore implements MultiplayerRepository {
   readonly #pool: Pool
   readonly #options: MysqlStoreOptions
   readonly #revisions = new Map<RoomCode, StorageRevision>()
@@ -38,7 +38,7 @@ export class MysqlStore {
     this.#options = options
     this.#pool = createPool({ host: config.host, port: config.port, database: config.database,
       user: config.user, password: config.password, connectTimeout: QUERY_TIMEOUT_MS,
-      connectionLimit: 2, maxIdle: 2, idleTimeout: 30_000, waitForConnections: false,
+      connectionLimit: 2, maxIdle: 2, idleTimeout: 30_000, waitForConnections: true, queueLimit: 64,
       multipleStatements: false, enableKeepAlive: true, supportBigNumbers: true, bigNumberStrings: true,
       ...(config.ca === null ? {} : { ssl: { ca: config.ca, rejectUnauthorized: true, verifyIdentity: true, minVersion: 'TLSv1.2' } }),
     })
@@ -46,7 +46,7 @@ export class MysqlStore {
 
   public static async open(config: MysqlConfig, options: MysqlStoreOptions = {}): Promise<MysqlStore> {
     const store = new MysqlStore(config, options)
-    try { await store.#withConnection((connection) => store.#schema(connection, config.initialize)); return store }
+    try { await store.#withConnection((connection) => store.#schema(connection, config.initialize), 30_000); return store }
     catch {
       await store.close().catch(() => {})
       options.onDiagnostic?.({ code: 'PERSISTENCE_OPEN_FAILED' })
@@ -166,17 +166,24 @@ export class MysqlStore {
     this.#revisions.delete(roomCode)
   }
 
-  public flush(): void { this.#requireOpen() } // Every save/remove has already committed.
+  public async flush(): Promise<void> { this.#requireOpen() } // Every save/remove has already committed.
   public async close(): Promise<void> {
     if (this.#closed) return
     this.#closed = true
-    await this.#pool.end()
+    let timer: NodeJS.Timeout | undefined
+    try {
+      await Promise.race([this.#pool.end(), new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new PersistenceError('PERSISTENCE_WRITE_FAILED')), 8000)
+      })])
+    } catch { throw new PersistenceError('PERSISTENCE_WRITE_FAILED') }
+    finally { clearTimeout(timer) }
   }
   #requireOpen(): void {
     if (this.#closed || this.#failed) throw new PersistenceError('PERSISTENCE_WRITE_FAILED')
   }
-  async #withConnection<T>(operation: (connection: PoolConnection) => Promise<T>): Promise<T> {
+  async #withConnection<T>(operation: (connection: PoolConnection) => Promise<T>, timeoutMs = 8000): Promise<T> {
     this.#requireOpen()
+    const deadline = performance.now() + timeoutMs
     let expired = false
     let timer: NodeJS.Timeout | undefined
     const acquisition = this.#pool.getConnection().then((connection) => {
@@ -189,10 +196,15 @@ export class MysqlStore {
         timer = setTimeout(() => { expired = true; reject(new Error('Connection deadline.')) }, QUERY_TIMEOUT_MS)
       })])
     } finally { clearTimeout(timer) }
+    let operationTimer: NodeJS.Timeout | undefined
     try {
-      await this.#execute(connection, 'SET SESSION innodb_lock_wait_timeout=2')
-      return await operation(connection)
-    } finally { connection.release() }
+      return await Promise.race([(async () => {
+        await this.#execute(connection, 'SET SESSION innodb_lock_wait_timeout=2')
+        return operation(connection)
+      })(), new Promise<never>((_resolve, reject) => {
+        operationTimer = setTimeout(() => { connection.destroy(); reject(new Error('Operation deadline.')) }, Math.max(1, deadline - performance.now()))
+      })])
+    } finally { clearTimeout(operationTimer); connection.release() }
   }
   async #bounded<T>(connection: PoolConnection, operation: Promise<T>): Promise<T> {
     let timer: NodeJS.Timeout | undefined
@@ -224,7 +236,7 @@ export class MysqlStore {
           try { await this.#bounded(connection, connection.rollback()) } catch { connection.destroy() }
           throw new Error('Transaction failed.')
         }
-      })
+      }, injectFault ? 8000 : 30_000)
     } catch {
       // A lost COMMIT response is uncertain. Never reconnect and replay a write automatically.
       this.#failed = true

@@ -29,7 +29,7 @@ async function closeServers({
     }
     roomService?.dispose()
     disposeRealtimeBoundary(realtimeServer)
-    try { roomService?.closeRepository() } catch { failed = true }
+    try { await roomService?.closeRepository() } catch { failed = true }
   }
   if (failed) throw new Error('Server shutdown failed. Check the private recovery runbook before restarting.')
 }

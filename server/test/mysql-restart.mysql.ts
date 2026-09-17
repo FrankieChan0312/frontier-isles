@@ -16,7 +16,7 @@ type Client = Socket<ServerToClientEvents, ClientToServerEvents>
 beforeEach(resetMysqlTestSchema)
 const clients: Client[] = []
 const processes: TestServerProcess[] = []
-const cleanup: (() => void)[] = []
+const cleanup: (() => void | Promise<void>)[] = []
 afterEach(async () => {
   for (const client of clients.splice(0)) client.disconnect()
   for (const process of processes.splice(0)) await process.crash()
@@ -120,9 +120,9 @@ describe('production process restart through real Socket.IO', () => {
     expect(successData(accepted).accepted).toBe(true)
     const before = successData(gameRequestSnapshotAcknowledgementSchema.parse(await actor.timeout(5000).emitWithAck('game:request-snapshot', identity)))
     await first.crash()
-    const inspect = new MysqlMultiplayerRepository(mysqlTestConfig())
-    const saved = requireValue(inspect.load()[0])
-    inspect.close()
+    const inspect = (await MysqlMultiplayerRepository.open(mysqlTestConfig()))
+    const saved = requireValue((await inspect.load())[0])
+    await inspect.close()
     expect(saved.game?.state.stateVersion).toBe(before.view.stateVersion)
     const second = await processFor(directory.database)
     const restored: Client[] = []
@@ -145,8 +145,8 @@ describe('production process restart through real Socket.IO', () => {
       expect(output.includes(mysqlTestConfig().password)).toBe(false)
       for (const member of members) expect(output.includes(member.credential.resumeToken)).toBe(false)
     }
-    const final = new MysqlMultiplayerRepository(mysqlTestConfig())
-    expect(canonicalJson(requireValue(final.load()[0]).game?.state) === canonicalJson(saved.game?.state)).toBe(true)
-    final.close()
+    const final = (await MysqlMultiplayerRepository.open(mysqlTestConfig()))
+    expect(canonicalJson(requireValue((await final.load())[0]).game?.state) === canonicalJson(saved.game?.state)).toBe(true)
+    await final.close()
   }, 30_000)
 })

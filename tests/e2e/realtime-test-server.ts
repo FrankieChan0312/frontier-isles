@@ -11,7 +11,7 @@ import { WORKFLOW_SCENARIOS, workflowFixture } from '../../server/test/online-wo
 const config = parseServerConfig(process.env)
 if (config.nodeEnv !== 'test') throw new Error('The browser test server requires NODE_ENV=test.')
 let gameNumber = 0
-const roomService = new InMemoryRoomService({
+const roomService = await InMemoryRoomService.open({
   reconnectGraceMs: config.reconnectGraceMs, roomIdleTtlMs: config.roomIdleTtlMs,
   nextGameIdentity: () => ({ gameId: gameIdSchema.parse(`game:browser-test:${++gameNumber}`), seed: 'NETWORK-GAME-TEST-0' }),
   gameDependencies: { createState: (gameConfig, seed) => {

@@ -19,7 +19,7 @@ const origin = 'https://isles.example.test'
 const protocolVersion = REALTIME_PROTOCOL_VERSION
 
 async function fixture(production = false) {
-  const service = new InMemoryRoomService()
+  const service = (await InMemoryRoomService.open())
   const http = createFrontierHttpServer({ isReady: () => service.isReady })
   const logs: string[] = []
   const server = createRealtimeServer(http, { port: 3001, clientOrigin: origin, clientOrigins: [origin],
@@ -167,25 +167,25 @@ describe('real Socket.IO security boundary', () => {
   })
   it('bounds a slow private-view consumer, pauses the game and releases its timed receipts', async () => {
     const network = await fixture()
-    const host = successData(network.service.createRoom('Host'))
+    const host = successData((await network.service.createRoom('Host')))
     const members = [host]
-    for (let index = 1; index < 4; index += 1) members.push(successData(network.service.joinRoom(host.credential.roomCode, `Human ${index}`)))
+    for (let index = 1; index < 4; index += 1) members.push(successData((await network.service.joinRoom(host.credential.roomCode, `Human ${index}`))))
     const clients: Client[] = []
     let received = 0
     for (const [index, member] of members.entries()) {
       const client = await network.connect(); clients.push(client)
       if (index > 0) client.on('game:update', (_view, acknowledge) => { received += 1; acknowledge() })
       successData(sessionResumeAcknowledgementSchema.parse(await acknowledge(client, 'session:resume', member.credential)))
-      successData(network.service.setReady(member.credential.sessionId, requireValue(network.service.getSnapshot(host.credential.roomCode)).revision, true))
+      successData((await network.service.setReady(member.credential.sessionId, requireValue(network.service.getSnapshot(host.credential.roomCode)).revision, true)))
     }
-    successData(network.service.requestStart(host.credential.sessionId, requireValue(network.service.getSnapshot(host.credential.roomCode)).revision))
+    successData((await network.service.requestStart(host.credential.sessionId, requireValue(network.service.getSnapshot(host.credential.roomCode)).revision)))
     const game = requireValue(network.service.getGameSession(host.credential.roomCode))
     const before = game.exportPersistence().state
     for (let index = 0; index < 64; index += 1) {
-      game.publish()
+      await game.publish()
       await vi.waitFor(() => expect(received).toBeGreaterThanOrEqual((index + 1) * 3), { interval: 1 })
     }
-    game.publish()
+    await game.publish()
     await vi.waitFor(() => expect(requireValue(clients[0]).connected).toBe(false))
     expect(game.lifecycleStatus).toBe('PAUSED_RECONNECTING')
     expect(game.exportPersistence().state).toEqual(before)

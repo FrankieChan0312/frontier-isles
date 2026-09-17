@@ -23,6 +23,7 @@ import {
 import { commandRequestFingerprint } from './command-request-fingerprint.js'
 import { GameExecutionQueue, GameQueueFullError } from './game-execution-queue.js'
 import type { PersistedGame } from '../persistence/multiplayer-record.js'
+import { PersistenceError } from '../persistence/multiplayer-repository.js'
 
 export type GameSeat =
   | { readonly seatId: SeatId; readonly occupancy: 'HUMAN'; readonly sessionId: SessionId; readonly displayName: string }
@@ -38,7 +39,8 @@ export interface GameSessionDependencies {
   readonly createState?: (config: GameConfig, seed: string) => GameState
   readonly afterTransition?: (state: GameState, command: GameCommand) => void
   /** Commit the enclosing Room aggregate before acknowledging or publishing new state. */
-  readonly commit?: () => void
+  readonly commit?: () => Promise<void>
+  readonly executionQueue?: GameExecutionQueue
 }
 
 export interface GamePublication {
@@ -86,7 +88,6 @@ export class GameSession {
   readonly #humanPlayers = new Map<SessionId, PlayerId>()
   readonly #seatPlayers = new Map<SeatId, PlayerId>()
   readonly #cache = new Map<SessionId, Map<CommandId, CachedCommandResult>>()
-  readonly #playerViews = new Map<PlayerId, PlayerView>()
   readonly #queue: GameExecutionQueue
   readonly #listeners = new Set<(publication: GamePublication) => void>()
   readonly #aiAgent: AiAgent
@@ -94,7 +95,13 @@ export class GameSession {
   readonly #advanceLimit: number
   readonly #cacheLimit: number
   readonly #afterTransition: GameSessionDependencies['afterTransition']
-  readonly #commit: () => void
+  readonly #commit: () => Promise<void>
+  readonly #committedViews = new Map<SessionId, GameUpdate>()
+  #committedState: GameState | null = null
+  #committedPresence: GamePresence | null = null
+  #committedRevision = 0
+  #committedHumans = new Map<SessionId, PlayerId>()
+  #transportPaused = false
   readonly #originalSeats: readonly GameSeat[]
   #state: GameState
   #publicationRevision = 0
@@ -127,9 +134,9 @@ export class GameSession {
     this.#advanceLimit = positiveInteger(dependencies.maxAiCommandsPerAdvance ?? 256)
     this.#cacheLimit = positiveInteger(dependencies.commandCacheSize ?? 128)
     if (this.#cacheLimit > 1024) throw new Error('Command cache capacity must not exceed 1024.')
-    this.#queue = new GameExecutionQueue(dependencies.maxQueuedOperations ?? 64)
+    this.#queue = dependencies.executionQueue ?? new GameExecutionQueue(dependencies.maxQueuedOperations ?? 64)
     this.#afterTransition = dependencies.afterTransition
-    this.#commit = dependencies.commit ?? (() => {})
+    this.#commit = dependencies.commit ?? (() => Promise.resolve())
     this.#originalSeats = seats.map((seat): GameSeat => seat.occupancy === 'HUMAN'
       ? { occupancy: 'HUMAN', seatId: seat.seatId, sessionId: seat.sessionId, displayName: seat.displayName }
       : { occupancy: 'AI', seatId: seat.seatId, profileId: seat.profileId })
@@ -161,6 +168,7 @@ export class GameSession {
           && actual.controller.profileId !== player.controller.profileId)
     })) throw new Error('Game state must match authoritative seat configuration.')
     this.#turnIdentity = turnIdentity(this.#state)
+    this.acceptCommit()
   }
 
   /** Only validated server repository records may enter this composition boundary. */
@@ -182,6 +190,7 @@ export class GameSession {
     for (const cache of saved.commandCache) game.#cache.set(cache.sessionId,
       new Map(cache.entries.map((entry) => [entry.result.commandId, structuredClone(entry)])))
     game.#ownCommandKeys = new Map(saved.ownCommandKeys.map((entry) => [entry.playerId, [...entry.keys]]))
+    game.acceptCommit()
     return game
   }
 
@@ -200,7 +209,7 @@ export class GameSession {
   /** Node-only aggregate counts for bounded resource verification; never a network contract. */
   public resources(): Readonly<Record<'queue' | 'cache' | 'views' | 'listeners' | 'aiTasks' | 'aiWaiters', number>> {
     return { queue: this.#queue.size, cache: [...this.#cache.values()].reduce((sum, entries) => sum + entries.size, 0),
-      views: this.#playerViews.size, listeners: this.#listeners.size, aiTasks: this.#aiTask === null ? 0 : 1,
+      views: this.#committedViews.size, listeners: this.#listeners.size, aiTasks: this.#aiTask === null ? 0 : 1,
       aiWaiters: this.#stopChoice === null ? 0 : 1 }
   }
 
@@ -220,21 +229,22 @@ export class GameSession {
   }
 
   /** Immediate transport safety latch; this never changes core state or RNG. */
-  public setPresence(disconnectedSeats: readonly DisconnectedSeatPresence[], abandonedDeadlineMs: number | null, publish = true): void {
+  public async setPresence(disconnectedSeats: readonly DisconnectedSeatPresence[], abandonedDeadlineMs: number | null, publish = true): Promise<void> {
     if (this.#closed) return
+    this.#transportPaused = false
     if (JSON.stringify(disconnectedSeats) === JSON.stringify(this.#disconnectedSeats)
       && abandonedDeadlineMs === this.#abandonedDeadlineMs) return
     this.#disconnectedSeats = structuredClone(disconnectedSeats)
     this.#abandonedDeadlineMs = abandonedDeadlineMs
     this.#presenceEpoch += 1
-    if (publish) this.publish()
+    if (publish) await this.#publish()
   }
 
   public async replaceHuman(
     sessionId: SessionId,
     profileId: LobbyAiProfileId,
     isAuthorized: () => boolean,
-    applyRoomReplacement: () => void,
+    applyRoomReplacement: () => Promise<void>,
   ): Promise<'REPLACED' | 'NOT_AUTHORIZED' | 'NOT_REPLACEABLE' | 'BUSY'> {
     try {
       return await this.#queue.run(async () => {
@@ -247,7 +257,7 @@ export class GameSession {
         this.#humanPlayers.delete(sessionId)
         this.#cache.delete(sessionId)
         this.#presenceEpoch += 1
-        applyRoomReplacement()
+        await applyRoomReplacement()
         await this.#runAi()
         return 'REPLACED'
       })
@@ -263,7 +273,10 @@ export class GameSession {
     this.#presenceEpoch += 1
     this.#listeners.clear()
     this.#cache.clear()
-    this.#playerViews.clear()
+    this.#committedViews.clear()
+    this.#committedHumans.clear()
+    this.#committedState = null
+    this.#committedPresence = null
   }
 
   #controller(playerId: PlayerId): PlayerController {
@@ -276,14 +289,8 @@ export class GameSession {
   }
 
   #playerView(playerId: PlayerId): PlayerView {
-    // At most four projections for the current immutable state; never retain old versions.
-    // A detached copy prevents an AI or caller from poisoning a later viewer's projection.
-    let cached = this.#playerViews.get(playerId)
-    if (cached === undefined) {
-      cached = gameEngine.createPlayerView(this.#state, playerId)
-      this.#playerViews.set(playerId, cached)
-    }
-    const view = structuredClone(cached)
+    // AI needs a fresh candidate view. Only committed Human snapshots are cached (at most four).
+    const view = gameEngine.createPlayerView(this.#state, playerId)
     return { ...view, self: { ...view.self, controller: this.#controller(view.self.id) },
       opponents: view.opponents.map((player) => ({ ...player, controller: this.#controller(player.id) })) }
   }
@@ -296,24 +303,47 @@ export class GameSession {
     return () => this.#listeners.delete(listener)
   }
 
-  public snapshot(sessionId: SessionId, events: readonly GameEvent[] = []): GameUpdate {
-    const viewer = this.#humanPlayers.get(sessionId)
-    if (viewer === undefined) throw new Error('Snapshot requires an authoritative Human session.')
-    return gameUpdateSchema.parse({
-      protocolVersion: REALTIME_PROTOCOL_VERSION, roomCode: this.roomCode, gameId: this.gameId,
-      publicationRevision: this.#publicationRevision, lifecycleStatus: this.lifecycleStatus,
-      presence: this.presenceSnapshot,
-      aiThinking: this.lifecycleStatus === 'ACTIVE'
-        && this.#controller(nextGameDecisionActor(this.#state)).type === 'AI',
-      view: this.#playerView(viewer),
-      events: createPlayerEventViews(events, viewer),
-    })
+  /** Immediate cancellation latch is separate from the durable presence candidate. */
+  public pauseTransport(): void { this.#transportPaused = true; this.#presenceEpoch += 1; this.#stopChoice?.() }
+
+  /** Called only after the enclosing aggregate commits. No candidate view escapes during I/O. */
+  public acceptCommit(): void {
+    this.#committedViews.clear()
+    this.#committedState = this.#state
+    this.#committedPresence = this.presenceSnapshot
+    this.#committedRevision = this.#publicationRevision
+    this.#committedHumans = new Map(this.#humanPlayers)
+  }
+
+  public snapshot(sessionId: SessionId): GameUpdate {
+    let snapshot = this.#committedViews.get(sessionId)
+    if (snapshot === undefined) {
+      const viewer = this.#committedHumans.get(sessionId)
+      const state = this.#committedState
+      const presence = this.#committedPresence
+      if (viewer === undefined || state === null || presence === null) throw new Error('Snapshot requires a committed Human session.')
+      const controller = (playerId: PlayerId): PlayerController => {
+        const replacement = presence.replacements.find((entry) => this.#seatPlayers.get(entry.seatId) === playerId)
+        const original = state.players[playerId]?.controller
+        if (original === undefined) throw new Error('Committed player invariant failed.')
+        return replacement === undefined ? original : { type: 'AI', profileId: replacement.profileId as AiProfileId }
+      }
+      const view = gameEngine.createPlayerView(state, viewer)
+      snapshot = gameUpdateSchema.parse({ protocolVersion: REALTIME_PROTOCOL_VERSION,
+        roomCode: this.roomCode, gameId: this.gameId, publicationRevision: this.#committedRevision,
+        lifecycleStatus: presence.lifecycleStatus, presence,
+        aiThinking: presence.lifecycleStatus === 'ACTIVE' && controller(nextGameDecisionActor(state)).type === 'AI',
+        view: { ...view, self: { ...view.self, controller: controller(view.self.id) },
+          opponents: view.opponents.map((player) => ({ ...player, controller: controller(player.id) })) }, events: [] })
+      this.#committedViews.set(sessionId, snapshot)
+    }
+    return structuredClone(snapshot)
   }
 
   /** Focused command boundary; explicit AI advances also use this same execution queue. */
   public submitHuman(sessionId: SessionId, request: GameCommandRequest): Promise<GameCommandAcknowledgement> {
     const detached = structuredClone(request)
-    return this.#enqueueHuman(() => this.#executeHuman(sessionId, detached).acknowledgement)
+    return this.#enqueueHuman(async () => (await this.#executeHuman(sessionId, detached)).acknowledgement)
   }
 
   /** Complete transport pipeline. Revalidate the live attachment after admission and before cache lookup. */
@@ -325,10 +355,10 @@ export class GameSession {
     const detached = structuredClone(request)
     return this.#enqueueHuman(async () => {
       if (!isAuthorized()) return createSafeErrorAcknowledgement('NOT_ROOM_MEMBER', 'Resume your Human seat before playing.')
-      // No asynchronous work occurs before publish commits state, result and revision together.
-      const execution = this.#executeHuman(sessionId, detached, false)
+      // This Room queue remains held across the durable transaction and publication.
+      const execution = await this.#executeHuman(sessionId, detached, false)
       if (execution.changed) {
-        this.publish()
+        await this.#publish()
         await this.#runAi()
       }
       return execution.acknowledgement
@@ -342,7 +372,7 @@ export class GameSession {
     }
   }
 
-  #executeHuman(sessionId: SessionId, request: GameCommandRequest, commitAccepted = true): HumanExecution {
+  async #executeHuman(sessionId: SessionId, request: GameCommandRequest, commitAccepted = true): Promise<HumanExecution> {
     const unchanged = (acknowledgement: GameCommandAcknowledgement): HumanExecution => ({ acknowledgement, changed: false })
     if (this.#stopping) return unchanged(createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The multiplayer server is stopping. Resume shortly.'))
     const actorId = this.#humanPlayers.get(sessionId)
@@ -357,7 +387,7 @@ export class GameSession {
       ? { ok: true, data: structuredClone(cached.result) }
       : createSafeErrorAcknowledgement('COMMAND_ID_CONFLICT', 'This command ID was already used for a different request. Resynchronize before a new action.'))
     if (this.#closed) return unchanged(createSafeErrorAcknowledgement('ROOM_CLOSED', 'This online game has closed.'))
-    if (this.lifecycleStatus === 'PAUSED_RECONNECTING' || this.lifecycleStatus === 'PAUSED_REPLACEMENT_REQUIRED') {
+    if (this.#transportPaused || this.lifecycleStatus === 'PAUSED_RECONNECTING' || this.lifecycleStatus === 'PAUSED_REPLACEMENT_REQUIRED') {
       return unchanged(createSafeErrorAcknowledgement('GAME_PAUSED', 'The game is paused until every Human reconnects or an expired seat is replaced.'))
     }
     if (this.#failed) return unchanged(createSafeErrorAcknowledgement('GAME_UNAVAILABLE', 'The game could not continue. Request a fresh snapshot.'))
@@ -376,19 +406,21 @@ export class GameSession {
       if (oldest !== undefined) cache.delete(oldest)
     }
     this.#cache.set(sessionId, cache)
-    if (!result.ok || commitAccepted) this.#commit()
+    if (!result.ok || commitAccepted) { await this.#commit(); this.acceptCommit() }
     return { acknowledgement: { ok: true, data: structuredClone(data) }, changed: result.ok }
   }
 
   /** Publish a committed transition or lifecycle change; every emission is viewer-specific. */
-  public publish(): void {
-    if (this.#stopping) return
+  public publish(): Promise<void> { return this.#queue.run(async () => { if (!this.#stopping) await this.#publish() }) }
+
+  async #publish(): Promise<void> {
     this.#publicationRevision += 1
-    this.#commit()
+    await this.#commit()
+    this.acceptCommit()
     const events = this.#pendingEvents
     this.#pendingEvents = []
-    for (const sessionId of this.#humanPlayers.keys()) {
-      const publication = { sessionId, update: this.snapshot(sessionId, events) }
+    for (const [sessionId, viewer] of this.#committedHumans) {
+      const publication = { sessionId, update: { ...this.snapshot(sessionId), events: [...createPlayerEventViews(events, viewer)] } }
       for (const listener of this.#listeners) listener(publication)
     }
   }
@@ -415,13 +447,12 @@ export class GameSession {
       this.#ownCommandKeys.set(actorId, keys)
     }
     this.#state = state
-    this.#playerViews.clear()
     this.#pendingEvents = [...this.#pendingEvents, ...events]
   }
 
   async #runAi(): Promise<void> {
     try {
-      for (let count = 0; !this.#stopping && this.lifecycleStatus === 'ACTIVE'; count += 1) {
+      for (let count = 0; !this.#stopping && !this.#transportPaused && this.lifecycleStatus === 'ACTIVE'; count += 1) {
         const actorId = nextGameDecisionActor(this.#state)
         const controller = this.#controller(actorId)
         if (controller.type !== 'AI') return
@@ -441,7 +472,7 @@ export class GameSession {
         })
         const selected = await Promise.race([choice.then((command) => ({ kind: 'COMMAND' as const, command })), stopped])
           .finally(() => { this.#stopChoice = null })
-        if (selected.kind === 'STOPPED' || this.#stopping || this.lifecycleStatus !== 'ACTIVE') return
+        if (selected.kind === 'STOPPED' || this.#transportPaused || this.#stopping || this.lifecycleStatus !== 'ACTIVE') return
         const command = selected.command
         if (presenceEpoch !== this.#presenceEpoch) continue
         if (version !== this.#state.stateVersion) throw new Error('Game mutation escaped the execution queue.')
@@ -456,12 +487,13 @@ export class GameSession {
         if (!result.ok) throw new Error('AI submitted an illegal command.')
         this.#aiCommandCount += 1
         this.#accept(result.state, result.events, actorId, command)
-        this.publish()
+        await this.#publish()
       }
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof PersistenceError) throw error
       if (this.#stopping || this.lifecycleStatus !== 'ACTIVE') return
       this.#failed = true
-      this.publish()
+      await this.#publish()
     }
   }
 }

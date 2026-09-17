@@ -70,7 +70,7 @@ describe('authoritative GameSession', () => {
     const updates: GameUpdate[] = []
     game.subscribe(({ update }) => updates.push(update))
     successData(await game.submitHuman(north, requestFor(game, north, { type: 'BUY_DEVELOPMENT_CARD' })))
-    game.publish()
+    await game.publish()
     expect(updates).toHaveLength(4)
     for (const update of updates) {
       expect(gameUpdateSchema.safeParse(update).success).toBe(true)
@@ -107,7 +107,7 @@ describe('authoritative GameSession', () => {
         : { type: 'PLACE_INITIAL_ROAD', edgeId: requireValue(view.legalActions.legalInitialRoadEdgeIds?.[0]) }
       const before = transitions
       expect(successData(await game.submitHuman(session, requestFor(game, session, command))).accepted).toBe(true)
-      game.publish()
+      await game.publish()
       await game.advanceAi()
       observedAiAdvancement = transitions > before + 1
     }
@@ -143,7 +143,7 @@ describe('authoritative GameSession', () => {
       { type: 'REJECT_TRADE', tradeId: 'trade:pause' as TradeId }))).accepted).toBe(false)
     expect(successData(await game.submitHuman(north, requestFor(game, north,
       { type: 'REJECT_TRADE', tradeId: 'trade:pause' as TradeId }))).accepted).toBe(true)
-    game.publish()
+    await game.publish()
     await game.advanceAi()
     expect(transitions).toBeGreaterThan(1)
     expect(game.lifecycleStatus).toBe('ACTIVE')
@@ -175,7 +175,7 @@ describe('authoritative GameSession', () => {
     game.subscribe(({ update }) => updates.push(update))
     expect(successData(await game.submitHuman(north, requestFor(game, north,
       { type: 'DISCARD_RESOURCES', resources: { ...createEmptyResourceBag(), BRICK: 4 } }))).accepted).toBe(true)
-    game.publish()
+    await game.publish()
     expect(updates.find((update) => update.view.self.id === game.playerForSession(east))?.events)
       .toContainEqual(expect.objectContaining({ type: 'RESOURCES_DISCARDED', resources: null }))
     await game.advanceAi()

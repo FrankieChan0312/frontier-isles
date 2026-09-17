@@ -21,7 +21,7 @@ describe('active-game replacement through actual sockets', () => {
     const before = await networkSnapshot(network, host)
     requireValue(network.clients[1]).disconnect()
     await vi.waitFor(() => expect(network.snapshot().seats[1]).toMatchObject({ connectionStatus: 'RECONNECTING' }))
-    network.runtime.advanceBy(30_000)
+    await network.runtime.advanceBy(30_000)
     const request: RoomReplaceHumanRequest = { protocolVersion: REALTIME_PROTOCOL_VERSION, gameId: before.gameId,
       expectedRevision: network.snapshot().revision, seatId: 'EAST', profileId: 'BUILDER' }
     expect(await other.timeout(5_000).emitWithAck('room:replace-human', request)).toMatchObject({ ok: false, error: { code: 'NOT_HOST' } })
@@ -70,7 +70,7 @@ describe('active-game replacement through actual sockets', () => {
     const playerId = (await networkSnapshot(network, north)).view.self.id
     north.disconnect()
     await vi.waitFor(() => expect(network.snapshot().seats[0]).toMatchObject({ connectionStatus: 'RECONNECTING' }))
-    network.runtime.advanceBy(30_000)
+    await network.runtime.advanceBy(30_000)
     expect(network.snapshot().hostSeatId).toBe('EAST')
     expect(state).toBe(before)
     successData(roomReplaceHumanAcknowledgementSchema.parse(await east.timeout(5_000).emitWithAck('room:replace-human', {

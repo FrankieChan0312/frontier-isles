@@ -35,7 +35,7 @@ it('bounded alpha load releases Room, queue, cache, listener, receipt, timer and
       const task = system.schedule(delay, () => { timers.delete(identity); action() })
       return { cancel: () => { timers.delete(identity); task.cancel() } }
     } }
-    const service = new InMemoryRoomService({ runtime })
+    const service = (await InMemoryRoomService.open({ runtime }))
     const http = createFrontierHttpServer({ isReady: () => service.isReady })
     const server = createRealtimeServer(http, { nodeEnv: 'test', port: 3001, clientOrigin: 'http://127.0.0.1',
       reconnectGraceMs: 30_000, roomIdleTtlMs: 1_800_000 }, { roomService: service })

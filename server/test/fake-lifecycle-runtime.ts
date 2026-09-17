@@ -4,7 +4,7 @@ import type {
 } from '../src/lobby/lifecycle-runtime.js'
 
 interface FakeTask {
-  readonly callback: () => void
+  readonly callback: () => void | Promise<void>
   readonly dueAt: number
   readonly sequence: number
   cancelled: boolean
@@ -20,7 +20,7 @@ export class FakeLifecycleRuntime implements RoomLifecycleRuntime {
   }
   public get activeTaskCount(): number { return this.#tasks.filter((task) => !task.cancelled).length }
 
-  public schedule(delayMs: number, callback: () => void): ScheduledLifecycleTask {
+  public schedule(delayMs: number, callback: () => void | Promise<void>): ScheduledLifecycleTask {
     const task: FakeTask = {
       callback,
       dueAt: this.#currentTime + delayMs,
@@ -31,7 +31,7 @@ export class FakeLifecycleRuntime implements RoomLifecycleRuntime {
     return { cancel: () => { task.cancelled = true } }
   }
 
-  public advanceBy(durationMs: number): void {
+  public async advanceBy(durationMs: number): Promise<void> {
     const target = this.#currentTime + durationMs
     while (true) {
       const next = this.#tasks
@@ -40,7 +40,7 @@ export class FakeLifecycleRuntime implements RoomLifecycleRuntime {
       if (next === undefined) break
       next.cancelled = true
       this.#currentTime = next.dueAt
-      next.callback()
+      await next.callback()
     }
     this.#currentTime = target
   }

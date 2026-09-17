@@ -30,10 +30,10 @@ export interface NetworkGame {
 export async function networkGame(humans = 2, dependencies: GameSessionDependencies = {}, seed = 'NETWORK-GAME-TEST-0'): Promise<NetworkGame> {
   let gameNumber = 0
   const runtime = new FakeLifecycleRuntime()
-  const service = new InMemoryRoomService({ runtime,
+  const service = (await InMemoryRoomService.open({ runtime,
     // NORTH starts with this fixed seed; AI-first and private-response pauses have separate tests.
     nextGameIdentity: () => ({ gameId: gameIdSchema.parse(gameNumber++ === 0 ? 'game:network-test' : `game:network-test:${gameNumber}`), seed }),
-    gameDependencies: dependencies })
+    gameDependencies: dependencies }))
   const httpServer = createFrontierHttpServer()
   const realtimeServer = createRealtimeServer(httpServer, { port: 3001, clientOrigin: 'http://127.0.0.1:5173',
     nodeEnv: 'test', reconnectGraceMs: 30_000, roomIdleTtlMs: 1_800_000 }, { roomService: service })
