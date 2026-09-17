@@ -61,11 +61,16 @@ export class MysqlStore implements MultiplayerRepository {
       await store.#withConnection(async (connection) => {
         // Metadata is privilege-filtered. Refuse an audit that cannot see every object.
         // Direct database grants are intentional; role-derived authority is not inferred.
+        // mysql.db escapes underscores unless partial_revokes makes names literal.
+        // Global grants may hide database-specific restrictions under partial revokes.
         const privileges = await store.#rows(connection, `SELECT PRIVILEGE_TYPE AS privilege
-          FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA=DATABASE()
+          FROM information_schema.SCHEMA_PRIVILEGES
+          WHERE CAST(CASE WHEN @@partial_revokes=0 THEN REPLACE(TABLE_SCHEMA,CONCAT(CHAR(92),'_'),'_')
+            ELSE TABLE_SCHEMA END AS BINARY)=CAST(DATABASE() AS BINARY)
           AND GRANTEE=CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',1)),'@',QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',-1)))
           UNION SELECT PRIVILEGE_TYPE AS privilege FROM information_schema.USER_PRIVILEGES
-          WHERE GRANTEE=CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',1)),'@',QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',-1)))`)
+          WHERE @@partial_revokes=0
+          AND GRANTEE=CONCAT(QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',1)),'@',QUOTE(SUBSTRING_INDEX(CURRENT_USER(),'@',-1)))`)
         const granted = new Set(privileges.map((row) => row.privilege))
         for (const privilege of ['SELECT', 'TRIGGER', 'EVENT', 'ALTER ROUTINE']) {
           if (!granted.has(privilege)) throw new Error('Deployment metadata authority required.')

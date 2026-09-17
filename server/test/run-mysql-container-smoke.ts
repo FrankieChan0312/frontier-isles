@@ -1,7 +1,7 @@
 /** Owned local production/TLS qualification only. No cloud endpoint or image publication. */
 import { spawn } from 'node:child_process'
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import { createConnection, type Connection, type RowDataPacket } from 'mysql2/promise'
@@ -15,6 +15,7 @@ import { requireValue, successData } from './game-test-helpers.js'
 import { canonicalJson } from '../src/persistence/canonical-json.js'
 import { decodeMultiplayerRecord } from '../src/persistence/multiplayer-repository.js'
 import type { MultiplayerRecord } from '../src/persistence/multiplayer-record.js'
+import { MysqlStore } from '../src/persistence/mysql-store.js'
 
 const owner = `frontier-preflight-${randomUUID()}`
 const label = 'frontier-isles.preflight'
@@ -36,6 +37,8 @@ let dbPort = 0
 let appUrl = ''
 let ca = ''
 let blockedStaticRoots = 0
+const rejectedTls: string[] = []
+const privateMaterial: string[] = []
 const tokens: string[] = []
 const rawResumeTokens: string[] = []
 
@@ -49,7 +52,8 @@ async function docker(args: readonly string[], environment: NodeJS.ProcessEnv = 
     child.once('error', () => { clearTimeout(timeout); reject(new Error('Owned Docker operation unavailable.')) })
     child.once('close', (code) => {
       clearTimeout(timeout)
-      const leaked = [...Object.values(passwords), ...tokens].some((secret) => output.includes(secret))
+      const leaked = [...Object.values(passwords), ...tokens, ...privateMaterial].some((secret) => output.includes(secret))
+        || /-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----/u.test(output)
       if (args[0] === 'build' && !leaked) writeFileSync('server/logs/preflight-production-image-build.log', output)
       if (code === 0 && !leaked) done(output.trim())
       else reject(new Error('Owned Docker operation failed or exposed private data.'))
@@ -68,6 +72,13 @@ async function remove(name: string): Promise<void> {
 async function db(user = 'root', password = passwords.root): Promise<Connection> {
   return createConnection({ host: 'localhost', port: dbPort, user, password, database: databaseName, connectTimeout: 2000,
     ssl: { ca, rejectUnauthorized: true, verifyIdentity: true, minVersion: 'TLSv1.2' } })
+}
+async function createRuntimeAccount(administrator: Connection): Promise<void> {
+  await administrator.query('CREATE USER ?@? IDENTIFIED BY ?', ['frontier_runtime', '%', passwords.runtime])
+  await administrator.query("GRANT SELECT ON frontier_isles_mysql_test.persistence_schema TO 'frontier_runtime'@'%'")
+  await administrator.query("GRANT UPDATE (id) ON frontier_isles_mysql_test.persistence_schema TO 'frontier_runtime'@'%'")
+  await administrator.query("GRANT SELECT,INSERT,UPDATE,DELETE ON frontier_isles_mysql_test.rooms TO 'frontier_runtime'@'%'")
+  await administrator.query("GRANT SELECT,INSERT ON frontier_isles_mysql_test.quarantine TO 'frontier_runtime'@'%'")
 }
 async function ready(): Promise<void> {
   for (let attempt = 0; attempt < 300; attempt += 1) {
@@ -112,20 +123,24 @@ try {
   await docker(['build', '--iidfile', iid, '.'])
   image = readFileSync(iid, 'utf8').trim()
   assert.match(image, /^sha256:[a-f0-9]{64}$/u)
-  // Explicit local certificate permission is required by this task's operator instructions.
+  // Human-authorized disposable local identities only; never install into a trust store.
   step = 'disposable-local-certificates'
   const certContainer = `${owner}-certificates`
   await create(certContainer, ['--network', 'none', '--mount', `type=bind,source=${certificates},target=/certs`,
     '--entrypoint', 'bash', mysqlImage, '-ec',
-    'umask 077; openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=Frontier-Local-Test-CA -keyout /certs/ca-key.pem -out /certs/ca.pem >/dev/null 2>&1; openssl req -newkey rsa:2048 -nodes -subj /CN=frontier-mysql -keyout /certs/server-key.pem -out /certs/server.csr >/dev/null 2>&1; printf "subjectAltName=DNS:frontier-mysql,DNS:localhost\\nextendedKeyUsage=serverAuth\\n" >/certs/server.ext; openssl x509 -req -in /certs/server.csr -CA /certs/ca.pem -CAkey /certs/ca-key.pem -CAcreateserial -days 2 -extfile /certs/server.ext -out /certs/server.pem >/dev/null 2>&1; chmod 644 /certs/ca.pem /certs/server.pem; chown mysql:mysql /certs/server-key.pem'])
+    'umask 077; openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=Frontier-Local-Test-CA -keyout /certs/ca-key.pem -out /certs/ca.pem >/dev/null 2>&1; openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=Frontier-Untrusted-Test-CA -keyout /certs/untrusted-key.pem -out /certs/untrusted.pem >/dev/null 2>&1; openssl req -newkey rsa:2048 -nodes -subj /CN=frontier-mysql -keyout /certs/server-key.pem -out /certs/server.csr >/dev/null 2>&1; printf "subjectAltName=DNS:frontier-mysql,DNS:localhost\\nextendedKeyUsage=serverAuth\\n" >/certs/server.ext; openssl x509 -req -in /certs/server.csr -CA /certs/ca.pem -CAkey /certs/ca-key.pem -CAcreateserial -days 2 -extfile /certs/server.ext -out /certs/server.pem >/dev/null 2>&1; chmod 644 /certs/ca.pem /certs/server.pem /certs/untrusted.pem; chown mysql:mysql /certs/server-key.pem'])
   await docker(['start', '--attach', certContainer])
   await remove(certContainer)
   ca = readFileSync(join(certificates, 'ca.pem'), 'utf8')
+  for (const file of ['ca-key.pem', 'server-key.pem', 'untrusted-key.pem']) {
+    const key = readFileSync(join(certificates, file), 'utf8')
+    privateMaterial.push(key, key.replace(/-----[^\n]+-----|\s/gu, ''))
+  }
   step = 'owned-network-and-database'
   await docker(['network', 'create', '--label', `${label}=${owner}`, owner])
   networkOwned = true
   const database = `${owner}-mysql`
-  await create(database, ['--network', owner, '--network-alias', 'frontier-mysql', '--publish', '127.0.0.1::3306',
+  await create(database, ['--network', owner, '--network-alias', 'frontier-mysql', '--network-alias', 'frontier-mysql-mismatch', '--publish', '127.0.0.1::3306',
     '--env', 'MYSQL_ROOT_PASSWORD', '--env', 'MYSQL_ROOT_HOST', '--env', 'MYSQL_USER', '--env', 'MYSQL_PASSWORD', '--env', 'MYSQL_DATABASE',
     '--memory', '768m', '--cpus', '2', '--pids-limit', '256', '--tmpfs', '/var/lib/mysql:rw,noexec,nosuid,size=512m',
     ...['ca.pem', 'server.pem', 'server-key.pem'].flatMap((file) => ['--mount', `type=bind,source=${join(certificates, file)},target=/certs/${file},readonly`]), mysqlImage,
@@ -153,12 +168,53 @@ try {
   await remove(bootstrap)
   const administrator = await db()
   try {
-    await administrator.query('CREATE USER ?@? IDENTIFIED BY ? REQUIRE SSL', ['frontier_runtime', '%', passwords.runtime])
-    await administrator.query("GRANT SELECT ON frontier_isles_mysql_test.persistence_schema TO 'frontier_runtime'@'%'")
-    await administrator.query("GRANT SELECT,INSERT,UPDATE,DELETE ON frontier_isles_mysql_test.rooms TO 'frontier_runtime'@'%'")
-    await administrator.query("GRANT SELECT,INSERT ON frontier_isles_mysql_test.quarantine TO 'frontier_runtime'@'%'")
+    await createRuntimeAccount(administrator)
+    await administrator.query("ALTER USER 'frontier_runtime'@'%' REQUIRE SSL")
   } finally { await administrator.end() }
   const runtimeEnv = { ...env, MYSQL_USER: 'frontier_runtime', MYSQL_PASSWORD: passwords.runtime, MYSQL_SCHEMA_MODE: 'verify' }
+  async function rejectTls(reason: string, hostname: string, caFile = 'ca.pem'): Promise<void> {
+    step = `reject-${reason}`
+    const name = `${owner}-${reason}`
+    await create(name, ['--network', owner, '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
+      '--mount', `type=bind,source=${join(certificates, caFile)},target=/run/frontier/mysql-ca.pem,readonly`,
+      ...variables, image], { ...runtimeEnv, MYSQL_HOST: hostname })
+    await docker(['start', name])
+    assert.equal(await docker(['wait', name]), '1')
+    const output = await docker(['logs', name])
+    assert.ok(output.includes('PERSISTENCE_OPEN_FAILED') && output.includes('STARTUP_FAILED'))
+    assert.equal(output.includes('SERVER_LISTENING'), false)
+    await remove(name)
+    rejectedTls.push(reason)
+  }
+  await rejectTls('untrusted-ca', 'frontier-mysql', 'untrusted.pem')
+  await rejectTls('hostname-mismatch', 'frontier-mysql-mismatch')
+  step = 'plaintext-fixture'
+  const plaintext = `${owner}-plaintext`
+  await create(plaintext, ['--network', owner, '--network-alias', 'frontier-plaintext', '--publish', '127.0.0.1::3306',
+    '--env', 'MYSQL_ROOT_PASSWORD', '--env', 'MYSQL_ROOT_HOST', '--env', 'MYSQL_USER', '--env', 'MYSQL_PASSWORD', '--env', 'MYSQL_DATABASE',
+    '--memory', '768m', '--cpus', '2', '--pids-limit', '256', '--tmpfs', '/var/lib/mysql:rw,noexec,nosuid,size=512m', mysqlImage,
+    '--tls-version=', '--auto-generate-certs=OFF', '--mysqlx=OFF', '--innodb-flush-log-at-trx-commit=1', '--sync-binlog=1', '--max-connections=24'])
+  await docker(['start', plaintext])
+  const plainBinding = await docker(['port', plaintext, '3306/tcp'])
+  assert.match(plainBinding, /^127\.0\.0\.1:\d+$/u)
+  const plainConfig = { host: '127.0.0.1', port: Number(plainBinding.split(':')[1]), database: databaseName,
+    user: 'frontier_bootstrap', password: passwords.bootstrap, ca: null, initialize: true }
+  let plainReady = false
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    try { const connection = await createConnection({ host: plainConfig.host, port: plainConfig.port,
+      user: plainConfig.user, password: plainConfig.password, database: databaseName, connectTimeout: 1000 })
+      await connection.end(); plainReady = true; break
+    } catch { await new Promise<void>((done) => setTimeout(done, 1000)) }
+  }
+  assert.equal(plainReady, true)
+  await MysqlStore.prepareSchema(plainConfig)
+  const plainAdmin = await createConnection({ host: plainConfig.host, port: plainConfig.port, user: 'root', password: passwords.root })
+  try { await createRuntimeAccount(plainAdmin) } finally { await plainAdmin.end() }
+  // Prove the same runtime credentials/schema work over plaintext before testing no downgrade.
+  const plainRepository = await MysqlStore.open({ ...plainConfig, user: 'frontier_runtime', password: passwords.runtime, initialize: false })
+  try { assert.equal((await plainRepository.load()).length, 0) } finally { await plainRepository.close() }
+  await rejectTls('plaintext-downgrade', 'frontier-plaintext')
+  await remove(plaintext)
   step = 'invalid-static-root-fails-closed'
   for (const staticRoot of ['', '/app/missing-public']) {
     const invalid = `${owner}-invalid-${blockedStaticRoots}`
@@ -194,6 +250,9 @@ try {
   const mounts = await docker(['inspect', '--format', '{{range .Mounts}}{{.Destination}} {{end}}', app])
   assert.equal(mounts.includes('/data'), false)
   assert.equal(mounts.includes('/run/frontier/mysql-ca.pem'), true)
+  assert.equal(await docker(['inspect', '--format', '{{range .Mounts}}{{if eq .Destination "/run/frontier/mysql-ca.pem"}}{{.RW}}{{end}}{{end}}', app]), 'false')
+  assert.equal((await docker(['exec', app, 'node', '--input-type=module', '-e',
+    "import {createConnection} from 'mysql2/promise';import {readFileSync} from 'node:fs';const db=await createConnection({host:process.env.MYSQL_HOST,user:process.env.MYSQL_USER,password:process.env.MYSQL_PASSWORD,database:process.env.MYSQL_DATABASE,ssl:{ca:readFileSync(process.env.MYSQL_TLS_CA_FILE,'utf8'),rejectUnauthorized:true,verifyIdentity:true,minVersion:'TLSv1.2'}});const [rows]=await db.query(\"SHOW SESSION STATUS LIKE 'Ssl_cipher'\");console.log(rows.length===1&&rows[0].Value.length>0?'VERIFIED_TLS_CIPHER':'MISSING_TLS');await db.end();"])), 'VERIFIED_TLS_CIPHER')
   step = 'legal-command'
   const protocolVersion = REALTIME_PROTOCOL_VERSION
   const members: RoomSessionData[] = []
@@ -228,6 +287,10 @@ try {
     step = `${mode}-recovery`
     if (mode === 'crash') { await docker(['kill', '--signal=KILL', app]); await docker(['start', app]) }
     else await docker(['restart', '--time', '30', app])
+    // Docker reassigns an ephemeral host port after a stop/start on this platform.
+    const recoveredBinding = await docker(['port', app, '3001/tcp'])
+    assert.match(recoveredBinding, /^127\.0\.0\.1:\d+$/u)
+    appUrl = `http://${recoveredBinding}`
     await ready()
     const recovered = await stored()
     assert.equal(canonicalJson(recovered.game?.state) === canonicalJson(saved.game?.state), true)
@@ -259,9 +322,12 @@ try {
       await docker(['network', 'rm', owner]); networkOwned = false
     }
     directory.remove()
+    assert.equal(existsSync(directory.path), false)
   } catch { passed = false; process.exitCode = 1; console.error('LOCAL_MYSQL_PRODUCTION_CLEANUP_FAILED') }
   const summary = { code: 'LOCAL_MYSQL_PRODUCTION', passed, image, owner, ownedResourcesRemoved: containers.length === 0 && !networkOwned,
     productionTls: passed, restrictedRuntime: passed, sqliteRequired: false, blockedStaticRoots,
+    rejectedTls, readonlyCaMount: passed, negotiatedTlsCipher: passed, certificatesRemoved: !existsSync(directory.path),
+    privateMaterialAbsent: passed, globalTrustChanged: false,
     humans: passed ? 4 : 0, legalCommands: passed ? 1 : 0, exactReplays: passed ? 2 : 0,
     starts: passed ? 3 : 0, crashRecovery: passed, gracefulRestart: passed, exactStateAndRng: passed,
     cloudAccessed: false, pushed: false, deployed: false }

@@ -38,7 +38,7 @@ function textEntries(archive: Buffer): readonly string[] {
 function files(root: string): readonly string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? files(join(root, entry.name)) : [join(root, entry.name)])
 }
-const counts = { traces: 0, reports: 0, tokens: 0, sessionIdentities: 0, digests: 0, fingerprints: 0, authoritativeRng: 0 }
+const counts = { traces: 0, reports: 0, tokens: 0, sessionIdentities: 0, digests: 0, fingerprints: 0, authoritativeRng: 0, privateKeys: 0 }
 try {
   const root = resolve(process.argv[2] ?? 'test-results')
   for (const file of files(root).filter((path) => /online|lobby|mysql|async|preflight/iu.test(path))) {
@@ -48,6 +48,7 @@ try {
     const entries = archive ? textEntries(readFileSync(file)) : [readFileSync(file, 'utf8')]
     if (archive) counts.traces += 1; else counts.reports += 1
     for (const text of entries) {
+      counts.privateKeys += [...text.matchAll(/-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----/gu)].length
       counts.tokens += [...text.matchAll(/["\\]+resumeToken["\\]+\s*:\s*["\\]+[A-Za-z0-9_-]{43}["\\]+/gu)].length
       counts.sessionIdentities += [...text.matchAll(/["\\]+sessionId["\\]+\s*:\s*["\\]+[A-Za-z0-9_-]{24}["\\]+/gu)].length
       counts.digests += [...text.matchAll(/["\\]+(?:resumeTokenDigest|tokenDigest)["\\]+\s*:\s*["\\]+[A-Za-z0-9_-]{43}["\\]+/gu)].length
@@ -55,7 +56,7 @@ try {
       counts.authoritativeRng += [...text.matchAll(/["\\]+random["\\]+\s*:\s*\{[^}]{0,400}["\\]+drawCount["\\]+\s*:\s*\d+/gu)].length
     }
   }
-  const passed = counts.tokens + counts.sessionIdentities + counts.digests + counts.fingerprints + counts.authoritativeRng === 0
+  const passed = counts.tokens + counts.sessionIdentities + counts.digests + counts.fingerprints + counts.authoritativeRng + counts.privateKeys === 0
   const report = { code: 'ONLINE_ARTIFACT_AUDIT', passed, ...counts }
   mkdirSync('logs', { recursive: true }); writeFileSync('logs/goal-c-12-artifact-audit.json', JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report)); if (!passed) process.exitCode = 1

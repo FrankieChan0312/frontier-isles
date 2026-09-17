@@ -11,6 +11,12 @@ async function runtimeConnection(): Promise<Connection> {
   const { host, port, database, user, password } = restrictedMysqlConfig()
   return createConnection({ host, port, database, user, password, connectTimeout: 2000 })
 }
+async function ownedRootConnection(): Promise<Connection> {
+  const config = mysqlTestConfig()
+  const password = process.env.MYSQL_ROOT_PASSWORD
+  if (password === undefined || !/^[0-9a-f]{48}$/u.test(password)) throw new Error('Owned root credential unavailable.')
+  return createConnection({ host: config.host, port: config.port, database: config.database, user: 'root', password })
+}
 describe('deployment schema authority and restricted runtime', () => {
   it('audits with deployment authority and refuses incomplete runtime metadata visibility', async () => {
     await MysqlStore.prepareSchema({ ...mysqlTestConfig(), initialize: false })
@@ -19,13 +25,41 @@ describe('deployment schema authority and restricted runtime', () => {
     expect(await runtime.load()).toEqual([])
     await runtime.close()
   })
+  it('permits the runtime admission row lock', async () => {
+    const runtime = await runtimeConnection()
+    try {
+      await runtime.beginTransaction()
+      await runtime.query('SELECT id FROM persistence_schema WHERE id=1 FOR UPDATE')
+    } finally { await runtime.rollback(); await runtime.end() }
+  })
+  it('does not infer global authority when partial revokes can hide schema objects', async () => {
+    const config = mysqlTestConfig()
+    const root = await ownedRootConnection()
+    const globalConfig = { ...config, user: 'frontier_metadata_global', initialize: false }
+    try {
+      await root.query('CREATE USER ?@? IDENTIFIED BY ?', [globalConfig.user, '%', config.password])
+      await root.query("GRANT SELECT,TRIGGER,EVENT,ALTER ROUTINE ON *.* TO 'frontier_metadata_global'@'%'")
+      await MysqlStore.prepareSchema(globalConfig)
+      await root.query('SET GLOBAL partial_revokes=ON')
+      await root.query("REVOKE TRIGGER ON frontier_isles_mysql_test.* FROM 'frontier_metadata_global'@'%'")
+      await expect(MysqlStore.prepareSchema(globalConfig)).rejects.toThrow('PERSISTENCE_OPEN_FAILED')
+      // Changing partial_revokes changes underscore interpretation of existing grants.
+      await expect(MysqlStore.prepareSchema({ ...config, initialize: false })).rejects.toThrow('PERSISTENCE_OPEN_FAILED')
+      await root.query("GRANT SELECT,TRIGGER,EVENT,ALTER ROUTINE ON frontier_isles_mysql_test.* TO 'frontier_test'@'%'")
+      await MysqlStore.prepareSchema({ ...config, initialize: false })
+    } finally {
+      await root.query("DROP USER IF EXISTS 'frontier_metadata_global'@'%'")
+      await root.query('SET GLOBAL partial_revokes=OFF')
+      await root.end()
+    }
+  })
   it.each([
     ['trigger', 'CREATE TRIGGER unexpected_trigger BEFORE UPDATE ON rooms FOR EACH ROW SET NEW.revision=NEW.revision', 'DROP TRIGGER IF EXISTS unexpected_trigger'],
     ['routine', 'CREATE PROCEDURE unexpected_routine() SELECT 1', 'DROP PROCEDURE IF EXISTS unexpected_routine'],
     ['event', 'CREATE EVENT unexpected_event ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1', 'DROP EVENT IF EXISTS unexpected_event'],
     ['view', 'CREATE VIEW unexpected_view AS SELECT id FROM persistence_schema', 'DROP VIEW IF EXISTS unexpected_view'],
   ])('rejects an unexpected %s using complete metadata authority', async (_kind, create, drop) => {
-    const admin = await mysqlTestConnection()
+    const admin = await ownedRootConnection()
     try {
       await admin.query(create)
       await expect(MysqlStore.prepareSchema({ ...mysqlTestConfig(), initialize: false })).rejects.toThrow('PERSISTENCE_OPEN_FAILED')
@@ -57,20 +91,26 @@ describe('deployment schema authority and restricted runtime', () => {
   it('denies runtime DDL, triggers, events, file, grants and account administration', async () => {
     const runtime = await runtimeConnection()
     try {
+      const [grants] = await runtime.query('SHOW GRANTS')
+      expect(JSON.stringify(grants)).not.toMatch(/\b(?:CREATE|ALTER|DROP|TRIGGER|EVENT|FILE|GRANT OPTION|SUPER)\b/u)
       for (const sql of [
+        'UPDATE persistence_schema SET version=version WHERE id=1',
         'CREATE TABLE forbidden_table (id INT)', 'ALTER TABLE rooms ADD COLUMN forbidden INT', 'DROP TABLE quarantine',
         'CREATE TRIGGER forbidden_trigger BEFORE UPDATE ON rooms FOR EACH ROW SET NEW.revision=NEW.revision',
         'CREATE EVENT forbidden_event ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1',
-        "SELECT 1 INTO OUTFILE '/tmp/frontier-forbidden-export'",
+        "SELECT 1 INTO OUTFILE '/var/lib/mysql-files/frontier-forbidden-export'",
         "GRANT SELECT ON frontier_isles_mysql_test.rooms TO 'frontier_runtime'@'%'",
         "CREATE USER 'frontier_forbidden'@'%'", 'CREATE PROCEDURE forbidden_routine() SELECT 1',
       ]) {
         let denied = false
+        let code = 'SUCCEEDED'
         try { await runtime.query(sql) } catch (error: unknown) {
+          code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'UNKNOWN'
           denied = typeof error === 'object' && error !== null && 'code' in error
-            && ['ER_TABLEACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR', 'ER_SPECIFIC_ACCESS_DENIED_ERROR'].includes(String(error.code))
+            && ['ER_TABLEACCESS_DENIED_ERROR', 'ER_COLUMNACCESS_DENIED_ERROR', 'ER_DBACCESS_DENIED_ERROR', 'ER_SPECIFIC_ACCESS_DENIED_ERROR',
+              'ER_BINLOG_CREATE_ROUTINE_NEED_SUPER'].includes(String(error.code))
         }
-        expect(denied).toBe(true)
+        expect(denied, `${sql.split(' ').slice(0, 2).join(' ')}: ${code}`).toBe(true)
       }
     } finally { await runtime.end() }
   })

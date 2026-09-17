@@ -22,6 +22,7 @@ export async function prepareRestrictedMysql(): Promise<void> {
     await root.query('CREATE USER IF NOT EXISTS ?@? IDENTIFIED BY ?', [runtime.user, '%', runtime.password])
     // Fixed identifiers belong exclusively to the harness-created database.
     await root.query("GRANT SELECT ON frontier_isles_mysql_test.persistence_schema TO 'frontier_runtime'@'%'")
+    await root.query("GRANT UPDATE (id) ON frontier_isles_mysql_test.persistence_schema TO 'frontier_runtime'@'%'")
     await root.query("GRANT SELECT,INSERT,UPDATE,DELETE ON frontier_isles_mysql_test.rooms TO 'frontier_runtime'@'%'")
     await root.query("GRANT SELECT,INSERT ON frontier_isles_mysql_test.quarantine TO 'frontier_runtime'@'%'")
   } finally { await root.end() }
