@@ -15,7 +15,13 @@ export interface PersistenceDiagnostic {
   readonly code: 'PERSISTENCE_RECOVERED' | 'PERSISTENCE_QUARANTINED' | PersistenceFailureCode
   readonly records?: number
 }
-/** One Room and its GameSession/session/cache data form a single atomic durable record. */
+/**
+ * One Room and its GameSession/session/cache data form a single atomic durable record.
+ * Methods complete synchronously: save/remove return only after durable commit. Callers
+ * must stop authority on failure, including an uncertain commit; never retry a write
+ * blindly. load validates/quarantines records before recovery, without rebuilding state.
+ * Database concurrency tokens belong to the adapter, not gameplay or Room revisions.
+ */
 export interface MultiplayerRepository {
   load(): readonly MultiplayerRecord[]
   save(record: MultiplayerRecord): void
