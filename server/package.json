@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24.19.0 <25" },
+  "engines": {
+    "node": ">=24.19.0 <25"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
@@ -12,9 +14,10 @@
     "test": "vitest run test"
   },
   "dependencies": {
-    "@frontier-isles/game-core": "0.1.0",
     "@frontier-isles/game-ai": "0.1.0",
+    "@frontier-isles/game-core": "0.1.0",
     "@frontier-isles/realtime-contracts": "0.1.0",
+    "mysql2": "3.24.4",
     "socket.io": "4.8.3",
     "zod": "4.5.4"
   },

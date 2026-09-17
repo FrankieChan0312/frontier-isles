@@ -25,6 +25,7 @@ afterEach(async () => {
 describe('server configuration', () => {
   it('uses the accepted local defaults', () => {
     expect(parseServerConfig({})).toEqual({
+      persistenceProvider: 'sqlite',
       port: 3001,
       clientOrigin: 'http://127.0.0.1:5173',
       clientOrigins: ['http://127.0.0.1:5173'],

@@ -11,6 +11,7 @@
     "packages/*"
   ],
   "scripts": {
+    "test:mysql": "npm run build:server && tsx server/test/run-mysql-tests.ts",
     "dev": "npm run build:game && npm run build:contracts && vite",
     "dev:web": "npm run build:game && npm run build:contracts && vite",
     "dev:server": "npm run build:game && npm run build:contracts && npm run dev --workspace @frontier-isles/server",

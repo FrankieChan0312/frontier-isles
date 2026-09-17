@@ -1,4 +1,5 @@
 import { isAbsolute, relative, sep } from 'node:path'
+import { parseMysqlConfig, type MysqlConfig } from './persistence/mysql-config.js'
 
 export type ServerEnvironment = 'development' | 'test' | 'production'
 
@@ -13,6 +14,8 @@ export interface ServerConfig {
   readonly gameAbandonedTtlMs?: number
   readonly persistenceFile?: string
   readonly restartRecoveryGraceMs?: number
+  readonly persistenceProvider?: 'sqlite' | 'mysql'
+  readonly mysql?: MysqlConfig
 }
 const DEFAULT_PORT = '3001'
 const DEFAULT_CLIENT_ORIGIN = 'http://127.0.0.1:5173'
@@ -79,6 +82,9 @@ function parseTimerDelay(value: string, label: string): number {
 }
 
 export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig {
+  const persistenceProvider = environment.PERSISTENCE_PROVIDER ?? 'sqlite'
+  if (persistenceProvider !== 'sqlite' && persistenceProvider !== 'mysql') throw new Error('PERSISTENCE_PROVIDER must be sqlite or mysql.')
+  const mysql = persistenceProvider === 'mysql' ? parseMysqlConfig(environment) : undefined
   const nodeEnv = parseNodeEnvironment(environment.NODE_ENV ?? DEFAULT_NODE_ENV)
   const clientOrigin = parseClientOrigin(environment.CLIENT_ORIGIN ?? DEFAULT_CLIENT_ORIGIN)
   let clientOrigins = [clientOrigin]
@@ -103,7 +109,7 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
     || staticRoot.includes('\0') || !isAbsolute(staticRoot) || /^[\\/]{2}/u.test(staticRoot))) {
     throw new Error('STATIC_ROOT must be an absolute local build directory.')
   }
-  if (nodeEnv === 'production' && (environment.PERSISTENCE_FILE === undefined || !isAbsolute(persistenceFile))) {
+  if (persistenceProvider === 'sqlite' && nodeEnv === 'production' && (environment.PERSISTENCE_FILE === undefined || !isAbsolute(persistenceFile))) {
     throw new Error('PERSISTENCE_FILE must be an explicit absolute private data path in production.')
   }
   if (nodeEnv === 'production' && staticRoot === undefined) throw new Error('STATIC_ROOT is required in production.')
@@ -112,6 +118,8 @@ export function parseServerConfig(environment: NodeJS.ProcessEnv): ServerConfig 
     if (!isAbsolute(path) && path !== '..' && !path.startsWith(`..${sep}`)) throw new Error('PERSISTENCE_FILE must be outside STATIC_ROOT.')
   }
   return {
+    persistenceProvider,
+    ...(mysql === undefined ? {} : { mysql }),
     port: parsePort(environment.PORT ?? DEFAULT_PORT),
     clientOrigin,
     clientOrigins,

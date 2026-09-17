@@ -4,13 +4,16 @@ import { createRealtimeServer } from './create-realtime-server.js'
 import { createGracefulShutdown } from './graceful-shutdown.js'
 import { InMemoryRoomService } from './lobby/room-service.js'
 import { SqliteMultiplayerRepository } from './persistence/sqlite-multiplayer-repository.js'
+import { MysqlMultiplayerRepository } from './persistence/mysql-multiplayer-repository.js'
 import { safeLogRecord } from './security/safe-log.js'
 
 function reportDiagnostic(diagnostic: unknown): void { console.log(safeLogRecord(diagnostic)) }
 
 function start(): void {
   const config = parseServerConfig(process.env)
-  const repository = new SqliteMultiplayerRepository(config.persistenceFile ?? 'data/frontier-isles.sqlite', { onDiagnostic: reportDiagnostic })
+  const repository = config.persistenceProvider === 'mysql' && config.mysql !== undefined
+    ? new MysqlMultiplayerRepository(config.mysql, { onDiagnostic: reportDiagnostic })
+    : new SqliteMultiplayerRepository(config.persistenceFile ?? 'data/frontier-isles.sqlite', { onDiagnostic: reportDiagnostic })
   let roomService: InMemoryRoomService
   try {
     roomService = new InMemoryRoomService({ repository, reconnectGraceMs: config.reconnectGraceMs,
