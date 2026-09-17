@@ -426,3 +426,154 @@ frontend source/bundling is unchanged, and lint has zero warnings.
 
 No engine rules, AI strategy, UI, gateway, public protocol, account system, distributed service,
 new dependency, unrelated future feature, cloud resource, deployment, push, merge or tag was added.
+
+## Cloud preflight remediation — 2026-09-17
+
+This section follows the read-only preflight audit and does not rewrite earlier local
+acceptance as cloud evidence. Accepted starting branch `feat/v2-mysql-persistence`,
+clean HEAD `348d203054a0dceb85e2a1f464b4bd039e2a5399`; dedicated authorized branch
+`fix/v2-cloud-deployment-preflight`. See [active task](../../tasks/V2_CLOUD_DEPLOYMENT_PREFLIGHT.md),
+[ADR-V2-0016](ADR-V2-0016-cloud-preflight-deployment-boundaries.md) and
+[installation/operation templates](../../deploy/README.md).
+
+The preflight found that MySQL production still supplied a nonexistent SQLite file to
+the static-root realpath guard. Existing MySQL process tests used NODE_ENV=test without
+STATIC_ROOT and missed that combination. Configuration is now provider-aware, preserving
+all SQLite confinement and static-asset protections. MySQL does not fall back to SQLite.
+
+The separate MySQL Compose reference supplies all runtime configuration, a read-only CA
+mount and loopback port, with no persistent SQLite volume. Runtime remains non-root,
+read-only and resource/log bounded. The original SQLite composition remains supported.
+Vercel declares the exact requested realtime build target and frontend CSP. The systemd
+oneshot supplies host boot ordering and graceful stop without a competing restart loop.
+
+The one-shot schema command verifies deployment metadata authority before inspecting
+tables, triggers, routines and events. Normal runtime is restricted to necessary table
+DML and verify mode; it cannot initialize the production schema. Existing transaction,
+FIFO, durability, recovery, privacy and RNG boundaries remain unchanged.
+
+### Development evidence (not final acceptance)
+
+- Focused provider/configuration/HTTP tests: 4 files, 55 tests passed.
+- Deployment/header/Origin/provider/security subset: 3 files, 31 tests passed.
+- `npm run check:deployment`: exit 0; expanded MySQL Compose and actual split-origin
+  Vite build validated with synthetic configuration only; no secret expansion retained.
+- `npm run check:boot`: exit 0; systemd-analyze verify in a task-owned isolated Linux
+  container; Docker dependency is a syntax-only stub. Owned container removed. This
+  does not verify real host boot or install anything on EC2.
+- Initial production-smoke TypeScript check caught an inferred environment parameter
+  and unbranded RoomRevision return type. Both were minimally corrected; focused tsc
+  rerun exited 0. The failed check is not counted as a pass.
+
+### Final local gates
+
+Qualification remains incomplete. No remediation acceptance is claimed until all
+required local gates pass. Current verified results:
+
+| Command | Exit | Evidence |
+| --- | --- | --- |
+| `npm run check:all` | 0 | 109 files / 697 tests; frontend 113, core 261, AI 36, contracts 66, server 221; typechecks, lint and builds pass |
+| `npm run check` (final aggregate) | 0 | 74 files / 410 tests; root typechecks, zero-warning lint, frontend/core/AI tests and production build pass |
+| `npm run simulate` | 0 | 100 games, 65,341 commands; deterministic summary hash `1adc49e8` |
+| `npm run simulate:online` | 0 | Six legal winners across 2H/3H/4H; repeated seeds match |
+| `npm run smoke:container` | 0 | Rebuilt image, 4 humans, 1 durable command, 2 starts, exact replay/state/RNG, graceful stop; SQLite explicit data mount preserved |
+| `npm run check:deployment` | 0 | Final expanded Compose and real Vite build; synthetic backend password supplied to the build environment is absent from the generated bundle |
+| `npm run e2e -- --trace on` | 0 | Final isolated run: 39/39 passed, 39 traces redacted, 138 private identities removed |
+| `npm run check:boot` | 0 | Isolated Linux systemd syntax verification; owned container removed; no actual reboot |
+| `npm audit --json` | 0 | Zero vulnerabilities in every severity category |
+| `npm run audit:artifacts` | 0 | 31 online/lobby traces and 10 reports; zero private-token/identity/digest/fingerprint/RNG matches |
+| `npm run audit:artifacts -- server/logs` | 0 | One retained failure trace and 73 logs/reports; zero private matches |
+| `git diff --check` / baseline-to-current `git diff ... --check` | 0 | No whitespace errors |
+| `npm run test:mysql` | Not run | Requires clarification for disposable local certificates; includes 22 new restricted/schema tests |
+| `npm run smoke:mysql-production` | Not run | Production MySQL/TLS/no-SQLite recovery acceptance remains unverified |
+
+The qualified SQLite image ID is
+`sha256:489f127550e85556e98eb54c9a1136466c8b5430623f52d43cb03219bac62d5e`.
+It ran Node 24.19.0 / SQLite 3.53.3 as UID 1000 with read-only root, excluded test
+fixtures, denied five private paths and exposed no resume credentials in logs.
+The image/cache stays local; its temporary container and storage were removed.
+No preflight/boot-labeled containers or listeners on test ports 3001/4173 remained
+at the final ownership check. The existing Vite large-chunk advisory remains;
+ESLint completed with zero warnings. No build limit or test assertion was relaxed.
+
+An initial aggregate invocation ended without a complete result and is not counted
+as passing; the full subsequent invocation above completed with exit 0. The first
+browser run overlapped a dependency rebuild, causing hundreds of Vite reload messages
+in the failed focus-test trace. Browser qualification must run without overlapping
+builds; this is an execution-order repair, with no weakened assertion or product change.
+That invocation exited 1 with 38 passed and one failed; 39 traces were redacted (138
+private identities removed). Its redacted focus-failure trace is retained separately.
+`npm run e2e -- tests/e2e/online-game.spec.ts --grep 'primary actions start in view'
+--trace on` then exited 0 with one test passed unchanged (one trace / four identities
+redacted). The complete isolated rerun then passed all 39 tests. No normal repair class
+exceeded the three-attempt limit; no skipped or interrupted run counts as passing.
+
+The request explicitly prohibits TLS certificate creation while also requesting
+isolated production TLS qualification. Clarification for disposable local test-only
+certificates is pending. Neither the new production MySQL/TLS smoke nor the MySQL
+account/schema suite (whose isolated MySQL service auto-generates test certificates)
+has been executed for this remediation. Their implementation is not passing evidence.
+
+AWS/VPS account access, public certificates, cloud resources, image publication,
+deployment, push, merge and tag remain prohibited and unperformed.
+
+### Remediation file inventory and scope
+
+- Runtime: `server/src/config.ts`, `server/src/server.ts`,
+  `server/src/persistence/mysql-store.ts`,
+  `server/src/persistence/mysql-schema-command.ts`.
+- Deployment configuration: `.gitignore`, `Dockerfile`,
+  `.env.mysql-production.example`, `compose.mysql-production.yaml`, `vercel.json`,
+  `deploy/frontier-isles.service`.
+- Test commands and frontend regression: `package.json`,
+  `src/infrastructure/realtime/realtime-config.test.ts`.
+- Server qualification: `server/test/production-startup.test.ts`,
+  `server/test/deployment-config.test.ts`, `server/test/run-deployment-config-check.ts`,
+  `server/test/Dockerfile.boot-check`, `server/test/run-boot-config-check.ts`,
+  `server/test/mysql-restricted-helpers.ts`, `server/test/mysql-restricted-recovery.mysql.ts`,
+  `server/test/mysql-schema.mysql.ts`, `server/test/run-mysql-tests.ts`,
+  `server/test/run-mysql-container-smoke.ts`, `server/test/run-artifact-audit.ts`.
+- Documentation: `docs/v2/V2_DEPLOYMENT.md`, `docs/v2/V2_SECURITY.md`,
+  `docs/v2/V2_PERSISTENCE_RECOVERY.md`, `docs/v2/V2_MYSQL_PROGRESS.md`,
+  `docs/v2/ADR-V2-0016-cloud-preflight-deployment-boundaries.md`, `deploy/README.md`,
+  `tasks/V2_CLOUD_DEPLOYMENT_PREFLIGHT.md`.
+
+Nine ordinary tests were added (five startup, three deployment/CSP/Origin, one exact
+frontend target). The new MySQL files add nine schema/privilege cases plus the existing
+13-case shared recovery contract under restricted credentials; those 22 tests await
+execution and are not included in the passing total. New executable gates validate
+Compose/generated frontend output, Linux boot syntax and production MySQL/TLS recovery.
+Artifact auditing now includes preflight logs.
+
+No application dependency or lockfile change was added. The boot syntax checker uses
+systemd only in its disposable Ubuntu test image. No engine, AI, UI, protocol, Redis,
+scaling, second authority, ALB, RDS Proxy, cloud SDK or unrelated future feature was added.
+AWS EC2/RDS, real RDS TLS, real network latency, public HTTPS/WSS, Vercel deployment,
+GoDaddy DNS, EC2 reboot and RDS automated backup/PITR/restore remain unverified.
+
+Local implementation commits (no push, merge or tag):
+
+1. `1fece78e566116d4af7095d1aa66b376000fdfdd` — provider-aware production startup.
+2. `cc57d9eeb1052a5c3cadd67685a30433f786c124` — deployment schema authority and
+   distinct restricted-account test coverage awaiting real-MySQL execution.
+3. `99d354a85c8c18c7627e5a953a4ebeed4ca7b806` — deployment configuration and local
+   qualification commands, including the unexecuted production MySQL/TLS smoke.
+
+A final documentation commit records the observed acceptance boundary. Its HEAD and
+the post-commit worktree status are returned in the completion response.
+
+### Acceptance decision
+
+The code and templates are prepared, but the requested local acceptance is blocked.
+The sole outstanding decision is whether disposable, isolated local test CA/server
+certificates are authorized despite the pasted request's explicit certificate-creation
+prohibition. No such certificates were created by this remediation. Both real-MySQL
+gates must run and pass before claiming production MySQL startup, restricted-account
+behavior, privileged schema auditing or production TLS recovery as locally verified.
+Do not substitute the passing SQLite image smoke or configuration tests for those gates.
+
+No cloud/VPS account was accessed; no image was published; nothing was pushed, merged,
+tagged or deployed. No billable resource was created. This is not cloud deployment
+acceptance or approval to rerun a cloud preflight against real accounts.
+
+`CLOUD_DEPLOYMENT_REMEDIATION_BLOCKED` / `PENDING_HUMAN_DECISION`

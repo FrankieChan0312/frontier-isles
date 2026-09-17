@@ -1,5 +1,12 @@
 # V2 Online Multiplayer Alpha Deployment Reference
 
+The local cloud-preflight remediation adds a separate
+[MySQL deployment template and operating procedure](../../deploy/README.md),
+`compose.mysql-production.yaml`, a oneshot systemd boot unit and Vercel split-origin
+headers/build configuration. These are local preparation, not cloud deployment.
+The original SQLite Compose workflow below remains supported. MySQL production no
+longer validates an unrelated SQLite path; production runtime requires schema verify.
+
 This repository prepares a local, single-process production artifact. No cloud account, image
 publication, external endpoint or deployment is created by qualification. Human deployment UAT
 must happen separately. Supported runtime: Node 24.19+ within Node 24; image pins 24.19.0 Debian slim.

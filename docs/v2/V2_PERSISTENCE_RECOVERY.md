@@ -96,6 +96,14 @@ of server storage, downtime, recovery, credentials and this schema.
 
 ## MySQL provider (local qualification; future RDS)
 
+Cloud-preflight remediation separates privileged one-shot schema authority from normal
+runtime. See [deployment templates](../../deploy/README.md) for exact grants, command
+and boot policy. `npm run mysql:schema` uses built output and never starts HTTP or loads
+Rooms. Run initialize only once for an empty expected database; audit with verify before
+each release. Production HTTP startup refuses initialize. Runtime metadata checks do
+not independently prove absence of objects hidden by privileges: the deployment audit
+requires complete visibility and rejects triggers, routines, events and extra objects.
+
 `PERSISTENCE_PROVIDER=mysql` selects a Promise-based aggregate repository using mysql2/promise
 directly. [ADR-V2-0015](ADR-V2-0015-asynchronous-authoritative-persistence.md) replaces the
 historical synchronous worker bridge. SQLite implements the same asynchronous contract while
@@ -121,16 +129,20 @@ Backend environment variables (never `VITE_`):
 | `MYSQL_TLS_CA_FILE` | Required trusted PEM CA bundle for TLS; mount privately |
 | `MYSQL_SCHEMA_MODE` | `verify` default; `initialize` explicitly bootstraps an empty database |
 
-MySQL does not use `PERSISTENCE_FILE`. The SQLite Compose reference does not automatically forward
-MySQL configuration. Node reads environment variables directly, without loading dotenv files.
+MySQL does not use or validate `PERSISTENCE_FILE`, and the HTTP boundary receives no SQLite
+path for that provider. The SQLite Compose reference does not automatically forward
+MySQL configuration; use the separate production MySQL composition. Node reads environment
+variables directly, without loading dotenv files.
 Production still requires the existing public static-root and Origin configuration. Split-origin
 hosting is future deployment work, not an implied change to that deployment contract.
 
 Provision an empty dedicated database separately; this application never creates a database or
-account. With temporary bootstrap privileges, run `MYSQL_SCHEMA_MODE=initialize` once. It creates
-three InnoDB tables and schema version 1 only if no table exists. Then use `verify` and a service
-account limited to SELECT/INSERT/UPDATE/DELETE on those tables (plus the metadata visibility needed
-for startup checks). Do not grant normal runtime DDL/admin access. Partial DDL, unknown versions,
+account. With temporary deployment privileges, run the one-shot `mysql:schema` command with
+`MYSQL_SCHEMA_MODE=initialize` once. It creates three InnoDB tables and schema version 1 only if
+the database is empty of tables and programmable objects. Then use `verify` with runtime SELECT
+on persistence_schema, SELECT/INSERT/UPDATE/DELETE on rooms, and SELECT/INSERT on quarantine.
+Full metadata visibility belongs to the deployment audit, not the runtime account. Do not grant
+normal runtime DDL/admin access. Partial DDL, unknown versions,
 unrelated tables, changed structures or unsupported durability settings fail closed; investigate
 privately rather than dropping or recreating existing data. No SQLite-to-MySQL copy tool is added.
 

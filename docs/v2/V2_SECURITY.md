@@ -1,5 +1,14 @@
 # V2 Alpha Security Boundary
 
+Cloud-preflight remediation adds an explicit privileged schema audit and restricted
+runtime grants; [deployment templates](../../deploy/README.md) define this separation.
+Do not grant TRIGGER to runtime to work around privilege-filtered metadata. The one-shot
+deployment command proves visibility before checking trigger/routine/event absence and
+never starts HTTP. Its credentials must not enter the normal service. Production MySQL
+startup ignores SQLite paths while SQLite's lexical/realpath confinement is unchanged.
+The Vercel declaration permits the exact planned HTTPS/WSS backend in frontend CSP;
+the backend still admits only exact configured Origins, never wildcard preview hosts.
+
 Dependency versions remain locked. The reviewed esbuild platform-binary installer is allowed only
 for `esbuild@0.28.2` in `package.json`; future versions require another review. Its installer validates
 the binary version and its fallback download integrity. No blanket install-script approval was added.
