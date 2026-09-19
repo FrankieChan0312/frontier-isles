@@ -1,4 +1,4 @@
-import type { PlayerEventView } from '../../game/contracts/player-events.ts'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
 import type { GameUpdate } from '../gateways/game-gateway.ts'
 import { createGameSessionStore } from './game-session-store.ts'
 import { createUiInteractionStore } from './ui-interaction-store.ts'

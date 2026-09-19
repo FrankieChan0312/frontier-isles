@@ -1,5 +1,8 @@
 # V1 Release Checklist
 
+This records the accepted historical V1 release. The current online prerelease is governed by
+[the V2 alpha checklist](v2/V2_ALPHA_RELEASE_CHECKLIST.md); online changes do not replace V1 authority.
+
 ## Scope and architecture
 
 - [x] One Human and three AI players use the fixed V1 ruleset.

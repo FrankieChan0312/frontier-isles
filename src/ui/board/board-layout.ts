@@ -2,15 +2,15 @@ import {
   createIntegerCornerCoordinate,
   ORDERED_CORNER_INDICES,
   type IntegerCornerCoordinate,
-} from '../../game/board/coordinates.ts'
-import { compareCodeUnits } from '../../game/board/topology-ids.ts'
+} from '@frontier-isles/game-core/board/coordinates'
+import { compareCodeUnits } from '@frontier-isles/game-core/board/topology-ids'
 import type {
   BoardTopology,
   HexCoordinate,
   PortKind,
   TileDefinition,
-} from '../../game/model/board-state.ts'
-import type { EdgeId, PortId, TileId, VertexId } from '../../game/model/ids.ts'
+} from '@frontier-isles/game-core/model/board-state'
+import type { EdgeId, PortId, TileId, VertexId } from '@frontier-isles/game-core/model/ids'
 import { formatPortAccessibleLabel, formatPortLabel } from './port-label.ts'
 
 export const DEFAULT_HEX_SIZE = 64

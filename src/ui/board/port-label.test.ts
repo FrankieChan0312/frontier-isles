@@ -1,4 +1,4 @@
-import type { PortKind } from '../../game/model/board-state.ts'
+import type { PortKind } from '@frontier-isles/game-core/model/board-state'
 import { formatPortAccessibleLabel, formatPortLabel } from './port-label.ts'
 
 describe('port labels', () => {

@@ -8,10 +8,17 @@ pnpm-debug.log*
 
 node_modules
 dist
+**/dist
 dist-ssr
 playwright-report
 test-results
+data
 *.local
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.mysql-production.example
 
 # Editor directories and files
 .vscode/*

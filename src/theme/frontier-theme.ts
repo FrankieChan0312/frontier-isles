@@ -57,9 +57,25 @@ export const frontierTheme = createTheme({
     MuiButtonBase: {
       styleOverrides: {
         root: {
-          '&.Mui-focusVisible': {
-            outline: '3px solid #f1c75b',
+          '&&.Mui-focusVisible': {
+            // Two opaque bands remain distinguishable on both paper and the dark header.
+            boxShadow: '0 0 0 3px #fffdf8',
+            outline: '3px solid #20312d',
             outlineOffset: 3,
+            transition: 'none',
+          },
+        },
+      },
+    },
+    MuiSwitch: {
+      styleOverrides: {
+        switchBase: {
+          // The switch clips at its container: draw both bands inside its moving base.
+          '&&&.Mui-focusVisible': {
+            boxShadow: 'inset 0 0 0 3px #fffdf8',
+            outline: '3px solid #20312d',
+            outlineOffset: -6,
+            transition: 'none',
           },
         },
       },

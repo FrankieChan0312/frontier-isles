@@ -39,6 +39,13 @@ async function supplyCount(page: Page, label: string): Promise<number> {
     .getAttribute('aria-label')
   const match = accessibleName?.match(/: (\d+)$/)
   if (match?.[1] === undefined) throw new Error(`Missing public supply count for ${label}.`)
+  // Modal decisions intentionally hide background regions from the accessibility tree.
+  // Inspect the bank's DOM relationship even while collecting a pre-discard supply snapshot.
+  const term = page.locator('section[aria-labelledby="bank-supply-title"] dt').filter({ hasText: new RegExp(`^${label}$`) })
+  const pair = term.locator('..')
+  await expect(pair.locator(':scope > dt')).toHaveCount(1)
+  await expect(pair.locator(':scope > dd')).toHaveCount(1)
+  await expect(pair.locator('dd').getByLabel(`${label} remaining: ${match[1]}`, { exact: true })).toHaveText(match[1])
   return Number(match[1])
 }
 
@@ -75,6 +82,7 @@ test('creates a seeded game, completes Human setup, rolls, ends, saves, reloads,
     await expect(page.getByLabel(`${resource} remaining: 19`)).toBeVisible()
   }
   await expect(page.getByLabel('Development Cards remaining: 25')).toBeVisible()
+  expect(await supplySnapshot(page)).toEqual({ Lumber: 19, Brick: 19, Wool: 19, Grain: 19, Ore: 19, 'Development Cards': 25 })
   const initialHtml = await page.locator('html').evaluate((element) => element.outerHTML)
   expect(initialHtml).not.toContain('development-card:')
   expect(initialHtml).not.toContain('developmentDeck')
@@ -162,6 +170,18 @@ test('performs maritime trade and negotiates a domestic offer with an AI', async
   await expect(page.getByLabel('Brick remaining: 16')).toBeVisible()
   await expect(page.getByLabel('Ore remaining: 19')).toBeVisible()
   await page.getByRole('button', { name: 'Maritime trade' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Maritime trade' })
+  const firstChoice = dialog.getByRole('button').first()
+  const cancel = dialog.getByRole('button', { name: 'Cancel' })
+  await cancel.focus()
+  await page.keyboard.press('Tab')
+  await expect(firstChoice).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(cancel).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Maritime trade' })).toBeFocused()
+  await page.keyboard.press('Enter')
   await page.getByRole('dialog', { name: 'Maritime trade' })
     .getByRole('button', { name: /Give 3 Brick.*receive 1 Ore/ }).click()
   await expect(page.getByRole('region', { name: 'Game log' })).toContainText('traded 3 Brick')

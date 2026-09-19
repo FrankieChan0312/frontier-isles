@@ -1,0 +1,38 @@
+import type {
+  AiProfileId,
+  RoomSnapshot,
+  SafeError,
+  SeatId,
+} from '@frontier-isles/realtime-contracts'
+import type { OnlineGameGateway } from './game-gateway.ts'
+
+export type LobbyConnectionState =
+  | 'CONNECTING'
+  | 'CONNECTED'
+  | 'RECONNECTING'
+  | 'DISCONNECTED'
+
+export interface LobbyGatewayState {
+  readonly connectionState: LobbyConnectionState
+  readonly error: SafeError | null
+  readonly selfSeatId: SeatId | null
+  readonly snapshot: RoomSnapshot | null
+}
+
+export type LobbyGatewayListener = (state: LobbyGatewayState) => void
+
+export interface LobbyGateway {
+  readonly gameGateway?: OnlineGameGateway
+  subscribe(listener: LobbyGatewayListener): () => void
+  createRoom(displayName: string): Promise<void>
+  joinRoom(displayName: string, roomCode: string): Promise<void>
+  resumeSession(): Promise<boolean>
+  setReady(ready: boolean): Promise<void>
+  setAiSeat(seatId: SeatId, profileId: AiProfileId | null): Promise<void>
+  startGame(): Promise<void>
+  replaceExpiredHuman(seatId: SeatId, profileId: AiProfileId): Promise<void>
+  closeGame(): Promise<void>
+  requestSnapshot(): Promise<void>
+  leaveRoom(): Promise<void>
+  dispose(): void
+}

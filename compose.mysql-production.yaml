@@ -1,0 +1,47 @@
+# One authority. This file is independent of the local SQLite compose.yaml reference.
+services:
+  frontier-isles:
+    image: ${FRONTIER_IMAGE:?Set a qualified immutable image digest}
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      STATIC_ROOT: /app/public
+      CLIENT_ORIGINS: ${CLIENT_ORIGINS:?Set the exact frontend HTTPS origin}
+      PERSISTENCE_PROVIDER: mysql
+      MYSQL_HOST: ${MYSQL_HOST:?Set the private database DNS hostname}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set the dedicated database}
+      MYSQL_USER: ${MYSQL_USER:?Set the restricted runtime account}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Supply the password through a private env file}
+      MYSQL_TLS: required
+      MYSQL_TLS_CA_FILE: /run/frontier/mysql-ca.pem
+      MYSQL_SCHEMA_MODE: verify
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - type: bind
+        source: ${MYSQL_TLS_CA_HOST_FILE:?Set an absolute existing trusted CA bundle path}
+        target: /run/frontier/mysql-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    restart: "on-failure:3"
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 128
+    healthcheck:
+      start_period: 75s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

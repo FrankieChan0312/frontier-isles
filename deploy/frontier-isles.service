@@ -1,0 +1,21 @@
+[Unit]
+Description=Frontier Isles single MySQL authority
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target
+RequiresMountsFor=/opt/frontier-isles /etc/frontier-isles
+ConditionPathExists=/etc/frontier-isles/mysql.env
+ConditionPathExists=/etc/frontier-isles/mysql-ca.pem
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/frontier-isles
+ExecStartPre=/usr/bin/docker compose --project-name frontier-isles --env-file /etc/frontier-isles/mysql.env -f /opt/frontier-isles/compose.mysql-production.yaml config --quiet
+ExecStart=/usr/bin/docker compose --project-name frontier-isles --env-file /etc/frontier-isles/mysql.env -f /opt/frontier-isles/compose.mysql-production.yaml up --detach --no-build --pull never --wait --wait-timeout 120
+ExecStop=/usr/bin/docker compose --project-name frontier-isles --env-file /etc/frontier-isles/mysql.env -f /opt/frontier-isles/compose.mysql-production.yaml stop --timeout 30
+TimeoutStartSec=150
+TimeoutStopSec=50
+
+[Install]
+WantedBy=multi-user.target

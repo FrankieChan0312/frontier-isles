@@ -1,11 +1,12 @@
-import type { CommandEnvelope } from '../../game/contracts/commands.ts'
-import type { RuleViolation } from '../../game/contracts/errors.ts'
-import type { PlayerEventView } from '../../game/contracts/player-events.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { GameConfig } from '../../game/model/game-config.ts'
-import type { GameId } from '../../game/model/ids.ts'
+import type { CommandEnvelope } from '@frontier-isles/game-core/contracts/commands'
+import type { RuleViolation } from '@frontier-isles/game-core/contracts/errors'
+import type { PlayerEventView } from '@frontier-isles/game-core/contracts/player-events'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { GameConfig } from '@frontier-isles/game-core/model/game-config'
+import type { GameId } from '@frontier-isles/game-core/model/ids'
+import type { GameDeliveryState, GamePresence } from '@frontier-isles/realtime-contracts'
 
-export type GatewayConnectionStatus = 'IDLE' | 'READY' | 'ERROR'
+export type GatewayConnectionStatus = 'IDLE' | 'READY' | 'ERROR' | 'CONNECTING' | 'RECONNECTING' | 'DISCONNECTED'
 export type GatewaySaveStatus = 'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'
 
 export interface GameUpdate {
@@ -15,6 +16,10 @@ export interface GameUpdate {
   readonly aiThinking: boolean
   readonly saveStatus: GatewaySaveStatus
   readonly error: string | null
+  readonly submitting?: boolean
+  readonly resynchronizing?: boolean
+  readonly delivery?: GameDeliveryState
+  readonly presence?: GamePresence
 }
 
 export type CommandResponse =
@@ -38,4 +43,9 @@ export interface GameGateway {
   loadLatestGame(): Promise<PlayerView>
   hasSavedGame(): Promise<boolean>
   deleteSavedGame(): Promise<void>
+}
+
+export interface OnlineGameGateway extends GameGateway {
+  requestSnapshot(): Promise<void>
+  dispose(): void
 }

@@ -14,14 +14,14 @@ import {
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { PlayerId, TradeId } from '../../game/model/ids.ts'
-import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '../../game/model/resource.ts'
-import type { TradeOffer } from '../../game/model/trade.ts'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerId, TradeId } from '@frontier-isles/game-core/model/ids'
+import { RESOURCE_TYPES, type ResourceBag, type ResourceType } from '@frontier-isles/game-core/model/resource'
+import type { TradeOffer } from '@frontier-isles/game-core/model/trade'
 import {
   hasPositiveResourceOverlap,
   hasValidTradeBundles,
-} from '../../game/rules/domestic-trade-rules.ts'
+} from '@frontier-isles/game-core/rules/domestic-trade-rules'
 import {
   emptyResourceBag,
   formatResourceBag,
@@ -155,7 +155,8 @@ export interface RobberTargetDialogProps {
 }
 
 export function RobberTargetDialog({ view, busy, onSubmit }: RobberTargetDialogProps): React.JSX.Element | null {
-  if (view.pendingDecision?.type !== 'CHOOSE_ROBBER_TARGET') return null
+  if (view.pendingDecision?.type !== 'CHOOSE_ROBBER_TARGET'
+    || view.pendingDecision.actingPlayerId !== view.self.id) return null
   return (
     <Dialog aria-labelledby="robber-target-title" fullWidth maxWidth="xs" open>
       <DialogTitle id="robber-target-title">Choose a player to steal from</DialogTitle>
@@ -240,7 +241,9 @@ export function DomesticTradeDialog({
   const selfIsInitiator = view.self.id === initiatorId
   const selfOutgoing = selfIsInitiator ? initiatorGives : counterpartyGives
   const otherPartyId = selfIsInitiator ? resolvedCounterpartyId : initiatorId
-  const otherName = view.opponents.find((player) => player.id === otherPartyId)?.name ?? 'AI player'
+  const otherParty = view.opponents.find((player) => player.id === otherPartyId)
+  const otherName = otherParty?.name ?? 'Other player'
+  const otherLabel = otherParty?.controller.type === 'HUMAN' ? 'Player' : 'AI'
   const draftOffer: TradeOffer | null = resolvedCounterpartyId === '' ? null : {
     tradeId,
     initiatorId,
@@ -290,12 +293,12 @@ export function DomesticTradeDialog({
             </FormControl>
           ) : <Typography>Replace the complete terms with {otherName}.</Typography>}
           <ResourceBagEditor
-            label="AI gives / You receive"
+            label={`${otherLabel} gives / You receive`}
             onChange={selfIsInitiator ? setCounterpartyGives : setInitiatorGives}
             value={selfIsInitiator ? counterpartyGives : initiatorGives}
           />
           <ResourceBagEditor
-            label="You give / AI receives"
+            label={`You give / ${otherLabel} receives`}
             maximum={view.self.resources}
             onChange={selfIsInitiator ? setInitiatorGives : setCounterpartyGives}
             value={selfIsInitiator ? initiatorGives : counterpartyGives}

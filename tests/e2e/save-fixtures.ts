@@ -1,25 +1,25 @@
-import type { GameState } from '../../src/game/model/game-state.ts'
-import type { ResourceBag } from '../../src/game/model/resource.ts'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { ResourceBag } from '@frontier-isles/game-core/model/resource'
 import type {
   AiProfileId,
   CommandId,
   PlayerId,
   VertexId,
-} from '../../src/game/model/ids.ts'
-import { executeNormalTurnLifecycleCommand } from '../../src/game/engine/normal-turn-lifecycle-engine.ts'
+} from '@frontier-isles/game-core/model/ids'
+import { executeNormalTurnLifecycleCommand } from '@frontier-isles/game-core/engine/normal-turn-lifecycle-engine'
 import {
   createCompletedGoldenSetup,
   GOLDEN_PLAYER_IDS,
-} from '../../src/game/engine/task-05-golden-fixture.test-helper.ts'
-import { createBalancedDiscardState } from '../../src/game/engine/task-07-controlled-seven.test-helper.ts'
-import { createGoldenPaidBuildingStart } from '../../src/game/engine/task-08-paid-building.test-helper.ts'
+} from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { createBalancedDiscardState } from '@frontier-isles/game-core/engine/task-07-controlled-seven.test-helper'
+import { createGoldenPaidBuildingStart } from '@frontier-isles/game-core/engine/task-08-paid-building.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
   createGoldenMaritimeTradeStart,
   EMPTY_TRADE_BAG,
-} from '../../src/game/engine/task-11-trading.test-helper.ts'
-import { gameEngine } from '../../src/game/engine/game-engine.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
 import {
   GAME_SAVE_SCHEMA_VERSION,
   serializeGameSave,

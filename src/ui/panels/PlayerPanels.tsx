@@ -1,6 +1,6 @@
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material'
-import type { PlayerView, PublicPlayerState } from '../../game/contracts/views.ts'
-import type { PlayerColor } from '../../game/model/player.ts'
+import type { PlayerView, PublicPlayerState } from '@frontier-isles/game-core/contracts/views'
+import type { PlayerColor } from '@frontier-isles/game-core/model/player'
 
 const PLAYER_COLORS: Readonly<Record<PlayerColor, string>> = {
   RED: '#c4473d',
@@ -12,11 +12,12 @@ const PLAYER_COLORS: Readonly<Record<PlayerColor, string>> = {
 interface PublicPlayerCardProps {
   readonly player: PublicPlayerState
   readonly current: boolean
+  readonly self: boolean
   readonly longestRoad: boolean
   readonly largestArmy: boolean
 }
 
-function PublicPlayerCard({ player, current, longestRoad, largestArmy }: PublicPlayerCardProps): React.JSX.Element {
+function PublicPlayerCard({ player, current, self, longestRoad, largestArmy }: PublicPlayerCardProps): React.JSX.Element {
   return (
     <Paper
       aria-current={current ? 'true' : undefined}
@@ -31,7 +32,7 @@ function PublicPlayerCard({ player, current, longestRoad, largestArmy }: PublicP
         <Box sx={{ minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 700 }}>{player.name}</Typography>
           <Typography color="text.secondary" variant="caption">
-            {player.controller.type === 'HUMAN' ? 'You' : player.controller.profileId}
+            {self ? 'You' : player.controller.type === 'HUMAN' ? 'Human' : player.controller.profileId}
           </Typography>
         </Box>
         <Typography aria-label={`${player.publicVictoryPoints} public points`} sx={{ fontWeight: 800 }} variant="h6">
@@ -52,7 +53,12 @@ function PublicPlayerCard({ player, current, longestRoad, largestArmy }: PublicP
 export function PlayerPanels({ view }: { readonly view: PlayerView }): React.JSX.Element {
   const players: PublicPlayerState[] = [
     {
-      ...view.self,
+      id: view.self.id,
+      name: view.self.name,
+      color: view.self.color,
+      controller: view.self.controller,
+      playedKnights: view.self.playedKnights,
+      publicVictoryPoints: view.self.publicVictoryPoints,
       resourceCardCount: Object.values(view.self.resources).reduce((sum, count) => sum + count, 0),
       developmentCardCount: view.self.developmentCards.length,
     },
@@ -67,6 +73,7 @@ export function PlayerPanels({ view }: { readonly view: PlayerView }): React.JSX
           largestArmy={view.publicGame.awards.largestArmyHolderId === player.id}
           longestRoad={view.publicGame.awards.longestRoadHolderId === player.id}
           player={player}
+          self={player.id === view.self.id}
         />
       ))}
     </Stack>

@@ -1,8 +1,8 @@
-import type { EdgeId, VertexId } from '../../game/model/ids.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
+import type { EdgeId, VertexId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
 import { createBrowserGameConfig } from '../../app/browser-game.ts'
-import { createGoldenPaidBuildingStart } from '../../game/engine/task-08-paid-building.test-helper.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
+import { createGoldenPaidBuildingStart } from '@frontier-isles/game-core/engine/task-08-paid-building.test-helper'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import {
   commandForEdgeSelection,
   commandForVertexSelection,

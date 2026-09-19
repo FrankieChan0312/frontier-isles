@@ -1,0 +1,8 @@
+# Test-only Linux syntax verifier; never used as the application image or installed on a host.
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends systemd \
+    && rm -rf /var/lib/apt/lists/* \
+    && printf '#!/bin/sh\nexit 1\n' > /usr/bin/docker && chmod 755 /usr/bin/docker \
+    && printf '[Unit]\nDescription=Syntax-only Docker dependency\n[Service]\nType=oneshot\nExecStart=/bin/true\nRemainAfterExit=yes\n' > /etc/systemd/system/docker.service
+COPY deploy/frontier-isles.service /etc/systemd/system/frontier-isles.service
+CMD ["systemd-analyze", "verify", "--man=no", "/etc/systemd/system/frontier-isles.service"]

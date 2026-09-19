@@ -1,6 +1,6 @@
-import { Chip, Divider, Paper, Stack, Typography } from '@mui/material'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import { RESOURCE_TYPES } from '../../game/model/resource.ts'
+import { Box, Chip, Paper, Stack, Typography } from '@mui/material'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import { RESOURCE_TYPES } from '@frontier-isles/game-core/model/resource'
 import { RESOURCE_LABELS } from '../game/ui-format.ts'
 
 export interface BankSupplyPanelProps {
@@ -17,7 +17,7 @@ export function BankSupplyPanel({ view }: BankSupplyPanelProps): React.JSX.Eleme
       <Typography color="text.secondary" sx={{ mb: 1.5 }} variant="body2">
         Public cards currently available for production, trades, and purchases.
       </Typography>
-      <Stack component="dl" divider={<Divider flexItem />} spacing={0} sx={{ m: 0 }}>
+      <Stack component="dl" spacing={0} sx={{ m: 0, '& > div + div': { borderTop: 1, borderColor: 'divider' } }}>
         {RESOURCE_TYPES.map((resource) => (
           <Stack
             component="div"
@@ -28,12 +28,12 @@ export function BankSupplyPanel({ view }: BankSupplyPanelProps): React.JSX.Eleme
             <Typography component="dt" sx={{ overflowWrap: 'anywhere' }} variant="body2">
               {RESOURCE_LABELS[resource]}
             </Typography>
-            <Chip
+            <Box component="dd" sx={{ m: 0 }}><Chip
               aria-label={`${RESOURCE_LABELS[resource]} remaining: ${bank.resources[resource]}`}
               label={bank.resources[resource]}
               size="small"
               variant="outlined"
-            />
+            /></Box>
           </Stack>
         ))}
         <Stack
@@ -44,12 +44,12 @@ export function BankSupplyPanel({ view }: BankSupplyPanelProps): React.JSX.Eleme
           <Typography component="dt" sx={{ overflowWrap: 'anywhere' }} variant="body2">
             Development Cards
           </Typography>
-          <Chip
+          <Box component="dd" sx={{ m: 0 }}><Chip
             aria-label={`Development Cards remaining: ${bank.developmentDeckCount}`}
             label={bank.developmentDeckCount}
             size="small"
             variant="outlined"
-          />
+          /></Box>
         </Stack>
       </Stack>
     </Paper>

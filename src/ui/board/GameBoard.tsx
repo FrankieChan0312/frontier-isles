@@ -1,7 +1,7 @@
 import { Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import { useId } from 'react'
-import type { BoardTopology } from '../../game/model/board-state.ts'
+import type { BoardTopology } from '@frontier-isles/game-core/model/board-state'
 import { BoardDebugLayer } from './BoardDebugLayer.tsx'
 import { createBoardSvgLayout } from './board-layout.ts'
 import { HexTile } from './HexTile.tsx'

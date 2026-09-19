@@ -1,7 +1,7 @@
-import type { DevelopmentCardId } from '../../game/model/ids.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
-import { createGoldenDomesticTradeStart } from '../../game/engine/task-11-trading.test-helper.ts'
+import type { DevelopmentCardId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { createGoldenDomesticTradeStart } from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
 import { developmentCardDisplayStatus, formatEvent, formatRuleViolation } from './ui-format.ts'
 
 describe('development-card UI formatting', () => {

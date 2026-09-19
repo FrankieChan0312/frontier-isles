@@ -2,19 +2,20 @@ import { ThemeProvider } from '@mui/material'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import type { CommandId, TradeId } from '../../game/model/ids.ts'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { createBalancedDiscardState } from '../../game/engine/task-07-controlled-seven.test-helper.ts'
+import type { CommandId, TileId, TradeId } from '@frontier-isles/game-core/model/ids'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { createBalancedDiscardState, createNoDiscardRobberMoveState } from '@frontier-isles/game-core/engine/task-07-controlled-seven.test-helper'
 import {
   createGoldenDomesticTradeStart,
   createInitialGoldenOffer,
-} from '../../game/engine/task-11-trading.test-helper.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
+} from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
 import { frontierTheme } from '../../theme/frontier-theme.ts'
 import {
   DiscardDecisionDialog,
   DomesticTradeDialog,
   TradeResponseDialog,
+  RobberTargetDialog,
 } from './GameDialogs.tsx'
 
 function themed(element: React.JSX.Element): React.JSX.Element {
@@ -22,6 +23,24 @@ function themed(element: React.JSX.Element): React.JSX.Element {
 }
 
 describe('game decision dialogs', () => {
+  it('opens robber target controls only for the projected acting player', () => {
+    const state = createNoDiscardRobberMoveState()
+    const result = gameEngine.execute(state, {
+      commandId: 'command:ui:robber-actor' as CommandId,
+      actorId: GOLDEN_PLAYER_IDS.sentinel,
+      expectedStateVersion: state.stateVersion,
+      command: { type: 'MOVE_ROBBER', tileId: 'tile:-2,2' as TileId },
+    })
+    if (!result.ok) throw new Error(`Robber fixture failed: ${result.violation.code}`)
+    const observer = gameEngine.createPlayerView(result.state, GOLDEN_PLAYER_IDS.human)
+    expect(observer.pendingDecision?.type).toBe('CHOOSE_ROBBER_TARGET')
+    const { rerender } = render(themed(<RobberTargetDialog busy={false} onSubmit={vi.fn()} view={observer} />))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const actor = gameEngine.createPlayerView(result.state, GOLDEN_PLAYER_IDS.sentinel)
+    rerender(themed(<RobberTargetDialog busy={false} onSubmit={vi.fn()} view={actor} />))
+    expect(screen.getByRole('dialog', { name: 'Choose a player to steal from' })).toBeInTheDocument()
+  })
+
   it('requires the exact engine-projected discard quantity and caps the Human hand', async () => {
     const user = userEvent.setup()
     const state = createBalancedDiscardState()

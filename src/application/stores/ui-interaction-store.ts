@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla'
 import type { StoreApi } from 'zustand/vanilla'
-import type { EdgeId, TileId, VertexId } from '../../game/model/ids.ts'
+import type { EdgeId, TileId, VertexId } from '@frontier-isles/game-core/model/ids'
 
 export type BuildMode = 'ROAD' | 'SETTLEMENT' | 'CITY' | null
 export type OpenDialog =

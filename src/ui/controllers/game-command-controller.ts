@@ -1,6 +1,6 @@
-import type { GameCommand } from '../../game/contracts/commands.ts'
-import type { PlayerView } from '../../game/contracts/views.ts'
-import type { EdgeId, TileId, VertexId } from '../../game/model/ids.ts'
+import type { GameCommand } from '@frontier-isles/game-core/contracts/commands'
+import type { PlayerView } from '@frontier-isles/game-core/contracts/views'
+import type { EdgeId, TileId, VertexId } from '@frontier-isles/game-core/model/ids'
 import type { BuildMode } from '../../application/stores/ui-interaction-store.ts'
 
 export function commandForVertexSelection(

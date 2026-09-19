@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
-import { gameEngine } from '../../game/engine/game-engine.ts'
-import { GOLDEN_PLAYER_IDS } from '../../game/engine/task-05-golden-fixture.test-helper.ts'
-import { createGoldenDomesticTradeStart } from '../../game/engine/task-11-trading.test-helper.ts'
+import { render, screen, within } from '@testing-library/react'
+import { gameEngine } from '@frontier-isles/game-core/engine/game-engine'
+import { GOLDEN_PLAYER_IDS } from '@frontier-isles/game-core/engine/task-05-golden-fixture.test-helper'
+import { createGoldenDomesticTradeStart } from '@frontier-isles/game-core/engine/task-11-trading.test-helper'
 import { BankSupplyPanel } from './BankSupplyPanel.tsx'
 
 describe('BankSupplyPanel', () => {
@@ -27,6 +27,17 @@ describe('BankSupplyPanel', () => {
     expect(screen.getByLabelText('Grain remaining: 18')).toBeVisible()
     expect(screen.getByLabelText('Ore remaining: 0')).toHaveTextContent('0')
     expect(screen.getByLabelText('Development Cards remaining: 0')).toHaveTextContent('0')
+    const list = container.querySelector('dl')
+    expect(list?.children).toHaveLength(6)
+    for (const [label, count] of [['Lumber', 17], ['Brick', 17], ['Wool', 18], ['Grain', 18], ['Ore', 0], ['Development Cards', 0]] as const) {
+      const term = screen.getByText(label, { selector: 'dt' })
+      const definition = term.nextElementSibling
+      expect(term.parentElement?.parentElement).toBe(list)
+      expect(term.parentElement?.children).toHaveLength(2)
+      expect(definition?.tagName).toBe('DD')
+      if (!(definition instanceof HTMLElement)) throw new Error('Missing bank definition.')
+      expect(within(definition).getByLabelText(`${label} remaining: ${count}`)).toHaveTextContent(String(count))
+    }
     expect(container.innerHTML).not.toContain('development-card:')
     expect(container.innerHTML).not.toContain('developmentDeck')
   })
@@ -49,6 +60,7 @@ describe('BankSupplyPanel', () => {
     }} />)
 
     expect(screen.getByLabelText('Brick remaining: 19')).toBeVisible()
+    expect(screen.getByText('Brick', { selector: 'dt' }).nextElementSibling).toHaveTextContent('19')
     expect(screen.queryByLabelText('Brick remaining: 17')).not.toBeInTheDocument()
   })
 })

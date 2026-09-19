@@ -1,6 +1,6 @@
-import type { GameState } from '../../game/model/game-state.ts'
-import type { AiProfileId, GameId, PlayerId } from '../../game/model/ids.ts'
-import { assertTradingState } from '../../game/engine/trading-invariants.ts'
+import type { GameState } from '@frontier-isles/game-core/model/game-state'
+import type { AiProfileId, GameId, PlayerId } from '@frontier-isles/game-core/model/ids'
+import { assertTradingState } from '@frontier-isles/game-core/engine/trading-invariants'
 
 export const GAME_SAVE_SCHEMA_VERSION = 1 as const
 
