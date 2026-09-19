@@ -1,71 +1,98 @@
-# Frontier Isles V2 Online Multiplayer Alpha
+# Frontier Isles
 
-Frontier Isles is an original island strategy game. The accepted V1 release candidate remains a
-browser-only experience for one Human and three heuristic AI players, with a deterministic
-TypeScript rules engine, a complete Material UI and raw SVG interface, and resumable browser saves.
-V2 adds a Node.js/Socket.IO server, authoritative four-seat Rooms and games, and a synchronized
-browser Lobby and online Game screen alongside unchanged Single Player.
+Frontier Isles is an original full-stack multiplayer strategy board game built around deterministic rules, private player information, negotiation, resource management, and settlement building.
 
-Version `2.0.0-alpha.1` prepares reliable command retries, serialized Human/AI mutations, explicit
-disconnect pause and Host-approved AI replacement, exact restart recovery and a bounded production
-network boundary. See [security](docs/v2/V2_SECURITY.md), [deployment](docs/v2/V2_DEPLOYMENT.md),
-[recovery](docs/v2/V2_PERSISTENCE_RECOVERY.md) and the [alpha release checklist](docs/v2/V2_ALPHA_RELEASE_CHECKLIST.md).
-The [Goal C acceptance report](docs/v2/V2_GOAL_C_ACCEPTANCE.md) records test totals and operational limits.
-The production reference serves the frontend and realtime server from one origin with one private
-SQLite volume. Human deployment UAT remains required; no public deployment is part of this work.
+**Live demo:** [game.frankiesgroceryhk.shop](https://game.frankiesgroceryhk.shop)
 
-## V1 features
+**Compatibility URL:** [play.frankiesgroceryhk.shop](https://play.frankiesgroceryhk.shop)
 
-- Seeded four-player game creation and reproducible board generation
-- Complete setup, dice production, robber/discard/theft, building, awards, scoring, and victory
-- Development cards plus domestic and maritime trading
-- Merchant, Builder, and Sentinel AI personalities that use redacted player views
-- Responsive, keyboard-operable raw SVG board and accessible MUI dialogs
-- Automatic and manual save/resume using one versioned local browser save
-- Deterministic 100-game release simulation and repeatable Chromium E2E suite
+The product combines a React + TypeScript client with a server-authoritative Node.js + Socket.IO backend, MySQL persistence, server-side AI, reconnect/resume, and a deterministic game engine. The live system runs on Vercel, Dockerized AWS EC2 infrastructure, private AWS RDS MySQL, and Caddy-managed HTTPS/WSS.
 
-The working ruleset identifier is `BASE_4P_COMBINED_ACTION_V1`.
+## Project overview
 
-## Run locally
+Frontier Isles supports both a self-contained Single Player experience and recoverable Online Multiplayer. The same pure TypeScript rules engine validates Human and AI commands in both modes, while the online server owns authoritative state and sends each participant a viewer-specific projection.
 
-Prerequisites are Node.js 24.19.0 or newer within the Node 24 line, and a compatible npm 11 release.
+The implemented ruleset covers seeded board generation, initial placement, dice production, building, domestic and maritime trading, development cards, the robber and discard workflow, route and army awards, hidden information, and deterministic victory resolution.
 
-```sh
-npm ci
-npm run dev:web
+## Key engineering features
+
+- Deterministic seeded engine with immutable state transitions and no wall-clock or unseeded gameplay randomness
+- Server-authoritative Online Multiplayer for two to four Humans, with remaining seats assignable to server-side AI
+- Viewer-specific redacted `PlayerView` data for the browser and every AI agent
+- Shared `game-core`, `game-ai`, and realtime-contract workspaces used by both frontend and backend
+- Command IDs, canonical request fingerprints, bounded idempotent retries, and retained-result replay
+- Serialized per-Room execution with independent Room queues and commit-before-publication ordering
+- Reconnect/resume, authoritative resynchronization, disconnect pause, and Host-approved permanent AI replacement
+- Exact restart recovery for game state, seeded RNG position, session ownership, publication revision, and retained command results
+- MySQL aggregate persistence with restricted runtime privileges and TLS to private RDS
+- Responsive Material UI controls and an accessible raw SVG board
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Browser]
+    Vercel[Vercel<br/>React + TypeScript frontend]
+    Caddy[Caddy<br/>HTTPS / WSS termination]
+    Server[Docker on AWS EC2<br/>Node.js + Socket.IO<br/>loopback-only authority]
+    RDS[(Private AWS RDS<br/>MySQL over TLS)]
+
+    Browser -->|HTTPS static assets| Vercel
+    Browser -->|HTTPS / WSS game traffic| Caddy
+    Caddy -->|Loopback HTTP / WebSocket| Server
+    Server -->|Verified TLS| RDS
+
+    Core[Shared deterministic game-core]
+    AI[Shared redacted-view game-ai]
+    Core --> Server
+    Core --> Vercel
+    Core --> AI
+    AI --> Server
+    AI --> Vercel
 ```
 
-Open the URL printed by Vite. Enter a name and seed, or keep the materialized seed shown on the Home
-screen. A successful command is saved automatically; **Save** also persists immediately. **Continue
-saved game** resumes the single latest save for the current browser origin.
+Vercel serves the static client; realtime traffic originates in the browser and reaches the EC2 authority through Caddy. The frontend never connects to the database, and Caddy is the only public path to the loopback-bound Node service.
 
-For Online Multiplayer, run both development commands below, enter a display name, then create a
-Room or join its six-character code from a second browser context. The Host assigns AI to remaining
-empty seats; with at least two connected Humans and all Humans Ready, the Host can Start Game.
-Every Human enters the same server game with their own private view. Refresh within 30 seconds
-resumes the same tab-scoped Human session and current game. Waiting Rooms expire after 30 minutes
-without accepted activity. Online games have no browser save; Single Player saves remain separate.
+## Tech stack
 
-Online actions use an ordered delivery queue with bounded acknowledgement retries. A retry keeps
-the same request and command ID; the server serializes Human and AI mutations per game and rejects
-conflicting reuse. Sending, retry, reconnect and resync states are visible. If delivery remains
-uncertain, use the fresh authoritative view and **Resync game** before deciding on a new action.
-See [the delivery ADR](docs/v2/ADR-V2-0010-command-delivery-and-serialized-execution.md).
+| Area | Technologies |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, Material UI, Zustand, raw SVG |
+| Backend | Node.js 24, TypeScript, Socket.IO, Zod |
+| Shared domain | TypeScript workspaces, immutable command engine, XORSHIFT32 seeded RNG |
+| Persistence | MySQL 8-compatible storage through `mysql2`; SQLite remains available for local/reference operation |
+| Infrastructure | Docker, AWS EC2, private AWS RDS MySQL, Caddy, Vercel |
+| Quality | Vitest, Testing Library, Playwright, ESLint, TypeScript project builds, deterministic simulations |
 
-Any active Human disconnect pauses gameplay and AI immediately. A public countdown shows the
-server's 30-second reconnect deadline. After expiry, the connected Host explicitly selects an AI
-profile to take over the same player permanently, or closes the game. An expired Host transfers
-to the first connected Human in NORTH/EAST/SOUTH/WEST order. Unresolved abandoned games and
-finished games expire after `GAME_ABANDONED_TTL_MS` (30 minutes by default); games close when no
-eligible Human session remains. See [the presence policy](docs/v2/ADR-V2-0011-active-game-presence-and-ai-replacement.md).
+## Game modes and gameplay
 
-The server now stores Rooms, games and resume-token digests in a private SQLite file. A restart
-restores exact state/RNG and pauses active games. Previously connected Humans have 120 seconds
-to resume; existing disconnected deadlines are preserved. Keep the same `PERSISTENCE_FILE` on
-local persistent disk and run one server process. See the [recovery runbook](docs/v2/V2_PERSISTENCE_RECOVERY.md)
-for startup failures, private backups and recovery boundaries.
+### Single Player
 
-## Quality and release commands
+One Human plays against three AI personalities. The authoritative engine and AI run locally in the browser, and compatible games can be saved and resumed from local browser storage. Single Player does not require the online backend.
+
+### Online Multiplayer
+
+Two to four Humans join a four-seat Room; the Host may assign server-side AI to open seats. The backend owns the game, validates all actions, advances AI through the same command contracts, and publishes a distinct private view to each Human. Supported workflows include lobby readiness, full-game play, trading, reconnect/resume, resync, disconnect pause, AI replacement, restart recovery, and retained command replay.
+
+## Reliability and multiplayer design
+
+Each admitted online command carries a stable ID and expected state version. The browser retries the exact request within bounded limits; the server fingerprints it, serializes it through the Room's FIFO, and either replays the retained result or rejects conflicting reuse. Accepted state and the retained result commit before publication and acknowledgement, so a lost acknowledgement can be retried without applying the action or consuming seeded randomness twice.
+
+Disconnects immediately pause authoritative progress. A valid session can resume within its server-owned deadline; after expiry, the connected Host may explicitly assign an AI profile to the same seat. On process restart, MySQL restores the exact aggregate before the server becomes ready, including pending decisions, state/RNG position, ownership, replacement state, and bounded idempotency data.
+
+## Security and privacy boundaries
+
+- The server derives actor authority from the attached Human session; client-supplied actor, Host, legality, resource, score, RNG, and revision claims grant no authority.
+- Browsers and AI receive redacted `PlayerView` projections, never unrestricted opponent hands, hidden development cards, the deck, or the authoritative RNG cursor.
+- Resume credentials are tab-scoped bearer values; only digests are persisted, and credentials are excluded from Room broadcasts and production diagnostics.
+- The backend uses an exact-origin CORS allowlist. Wildcard and preview-origin authorization are not enabled.
+- Public HTTPS/WSS terminates at Caddy; the Node service is bound to loopback, and its private RDS connection requires TLS certificate and hostname verification.
+- The normal MySQL runtime account is limited to the operations needed by the aggregate repository. Privileged schema inspection/bootstrap is a separate one-shot process and never starts HTTP.
+- Input sizes, Room/transport counts, command queues, receipts, retries, timers, logs, and persistence records are bounded and fail closed.
+
+## Testing and verification
+
+The accepted release source was reverified before this README update with:
 
 ```sh
 npm run typecheck
@@ -74,86 +101,84 @@ npm run test
 npm run build
 npm run check
 npm run simulate
-npm run simulate:online
-npm run test:recovery
-npm run test:security
-npm run test:load
-npm run smoke:container
-npx playwright install chromium
-npm run e2e
-npm run e2e:lobby
-npm run e2e:online
-npm run e2e:audit
-npm run audit:artifacts
 ```
 
-`npm run simulate` executes 100 fixed mixed-profile games with invariants checked after every
-accepted command. Playwright browser installation is a one-time machine prerequisite for E2E.
-`npm run simulate:online` runs complete real Socket.IO games for 2H+2AI, 3H+1AI and 4H, each twice
-to verify identical seeded summaries. The [Goal B acceptance matrix](docs/v2/V2_GOAL_B_ACCEPTANCE.md)
-maps all 20 command families to server and browser coverage.
+Current root-suite result: **410 passing tests across 74 files** — 113 frontend/application tests, 261 `game-core` tests, and 36 `game-ai` tests. Type checking, zero-warning lint, and the production Vite build pass. The build reports the existing advisory that the main client chunk exceeds Vite's default 500 kB guidance.
 
-## V2 workspace foundation
+The deterministic release simulation completed **100 games and 65,341 accepted commands**, checking invariants after every transition. Its reproducible summary hash is **`1adc49e8`**.
 
-Start the unchanged V1 web client and the realtime foundation in separate terminals:
+The repository also contains dedicated server, realtime-contract, recovery, security, MySQL, load, Socket.IO integration, container-smoke, and Playwright browser suites. See [testing](docs/TESTING.md), [online alpha testing](docs/v2/V2_ALPHA_TESTING.md), and [MySQL acceptance](docs/v2/V2_MYSQL_PROGRESS.md) for their scopes and operational prerequisites.
+
+## Local development
+
+Prerequisites: Node.js `>=24.19.0 <25` and a compatible npm 11 release.
+
+```sh
+npm ci
+```
+
+For Single Player, start the frontend only:
+
+```sh
+npm run dev:web
+```
+
+For Online Multiplayer development, run the frontend and server in separate terminals:
 
 ```sh
 npm run dev:web
 npm run dev:server
 ```
 
-During development, the server defaults to `http://127.0.0.1:3001`, exposes `GET /health`, and accepts credentialed
-Socket.IO connections only from `CLIENT_ORIGIN` (default `http://127.0.0.1:5173`). The browser uses
-the validated `VITE_REALTIME_URL` origin (default `http://127.0.0.1:3001`). The server owns
-durable four-seat waiting Rooms for create, join, Ready, Host-managed AI seats, snapshot, and
-leave, with validated `RECONNECT_GRACE_MS` and `ROOM_IDLE_TTL_MS` lifecycle settings. Accepted
-`room:start` creates one server-owned GameSession, fixes its seats, and publishes per-Human views.
-AI executes on the server. Copy the
-non-secret `.env.example` values into your process environment when overrides are needed; no
-`.env` file is committed.
+The local server defaults to `http://127.0.0.1:3001`, while Vite supplies the browser URL. Development defaults to local SQLite persistence; production uses MySQL. Copy values from [`.env.example`](.env.example) into your process environment only when overrides are needed. [`.env.production.example`](.env.production.example) and [`.env.mysql-production.example`](.env.mysql-production.example) contain non-secret deployment templates; never commit real credentials or infrastructure identifiers.
 
-Production additionally exposes `/ready`, requires an explicit `CLIENT_ORIGINS` allowlist and
-private/public absolute paths, and rejects debug library logging. The production frontend defaults
-to its own origin. `.env.production.example` and `compose.yaml` provide the non-secret local
-reference. `npm run smoke:container` builds and exercises a local image, including crash/restart,
-without creating a tag or publishing/deploying it. Read the deployment runbook before operating it.
+Useful aggregate commands:
 
 ```sh
+npm run check
 npm run check:server
 npm run check:all
+npm run simulate:online
 ```
 
-The V2 foundation requires Node.js 24 LTS. See the
-[V2 architecture baseline](docs/v2/V2_ARCHITECTURE_BASELINE.md) and
-[foundation ADR](docs/v2/ADR-V2-0001-node-socket-io-workspace-foundation.md).
+## Repository structure
 
-## Production build
+```text
+packages/
+  game-core/          Pure deterministic rules, state, selectors, and projections
+  game-ai/            Redacted-view AI agents and simulation runners
+  realtime-contracts/ Strict shared Socket.IO payload contracts
+server/
+  src/                Authoritative Rooms, game sessions, transport, and persistence
+  test/               Server, recovery, security, load, and MySQL qualification
+src/
+  application/        Gateways, controllers, and Zustand session/UI stores
+  infrastructure/     Browser persistence and realtime adapters
+  ui/                 React/MUI screens, dialogs, panels, and raw SVG board
+tests/e2e/             Playwright Single Player and Online Multiplayer workflows
+deploy/                Deployment and operations reference
+docs/                  Rules, architecture, ADRs, testing, security, and recovery
+```
 
-`npm run build` writes the static web client to `dist/`. Its Single Player mode requires
-no server, secret, runtime environment variable, or API. See [deployment](docs/DEPLOYMENT.md), the
-[release checklist](docs/RELEASE_CHECKLIST.md), [testing](docs/TESTING.md), and
-[known limitations](docs/KNOWN_LIMITATIONS.md).
+## Deployment architecture
 
-## Architecture and privacy boundary
+| Surface | Live endpoint / role |
+| --- | --- |
+| Primary frontend | [game.frankiesgroceryhk.shop](https://game.frankiesgroceryhk.shop) |
+| Compatibility frontend | [play.frankiesgroceryhk.shop](https://play.frankiesgroceryhk.shop) |
+| Realtime backend | [game-api.frankiesgroceryhk.shop](https://game-api.frankiesgroceryhk.shop) |
+| Static hosting | Vercel |
+| Application authority | One Dockerized Node.js process on AWS EC2, exposed only through Caddy |
+| Durable storage | Private AWS RDS MySQL with required TLS |
 
-The pure `packages/game-core/src/**` engine owns legality and deterministic state transitions.
-`packages/game-ai` depends only on core and supplies the shared deterministic AI and simulations.
-Run `npm run check:game` to verify both package boundaries. Human and AI
-players submit the same command contracts through `GameGateway`. React, MUI, and Zustand receive a
-viewer-specific `PlayerView` and redacted events, not an unrestricted opponent hand, development
-deck, or RNG cursor. Browser localStorage necessarily holds the authoritative offline save, but it
-is not rendered or placed in UI stores.
-Online mode uses SocketGameGateway on the Lobby's attached socket. Commands omit actor identity,
-which the server derives from the Human session. Reconnect, stale responses and **Resync game**
-request a fresh authoritative view. Delivery retries, active pause/replacement and durable restart
-recovery are implemented. Production security/deployment qualification remains the next milestone.
-See [Goal C progress](docs/v2/V2_GOAL_C_PROGRESS.md).
+The frontend build targets the exact backend origin and a restrictive `connect-src` policy. Caddy handles public HTTPS/WSS and forwards HTTP/1.1 and Socket.IO traffic to the loopback service. Production MySQL configuration is backend-only; database endpoints, credentials, AWS identifiers, and network topology details are intentionally absent from the repository.
 
-Start with [AGENTS.md](AGENTS.md), [product scope](docs/PRODUCT_SCOPE.md),
-[game rules](docs/GAME_RULES.md), and [architecture](docs/ARCHITECTURE.md) before changing code.
+## Project status and limitations
 
-## Project boundary
+The current release is publicly playable and supports complete Single Player and Online Multiplayer games. The package version remains `2.0.0-alpha.1`, reflecting deliberate product limits: no user accounts, matchmaking, chat, spectators, rankings, Human seat transfer, cross-region failover, or multiple authoritative server replicas. Room codes are coordination keys, not private invitations, and finite rate/capacity limits are safety boundaries rather than distributed denial-of-service protection.
 
-V1 has no backend, login, database, networking, online multiplayer, telemetry, or cloud save. It
-uses original presentation and does not include CATAN logos, official artwork, card images, or
-rulebook prose.
+The deployment uses one authoritative backend process and requires operator-managed database backup, restore, monitoring, and recovery. Phone portrait polish is not a release target, and client bundle code-splitting remains an identified optimization.
+
+## Original work and attribution
+
+Frontier Isles uses original source code, branding, interface design, and visual assets. It is inspired by the broader genre of hex-board resource and trading games, but it is not affiliated with or endorsed by CATAN or its rights holders. The repository does not include official logos, artwork, card images, or copied rulebook presentation.
